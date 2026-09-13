@@ -1,0 +1,35 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+.env
+.env.local
+.env.*.local
+!.env.example
+
+coverage/
+.nyc_output/
+
+storage/
+uploads/
+tmp/
+
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Instance PostgreSQL de développement locale
+.pgdata/
+
+.next-build/
+
+# Brouillons de travail hors application (maquettes, scripts jetables)
+.scratch/

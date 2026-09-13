@@ -1,0 +1,212 @@
+@import 'tailwindcss';
+
+/*
+ * Design System I2S OPS
+ * Source : I2S-TESTING — CHARTE GRAPHIQUE, Édition 2026, version 1.0.
+ *
+ * PALETTE OFFICIELLE (reportée telle quelle) :
+ *   Orange Signal     #D14E27   accent           Pantone 173 C
+ *   Vert Contrôle     #6E8F76   secondaire       Pantone 5555 C
+ *   Noir Industriel   #1A1B18   dominante        Pantone Black 6 C
+ *   Gris Acier        #4A4F52   texte courant    Cool Gray 11 C
+ *   Sable Technique   #F4F2ED   fonds clairs     Warm Gray 1 C
+ *   Blanc             #FFFFFF   réserve
+ *
+ * TYPOGRAPHIE : Poppins pour les titres, Barlow pour les textes.
+ * Substitut bureautique : Arial. Jamais Calibri, Aptos ni Times New Roman.
+ *
+ * ADAPTATION ASSUMÉE — la charte prescrit 55 % de Noir Industriel sur « un
+ * support complet », ce qui donnerait une application sombre. Le produit est
+ * utilisé huit heures par jour et le mode clair a été demandé : le Noir
+ * Industriel reste dominant, mais par le TEXTE et non par les aplats. Les
+ * fonds sont en Sable Technique et Blanc.
+ *
+ * EXTENSION ASSUMÉE — la charte interdit toute autre teinte, mais elle couvre
+ * l'imprimé et le marketing, pas les états d'une application. Quatre couleurs
+ * d'état sont ajoutées, tenues dans le registre chaud de la marque :
+ * succès = Vert Contrôle (couleur de charte), avertissement = ocre,
+ * erreur = brique profonde, information = Gris Acier.
+ *
+ * RÈGLE — l'Orange Signal est réservé à l'INTERACTIF (bouton principal, entrée
+ * de menu active, focus, lien). Il ne porte jamais d'état : sans quoi un bouton
+ * se lirait comme une alerte.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── Couleurs de charte ─────────────────────────────────────── */
+  --orange-signal: #d14e27;
+  --vert-controle: #6e8f76;
+  --noir-industriel: #1a1b18;
+  --gris-acier: #4a4f52;
+  --sable-technique: #f4f2ed;
+
+  /* ── Fonds et texte ─────────────────────────────────────────── */
+  --bg: #f4f2ed;
+  --surface: #ffffff;
+  --surface-2: #edeae3;
+  --surface-3: #e2ded5;
+  --border: #e0dcd3;
+  --border-strong: #c4bfb4;
+  --text: #1a1b18;
+  --text-muted: #4a4f52;
+  --text-subtle: #7d8285;
+
+  /* ── Marque ─────────────────────────────────────────────────── */
+  --accent: #d14e27;
+  --accent-hover: #b13f1d;
+  --accent-soft: #faeae4;
+  --accent-border: #eec3b3;
+
+  --secondary: #6e8f76;
+  --secondary-soft: #e9efea;
+
+  --primary: #1a1b18;
+  --primary-hover: #000000;
+  --primary-soft: #eceae5;
+
+  /* ── États (extension applicative) ──────────────────────────── */
+  --success: #4f7358;
+  --success-soft: #e9efea;
+  --warning: #96701c;
+  --warning-soft: #f7f0dd;
+  --danger: #8c2f1e;
+  --danger-soft: #f6e6e1;
+  --info: #4a4f52;
+  --info-soft: #eceae5;
+  --neutral: #7d8285;
+  --neutral-soft: #edeae3;
+
+  /* ── Navigation ─────────────────────────────────────────────── */
+  --rail: #ffffff;
+  --rail-border: #e0dcd3;
+  --rail-text: #4a4f52;
+  --rail-text-strong: #1a1b18;
+  --rail-muted: #8a8f8c;
+  --rail-active-bg: #faeae4;
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgb(26 27 24 / 0.05), 0 4px 12px rgb(26 27 24 / 0.05);
+  --shadow-raised: 0 2px 4px rgb(26 27 24 / 0.06), 0 12px 28px rgb(26 27 24 / 0.1);
+  --shadow-menu: 0 8px 24px rgb(26 27 24 / 0.14);
+
+  --font-title: 'Poppins', 'Barlow', Arial, sans-serif;
+  --font-body: 'Barlow', Arial, Helvetica, sans-serif;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-secondary: var(--secondary);
+  --color-secondary-soft: var(--secondary-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-rail: var(--rail);
+  --color-rail-border: var(--rail-border);
+  --color-rail-text: var(--rail-text);
+  --color-rail-muted: var(--rail-muted);
+  --color-rail-active: var(--rail-active-bg);
+
+  /* Rayons et ombres ne sont PAS remappés ici : `--shadow-card: var(--shadow-card)`
+     serait une auto-référence circulaire, et Tailwind rejetterait tout le bloc
+     `@theme` — l'application perdrait d'un coup toutes ses couleurs.
+     Ces valeurs s'utilisent directement : `shadow-[var(--shadow-card)]`. */
+
+  --font-sans: var(--font-body);
+  --font-title: var(--font-title);
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Titres en Poppins — « Écrire les titres en Poppins, les textes en Barlow ». */
+h1,
+h2,
+h3,
+h4,
+.title {
+  font-family: var(--font-title);
+  letter-spacing: -0.01em;
+}
+
+/* Montants, mesures et durées : alignement en colonne. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Identifiants métier — le seul emploi de la chasse fixe. */
+.ref {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * Motif « Équerre » — le symbole du logotype devient un élément de langage
+ * graphique. Employé avec parcimonie, en marqueur de marque.
+ */
+.equerre {
+  position: relative;
+  display: inline-block;
+  width: 0.62em;
+  height: 0.62em;
+  border-top: 0.2em solid var(--accent);
+  border-right: 0.2em solid var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

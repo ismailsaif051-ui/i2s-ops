@@ -1,0 +1,39 @@
+{
+  "name": "i2s-ops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ERP de gestion opérationnelle, inspection & contrôle de gestion — I2S TESTING",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "db:generate": "npm run generate -w @i2s/db",
+    "db:migrate": "npm run migrate -w @i2s/db",
+    "db:push": "npm run push -w @i2s/db",
+    "db:seed": "npm run seed -w @i2s/db",
+    "db:studio": "npm run studio -w @i2s/db",
+    "build:contracts": "npm run build -w @i2s/contracts",
+    "dev:api": "npm run dev -w @i2s/api",
+    "dev:web": "npm run dev -w @i2s/web",
+    "build": "npm run build -w @i2s/contracts && npm run build -w @i2s/calc && npm run db:generate && npm run build -w @i2s/api && npm run build -w @i2s/web",
+    "test": "npm run test -w @i2s/contracts && npm run test -w @i2s/api",
+    "typecheck": "tsc -b --pretty",
+    "db:setup": "node scripts/setup-db.mjs",
+    "db:start": "node scripts/db-start.mjs",
+    "dev": "node scripts/dev.mjs",
+    "db:demo": "npm run demo -w @i2s/db",
+    "db:reset": "npm run db:setup && npm run db:demo",
+    "db:demo:assets": "npm run demo:assets -w @i2s/db"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "pg": "^8.13.1",
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,65 @@
+# Fichier que Render lit tout seul quand vous connectez ce dépôt GitHub
+# (« New + » → « Blueprint » → choisir le dépôt). Il crée et relie à votre
+# place : la base de données, l'API et l'interface.
+#
+# Deux réglages ne peuvent pas être automatisés — Render doit d'abord
+# attribuer une adresse à chaque service avant qu'on puisse la donner à
+# l'autre. Ce sont ANTHROPIC_API_KEY et NEXT_PUBLIC_API_URL / WEB_ORIGIN,
+# marqués « sync: false » ci-dessous : Render vous demandera de les saisir
+# dans son interface après le premier déploiement. Voir les instructions
+# transmises avec ce fichier.
+
+databases:
+  - name: i2s-ops-db
+    databaseName: i2s_ops
+    plan: free
+
+services:
+  # ── API (NestJS) ──────────────────────────────────────────────────
+  - type: web
+    name: i2s-ops-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: i2s-ops-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL_DAYS
+        value: "30"
+      - key: STORAGE_ROOT
+        value: storage
+      # Adresse de l'interface, une fois que Render la lui aura attribuée
+      # (ex. https://i2s-ops-web.onrender.com) — voir les instructions.
+      - key: WEB_ORIGIN
+        sync: false
+      # Facultatif : l'assistant de rédaction des offres reste indisponible
+      # sans elle, le reste de l'application fonctionne normalement.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: claude-sonnet-5
+
+  # ── Interface (Next.js) ──────────────────────────────────────────────
+  - type: web
+    name: i2s-ops-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Adresse de l'API, une fois que Render la lui aura attribuée
+      # (ex. https://i2s-ops-api.onrender.com/api/v1) — voir les instructions.
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

@@ -1,0 +1,2081 @@
+// I2S OPS — schéma de données
+// Voir docs/03-MODELE-DONNEES.md pour la justification de chaque bloc.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SOCLE — sociétés, utilisateurs, droits, audit, référentiels
+// ═══════════════════════════════════════════════════════════════
+
+model Company {
+  id        String  @id @default(uuid(7))
+  code      String  @unique
+  name      String
+  legalName String?
+  ice       String? // Identifiant Commun de l'Entreprise (Maroc)
+  rc        String? // Registre de commerce
+  ifiscal   String?
+  cnss      String?
+  address   String?
+  city      String?
+  phone     String?
+  email     String?
+  logoUrl   String?
+  currency  String  @default("MAD")
+  vatRate   Decimal @default(20) @db.Decimal(5, 2)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  departments      Department[]
+  employees        Employee[]
+  clients          Client[]
+  affairs          Affair[]
+  invoices         Invoice[]
+  expenseReports   ExpenseReport[]
+  documents        Document[]
+  settings         Setting[]
+  numberSequences  NumberSequence[]
+  workCalendarDays WorkCalendarDay[]
+  userRoles        UserRole[]
+  vehicles         Vehicle[]
+  measuringDevices MeasuringDevice[]
+
+  @@map("companies")
+}
+
+model Department {
+  id        String  @id @default(uuid(7))
+  companyId String
+  code      String // CND, CTC, EILM, HSE, DIR, SUP
+  name      String
+  managerId String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company           Company            @relation(fields: [companyId], references: [id])
+  manager           Employee?          @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees         Employee[]         @relation("EmployeeDepartment")
+  affairs           Affair[]
+  affairServices    AffairDepartment[]
+  missions          Mission[]
+  vehicles          Vehicle[]
+  measuringDevices  MeasuringDevice[]
+  userRoles         UserRole[]
+  inspectionMethods InspectionMethod[]
+  opportunities     Opportunity[]
+  expenseLines      ExpenseLine[]
+
+  @@unique([companyId, code])
+  @@map("departments")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+}
+
+model User {
+  id           String     @id @default(uuid(7))
+  email        String     @unique
+  passwordHash String
+  employeeId   String?    @unique
+  status       UserStatus @default(ACTIVE)
+
+  mustChangePassword Boolean   @default(true)
+  mfaSecret          String?
+  mfaEnabled         Boolean   @default(false)
+  failedAttempts     Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  locale             String    @default("fr")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  employee      Employee?      @relation(fields: [employeeId], references: [id])
+  userRoles     UserRole[]
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid(7))
+  userId    String
+  tokenHash String    @unique
+  family    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Role {
+  id          String  @id @default(uuid(7))
+  code        String  @unique
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+  rank        Int     @default(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+enum PermissionAction {
+  VIEW
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  EXPORT
+  DOWNLOAD
+}
+
+model Permission {
+  id       String           @id @default(uuid(7))
+  resource String
+  action   PermissionAction
+
+  roles RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+enum ScopeLevel {
+  ALL
+  COMPANY
+  DEPARTMENT
+  TEAM
+  OWN
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  scope        ScopeLevel @default(COMPANY)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id           String  @id @default(uuid(7))
+  userId       String
+  roleId       String
+  companyId    String?
+  departmentId String?
+
+  createdAt DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role        @relation(fields: [roleId], references: [id])
+  company    Company?    @relation(fields: [companyId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  @@unique([userId, roleId, companyId, departmentId])
+  @@map("user_roles")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  entity     String
+  entityId   String?
+  action     String
+  before     Json?    @db.JsonB
+  after      Json?    @db.JsonB
+  reason     String?
+  userId     String?
+  userEmail  String?
+  ip         String?
+  userAgent  String?
+  companyId  String?
+  occurredAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([occurredAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id      String  @id @default(uuid(7))
+  userId  String
+  type    String
+  title   String
+  body    String?
+  link    String?
+  payload Json?   @db.JsonB
+  level   String  @default("info")
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model NumberSequence {
+  id        String @id @default(uuid(7))
+  companyId String
+  scope     String // AFFAIR, MISSION, MISSION_ORDER, REPORT, ATTACHMENT, INVOICE, EXPENSE, NON_CONFORMITY
+  year      Int
+  pattern   String
+  next      Int    @default(1)
+  padding   Int    @default(4)
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, scope, year])
+  @@map("number_sequences")
+}
+
+model Setting {
+  id        String   @id @default(uuid(7))
+  companyId String?
+  key       String
+  value     Json     @db.JsonB
+  updatedAt DateTime @updatedAt
+
+  company Company? @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, key])
+  @@map("settings")
+}
+
+model WorkCalendarDay {
+  id           String   @id @default(uuid(7))
+  companyId    String
+  date         DateTime @db.Date
+  isWorkingDay Boolean  @default(true)
+  label        String?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, date])
+  @@map("work_calendar_days")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RESSOURCES HUMAINES
+// ═══════════════════════════════════════════════════════════════
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  LEFT
+}
+
+model Employee {
+  id           String         @id @default(uuid(7))
+  companyId    String
+  matricule    String
+  firstName    String
+  lastName     String
+  departmentId String?
+  position     String?
+  managerId    String?
+  email        String?
+  phone        String?
+  hireDate     DateTime?      @db.Date
+  leaveDate    DateTime?      @db.Date
+  contractType String?
+  cin          String?
+  cnss         String?
+  isInspector  Boolean        @default(false)
+  status       EmployeeStatus @default(ACTIVE)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  company              Company             @relation(fields: [companyId], references: [id])
+  department           Department?         @relation("EmployeeDepartment", fields: [departmentId], references: [id])
+  manager              Employee?           @relation("EmployeeManager", fields: [managerId], references: [id])
+  subordinates         Employee[]          @relation("EmployeeManager")
+  managedDepartments   Department[]        @relation("DepartmentManager")
+  user                 User?
+  dailyCosts           EmployeeDailyCost[]
+  skills               EmployeeSkill[]
+  certifications       Certification[]
+  trainings            Training[]
+  leaveRequests        LeaveRequest[]
+  timesheetDays        TimesheetDay[]      @relation("TimesheetOwner")
+  validatedTimesheets  TimesheetDay[]      @relation("TimesheetValidator")
+  missionAssignments   MissionAssignment[]
+  expenseReports       ExpenseReport[]
+  advances             Advance[]
+  advancesRequested    Advance[]           @relation("AdvanceRequester")
+  advancesApproved     Advance[]           @relation("AdvanceApprover")
+  inspections          Inspection[]
+  authoredReports      Report[]            @relation("ReportAuthor")
+  checkedReports       Report[]            @relation("ReportChecker")
+  accountManagerFor    Affair[]            @relation("AffairAccountManager")
+  pilotedAffairs       Affair[]            @relation("AffairPilot")
+  preparedAffairs      Affair[]            @relation("AffairPreparedBy")
+  ownedOpportunities   Opportunity[]       @relation("OpportunityOwner")
+  draftedOffers        OfferDraft[]        @relation("OfferDraftAuthor")
+  reviewedOfferDrafts  OfferDraft[]        @relation("OfferDraftReviewer")
+  ownedClients         Client[]            @relation("ClientOwner")
+  heldDevices          MeasuringDevice[]   @relation("DeviceHolder")
+  assignedVehicles     Vehicle[]           @relation("VehicleAssignee")
+  vehicleBookings      VehicleBooking[]
+  attachmentLines      AttachmentLine[]
+  ownedNonConformities  NonConformity[]    @relation("NonConformityOwner")
+  openedNonConformities NonConformity[]    @relation("NonConformityOpener")
+  closedNonConformities NonConformity[]    @relation("NonConformityCloser")
+
+  @@unique([companyId, matricule])
+  @@index([departmentId])
+  @@map("employees")
+}
+
+/// Coût journalier historisé — jamais écrasé. Voir docs/09.
+model EmployeeDailyCost {
+  id         String    @id @default(uuid(7))
+  employeeId String
+  validFrom  DateTime  @db.Date
+  validTo    DateTime? @db.Date
+  amount     Decimal   @db.Decimal(12, 2)
+  currency   String    @default("MAD")
+  reason     String?
+
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, validFrom])
+  @@index([employeeId, validFrom, validTo])
+  @@map("employee_daily_costs")
+}
+
+model Skill {
+  id       String  @id @default(uuid(7))
+  code     String  @unique
+  name     String
+  category String?
+
+  employees EmployeeSkill[]
+
+  @@map("skills")
+}
+
+model EmployeeSkill {
+  employeeId String
+  skillId    String
+  level      Int    @default(1)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, skillId])
+  @@map("employee_skills")
+}
+
+model Certification {
+  id         String    @id @default(uuid(7))
+  employeeId String
+  type       String // COFREND, ASNT, habilitation électrique...
+  method     String? // UT, PT, MT, VT, RT
+  level      String? // 1, 2, 3
+  issuer     String?
+  number     String?
+  issuedAt   DateTime? @db.Date
+  expiresAt  DateTime? @db.Date
+  documentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("certifications")
+}
+
+model Training {
+  id         String    @id @default(uuid(7))
+  employeeId String
+  title      String
+  provider   String?
+  startDate  DateTime? @db.Date
+  endDate    DateTime? @db.Date
+  cost       Decimal?  @db.Decimal(12, 2)
+  status     String    @default("PLANNED")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("trainings")
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  RECOVERY
+  SPECIAL
+}
+
+enum LeaveStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model LeaveRequest {
+  id         String      @id @default(uuid(7))
+  employeeId String
+  type       LeaveType
+  startDate  DateTime    @db.Date
+  endDate    DateTime    @db.Date
+  days       Decimal     @db.Decimal(5, 1)
+  reason     String?
+  status     LeaveStatus @default(DRAFT)
+  approverId String?
+  decidedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, startDate])
+  @@map("leave_requests")
+}
+
+/// Pivot du module productivité — une ligne par employé et par jour.
+enum TimesheetCategory {
+  MISSION_BILLABLE
+  MISSION_NON_BILLABLE
+  SITE_WAITING
+  WEATHER
+  TRAINING
+  LEAVE
+  SICK
+  UNASSIGNED
+  OTHER
+}
+
+enum TimesheetSource {
+  /// Déduit du planning : affectation, congé accordé, formation, calendrier.
+  PLAN
+  /// Corrigé à la main — une régénération ne l'écrase pas.
+  MANUAL
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  VALIDATED
+  LOCKED
+}
+
+model TimesheetDay {
+  id         String            @id @default(uuid(7))
+  employeeId String
+  date       DateTime          @db.Date
+  category   TimesheetCategory @default(UNASSIGNED)
+  missionId  String?
+  affairId   String?
+  hours      Decimal?          @db.Decimal(4, 1)
+  billable   Boolean           @default(false)
+  comment    String?
+  source     TimesheetSource   @default(PLAN)
+  status     TimesheetStatus   @default(DRAFT)
+
+  dailyCostSnapshot Decimal?  @db.Decimal(12, 2)
+  validatedById     String?
+  validatedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee        Employee         @relation("TimesheetOwner", fields: [employeeId], references: [id], onDelete: Cascade)
+  validatedBy     Employee?        @relation("TimesheetValidator", fields: [validatedById], references: [id])
+  mission         Mission?         @relation(fields: [missionId], references: [id])
+  affair          Affair?          @relation(fields: [affairId], references: [id])
+  attachmentLines AttachmentLine[]
+
+  @@unique([employeeId, date])
+  @@index([date, category])
+  @@index([affairId])
+  @@map("timesheet_days")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  COMMERCIAL
+// ═══════════════════════════════════════════════════════════════
+
+enum ClientType {
+  PROSPECT
+  CLIENT
+}
+
+model Client {
+  id           String     @id @default(uuid(7))
+  companyId    String
+  code         String
+  name         String
+  type         ClientType @default(PROSPECT)
+  ice          String?
+  sector       String?
+  address      String?
+  city         String?
+  phone        String?
+  email        String?
+  paymentTerms Int        @default(30)
+  creditLimit  Decimal?   @db.Decimal(14, 2)
+  ownerId      String?
+  isActive     Boolean    @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company       Company           @relation(fields: [companyId], references: [id])
+  owner         Employee?         @relation("ClientOwner", fields: [ownerId], references: [id])
+  contacts      Contact[]
+  opportunities Opportunity[]
+  affairs       Affair[]
+  assets        Asset[]
+  invoices      Invoice[]
+  attachments   AttachmentSheet[]
+
+  @@unique([companyId, code])
+  @@map("clients")
+}
+
+model Contact {
+  id        String  @id @default(uuid(7))
+  clientId  String
+  firstName String
+  lastName  String
+  role      String?
+  email     String?
+  phone     String?
+  isPrimary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  followUps FollowUp[]
+
+  @@map("contacts")
+}
+
+enum OpportunityStage {
+  NEW
+  CONSULTATION
+  OFFER_DRAFT
+  OFFER_SENT
+  FOLLOW_UP
+  NEGOTIATION
+  WON
+  LOST
+}
+
+/// Pourquoi une consultation a été perdue.
+///
+/// Un motif en texte libre ne s'additionne pas : on ne peut ni le compter, ni
+/// le comparer d'une année sur l'autre. La catégorie, elle, se totalise — et
+/// c'est ce total qui dit s'il faut revoir les prix, les délais ou les
+/// références. Le texte libre reste, à côté, pour le détail du dossier.
+enum LostCause {
+  /// Prix trop élevé face au concurrent retenu.
+  PRIX
+  /// Délai d'intervention incompatible avec le besoin du client.
+  DELAI
+  /// Références, agréments ou qualifications jugés insuffisants.
+  REFERENCES
+  /// Capacité ou moyens indisponibles à la date demandée.
+  CAPACITE
+  /// Concurrent déjà en place, reconduit sans mise en concurrence réelle.
+  CONCURRENT_EN_PLACE
+  /// Dossier écarté : pièce manquante, remise hors délai, forme non conforme.
+  DOSSIER_NON_CONFORME
+  /// Le client a abandonné ou reporté son projet — personne n'a gagné.
+  PROJET_ABANDONNE
+  /// Sans réponse du client malgré les relances.
+  SANS_SUITE
+  AUTRE
+}
+
+model Opportunity {
+  id                String           @id @default(uuid(7))
+  clientId          String
+  departmentId      String?
+  title             String
+  stage             OpportunityStage @default(NEW)
+  amount            Decimal?         @db.Decimal(14, 2)
+  probability       Int              @default(20)
+  expectedCloseDate DateTime?        @db.Date
+  ownerId           String?
+  /// Cause de la perte, en catégorie : c'est elle qui rend l'analyse possible.
+  lostCause         LostCause?
+  /// Le détail de la perte, en clair — ce que la catégorie ne dit pas.
+  lostReason        String?
+  description       String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  client     Client      @relation(fields: [clientId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  owner      Employee?   @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  tenders    Tender[]
+  offers     Offer[]
+  followUps  FollowUp[]
+  affairs    Affair[]
+
+  @@index([stage])
+  @@map("opportunities")
+}
+
+model Tender {
+  id                 String    @id @default(uuid(7))
+  opportunityId      String
+  reference          String
+  publisher          String?
+  submissionDeadline DateTime?
+  openingDate        DateTime?
+  guaranteeAmount    Decimal?  @db.Decimal(14, 2)
+  status             String    @default("IDENTIFIED")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@map("tenders")
+}
+
+enum OfferStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+/// Nature du document d'offre remis au client.
+enum OfferDocumentNature {
+  /// Méthodologie, référentiels, moyens, livrables — sans aucun prix.
+  TECHNIQUE
+  /// Consistance de la prestation, conditions, prix.
+  COMMERCIALE
+  /// Les deux réunis, dans un seul document.
+  TECHNICO_COMMERCIALE
+}
+
+/// Où en est le texte rédigé par l'assistant.
+enum OfferDraftStatus {
+  /// Rédigé par l'assistant, pas encore relu par une personne.
+  A_RELIRE
+  /// Relu et assumé par une personne : l'offre peut partir.
+  RELU
+}
+
+/// Texte de l'offre rédigé avec l'assistant, puis relu.
+///
+/// L'assistant écrit les mots, jamais les chiffres : le tableau de prix est
+/// rendu à partir des lignes de l'offre en base. Un modèle qui inventerait un
+/// prix sur un document client serait un risque commercial, pas une commodité.
+///
+/// Rien ne part au client avant relecture : tant que le texte est `A_RELIRE`,
+/// l'envoi de l'offre est refusé.
+model OfferDraft {
+  id      String              @id @default(uuid(7))
+  offerId String              @unique
+  nature  OfferDocumentNature
+  status  OfferDraftStatus    @default(A_RELIRE)
+
+  /// Sections rédigées : { clé de section → texte }.
+  sections Json
+
+  /// Sur quoi le texte s'appuie — pour pouvoir y revenir des mois plus tard.
+  model         String
+  promptVersion String
+  generatedAt   DateTime  @default(now())
+  generatedById String?
+  reviewedAt    DateTime?
+  reviewedById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  offer      Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  generatedBy Employee? @relation("OfferDraftAuthor", fields: [generatedById], references: [id])
+  reviewedBy  Employee? @relation("OfferDraftReviewer", fields: [reviewedById], references: [id])
+
+  @@map("offer_drafts")
+}
+
+model Offer {
+  id            String      @id @default(uuid(7))
+  opportunityId String
+  number        String
+  version       Int         @default(1)
+  amountHT      Decimal     @db.Decimal(14, 2)
+  validUntil    DateTime?   @db.Date
+  status        OfferStatus @default(DRAFT)
+  sentAt        DateTime?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  lines       OfferLine[]
+  affairs     Affair[]
+  draft       OfferDraft?
+
+  @@unique([number, version])
+  @@map("offers")
+}
+
+model OfferLine {
+  id          String  @id @default(uuid(7))
+  offerId     String
+  position    Int     @default(1)
+  designation String
+  unit        String  @default("vacation")
+  quantity    Decimal @db.Decimal(12, 2)
+  unitPrice   Decimal @db.Decimal(14, 2)
+  amountHT    Decimal @db.Decimal(14, 2)
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@map("offer_lines")
+}
+
+model FollowUp {
+  id             String    @id @default(uuid(7))
+  opportunityId  String
+  contactId      String?
+  date           DateTime
+  channel        String    @default("EMAIL")
+  outcome        String?
+  nextActionDate DateTime? @db.Date
+  userId         String?
+
+  createdAt DateTime @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact     Contact?    @relation(fields: [contactId], references: [id])
+
+  @@map("follow_ups")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AFFAIRES & PROJETS
+// ═══════════════════════════════════════════════════════════════
+
+/// Statut commercial — codes du registre « Suivi Cde Partagé I2S ».
+/// G = gagnée · S/OP = suivant offre de prix (commande attendue) · P/A = perdue ou annulée.
+enum AffairCommercialStatus {
+  GAGNEE
+  SUIVANT_OP
+  PERDUE_ANNULEE
+  DP
+}
+
+/// Avancement des travaux et de la facturation — axe indépendant du statut commercial.
+enum AffairWorksStatus {
+  NON_DEMARRE
+  EN_COURS
+  A_FACTURER
+  FAC_PARTIELLE
+  FAC_TOTALE
+  PERDU_ANNULE
+}
+
+/// Cycle de vie interne, dérivé des deux axes ci-dessus.
+enum AffairStatus {
+  PROSPECT
+  IN_PROGRESS
+  SUSPENDED
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+model Affair {
+  id                 String  @id @default(uuid(7))
+  companyId          String
+  number             String // AA/XXXX — séquence pré-allouée par année
+  clientId           String
+  opportunityId      String?
+  offerId            String?
+  title              String // « Désignation » du registre
+  departmentId       String? // service pilote
+  accountManagerId   String?
+  /// Pilote de l'affaire (colonne « Pilote » du registre, saisie en initiales).
+  pilotId            String?
+  pilotInitials      String?
+  /// Qui a préparé l'affaire (colonne « AFF PREPARER PAR »).
+  preparedById       String?
+  preparedByInitials String?
+  /// Dossier physique ouvert (colonne « Ouv doss physiq »).
+  physicalFileOpened Boolean @default(false)
+  /// Lieu de contrôle en texte libre, tel que saisi au registre.
+  controlLocation    String?
+  /// Client final et bureau d'études, quand ils diffèrent du donneur d'ordre.
+  endClient          String?
+  engineeringOffice  String?
+
+  /// Montant de l'offre de prix (Mt OP DH HT).
+  offerAmountHT    Decimal? @db.Decimal(14, 2)
+  /// Montant du bon de commande reçu (Montant BC).
+  poAmountHT       Decimal? @db.Decimal(14, 2)
+  /// N° de bon de commande — texte libre : « BC 34950 », « Cmde verbale », « Contrat + Avenant ».
+  poNumber         String?
+  contractAmountHT Decimal? @db.Decimal(14, 2)
+  budgetAmount     Decimal? @db.Decimal(14, 2)
+  dailyRate        Decimal? @db.Decimal(14, 2)
+  budgetMarginRate Decimal? @db.Decimal(5, 2)
+
+  creationDate DateTime? @db.Date
+  startDate    DateTime? @db.Date
+  endDate      DateTime? @db.Date
+
+  commercialStatus AffairCommercialStatus @default(SUIVANT_OP)
+  worksStatus      AffairWorksStatus      @default(NON_DEMARRE)
+  status           AffairStatus           @default(PROSPECT)
+  riskFlag         Boolean                @default(false)
+  purchaseOrderRef String?
+  observation      String?
+  notes            String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  company         Company            @relation(fields: [companyId], references: [id])
+  client          Client             @relation(fields: [clientId], references: [id])
+  opportunity     Opportunity?       @relation(fields: [opportunityId], references: [id])
+  offer           Offer?             @relation(fields: [offerId], references: [id])
+  department      Department?        @relation(fields: [departmentId], references: [id])
+  accountManager  Employee?          @relation("AffairAccountManager", fields: [accountManagerId], references: [id])
+  pilot           Employee?          @relation("AffairPilot", fields: [pilotId], references: [id])
+  preparedBy      Employee?          @relation("AffairPreparedBy", fields: [preparedById], references: [id])
+  /// Une affaire peut mobiliser plusieurs services (« CND-CTC-EILM » au registre).
+  services        AffairDepartment[]
+  budgetLines     AffairBudgetLine[]
+  rates           AffairRate[]
+  projects        Project[]
+  missions        Mission[]
+  timesheetDays   TimesheetDay[]
+  reports         Report[]
+  attachments     AttachmentSheet[]
+  invoices        Invoice[]
+  expenseLines    ExpenseLine[]
+  advances        Advance[]
+  nonConformities NonConformity[]
+  documents       Document[]
+
+  @@unique([companyId, number])
+  @@index([status])
+  @@index([commercialStatus, worksStatus])
+  @@index([clientId])
+  @@map("affairs")
+}
+
+/// Services mobilisés par une affaire, au-delà du service pilote.
+model AffairDepartment {
+  affairId     String
+  departmentId String
+
+  affair     Affair     @relation(fields: [affairId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@id([affairId, departmentId])
+  @@map("affair_departments")
+}
+
+model AffairBudgetLine {
+  id            String  @id @default(uuid(7))
+  affairId      String
+  category      String // LABOUR, EXPENSES, VEHICLES, SUBCONTRACTING, OTHER
+  plannedAmount Decimal @db.Decimal(14, 2)
+  comment       String?
+
+  affair Affair @relation(fields: [affairId], references: [id], onDelete: Cascade)
+
+  @@unique([affairId, category])
+  @@map("affair_budget_lines")
+}
+
+model AffairRate {
+  id          String   @id @default(uuid(7))
+  affairId    String
+  serviceType String
+  unit        String   @default("vacation")
+  unitPrice   Decimal  @db.Decimal(14, 2)
+  validFrom   DateTime @db.Date
+
+  affair Affair @relation(fields: [affairId], references: [id], onDelete: Cascade)
+
+  @@map("affair_rates")
+}
+
+model Project {
+  id        String    @id @default(uuid(7))
+  affairId  String
+  code      String
+  name      String
+  manager   String?
+  startDate DateTime? @db.Date
+  endDate   DateTime? @db.Date
+  status    String    @default("OPEN")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  affair   Affair    @relation(fields: [affairId], references: [id], onDelete: Cascade)
+  sites    Site[]
+  missions Mission[]
+
+  @@unique([affairId, code])
+  @@map("projects")
+}
+
+model Site {
+  id                String   @id @default(uuid(7))
+  projectId         String
+  name              String
+  address           String?
+  city              String?
+  region            String?
+  latitude          Decimal? @db.Decimal(10, 7)
+  longitude         Decimal? @db.Decimal(10, 7)
+  distanceFromHqKm  Int?
+  accessConstraints String?
+  hseRequirements   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  missions Mission[]
+  assets   Asset[]
+
+  @@map("sites")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MISSIONS & ORDRES DE MISSION
+// ═══════════════════════════════════════════════════════════════
+
+enum MissionStatus {
+  REQUESTED
+  PLANNED
+  ASSIGNED
+  CONFIRMED
+  ORDER_ISSUED
+  IN_PROGRESS
+  COMPLETED
+  REPORTED
+  CLOSED
+  POSTPONED
+  CANCELLED
+}
+
+model Mission {
+  id           String        @id @default(uuid(7))
+  number       String
+  affairId     String
+  projectId    String?
+  siteId       String?
+  departmentId String?
+  serviceType  String?
+  status       MissionStatus @default(REQUESTED)
+  billable     Boolean       @default(true)
+  objective    String?
+  instructions String?
+
+  plannedStartDate    DateTime? @db.Date
+  plannedEndDate      DateTime? @db.Date
+  actualStartDate     DateTime?
+  actualEndDate       DateTime?
+  reportDueDate       DateTime? @db.Date
+  reportDeliveredDate DateTime? @db.Date
+
+  vehicleId     String?
+  requestedById String?
+  cancelReason  String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdById String?
+  updatedById String?
+
+  affair          Affair              @relation(fields: [affairId], references: [id])
+  project         Project?            @relation(fields: [projectId], references: [id])
+  site            Site?               @relation(fields: [siteId], references: [id])
+  department      Department?         @relation(fields: [departmentId], references: [id])
+  vehicle         Vehicle?            @relation(fields: [vehicleId], references: [id])
+  assignments     MissionAssignment[]
+  missionOrder    MissionOrder?
+  inspections     Inspection[]
+  reports         Report[]
+  timesheetDays   TimesheetDay[]
+  expenseLines    ExpenseLine[]
+  attachmentLines AttachmentLine[]
+  vehicleBookings VehicleBooking[]
+
+  @@unique([number])
+  @@index([affairId])
+  @@index([status, plannedStartDate])
+  @@map("missions")
+}
+
+model MissionAssignment {
+  id                String   @id @default(uuid(7))
+  missionId         String
+  employeeId        String
+  role              String   @default("LEAD")
+  plannedDays       Decimal  @db.Decimal(5, 1)
+  actualDays        Decimal? @db.Decimal(5, 1)
+  dailyCostSnapshot Decimal? @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+
+  mission  Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([missionId, employeeId])
+  @@map("mission_assignments")
+}
+
+enum MissionOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SIGNED
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+  REJECTED
+}
+
+model MissionOrder {
+  id              String             @id @default(uuid(7))
+  number          String             @unique
+  missionId       String             @unique
+  object          String
+  instructions    String?
+  hseInstructions String?
+  status          MissionOrderStatus @default(DRAFT)
+
+  issuedById    String?
+  signedById    String?
+  signedAt      DateTime?
+  signatureHash String?
+  signatureIp   String?
+  pdfDocumentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mission   Mission                @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  approvals MissionOrderApproval[]
+
+  @@map("mission_orders")
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+  RETURNED
+}
+
+model MissionOrderApproval {
+  id             String           @id @default(uuid(7))
+  missionOrderId String
+  step           Int
+  userId         String?
+  decision       ApprovalDecision
+  comment        String?
+  decidedAt      DateTime         @default(now())
+
+  missionOrder MissionOrder @relation(fields: [missionOrderId], references: [id], onDelete: Cascade)
+
+  @@map("mission_order_approvals")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INSPECTIONS, TEMPLATES, RAPPORTS
+// ═══════════════════════════════════════════════════════════════
+
+model InspectionMethod {
+  id           String   @id @default(uuid(7))
+  code         String   @unique // UT, PT, MT, VT, RT, VER_LEVAGE...
+  name         String
+  departmentId String?
+  standards    String[]
+  procedureRef String?
+
+  department Department?          @relation(fields: [departmentId], references: [id])
+  templates  InspectionTemplate[]
+
+  @@map("inspection_methods")
+}
+
+enum InspectionParadigm {
+  MEASUREMENT
+  CHECKLIST
+  CRITERIA
+}
+
+enum TemplateStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+}
+
+model InspectionTemplate {
+  id              String             @id @default(uuid(7))
+  formCode        String // PR01-F02
+  version         String             @default("00")
+  title           String
+  titleEn         String?
+  methodId        String?
+  paradigm        InspectionParadigm
+  applicationDate DateTime?          @db.Date
+  status          TemplateStatus     @default(DRAFT)
+  schema          Json               @db.JsonB
+  pdfLayout       Json?              @db.JsonB
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  method      InspectionMethod? @relation(fields: [methodId], references: [id])
+  inspections Inspection[]
+  reports     Report[]
+
+  @@unique([formCode, version])
+  @@map("inspection_templates")
+}
+
+enum InspectionStatus {
+  DRAFT
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+}
+
+model Inspection {
+  id              String           @id @default(uuid(7))
+  missionId       String
+  templateId      String
+  templateVersion String
+  assetId         String?
+  inspectorId     String
+  date            DateTime         @db.Date
+  data            Json             @db.JsonB
+  verdict         String?
+  status          InspectionStatus @default(DRAFT)
+
+  clientMutationId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mission   Mission            @relation(fields: [missionId], references: [id])
+  template  InspectionTemplate @relation(fields: [templateId], references: [id])
+  asset     Asset?             @relation(fields: [assetId], references: [id])
+  inspector Employee           @relation(fields: [inspectorId], references: [id])
+  devices   InspectionDevice[]
+  findings  Finding[]
+  report    Report?
+
+  @@index([missionId])
+  @@map("inspections")
+}
+
+model InspectionDevice {
+  inspectionId       String
+  measuringDeviceId  String
+  calibrationValidAt DateTime? @db.Date
+
+  inspection      Inspection      @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  measuringDevice MeasuringDevice @relation(fields: [measuringDeviceId], references: [id])
+
+  @@id([inspectionId, measuringDeviceId])
+  @@map("inspection_devices")
+}
+
+enum Severity {
+  CRITICAL
+  MAJOR
+  MINOR
+  OBSERVATION
+}
+
+model Finding {
+  id           String   @id @default(uuid(7))
+  inspectionId String
+  reference    String
+  type         String?
+  location     Json?    @db.JsonB
+  dimensions   String?
+  severity     Severity @default(OBSERVATION)
+  decision     String? // V/NV, C/NC
+  comment      String?
+  photoIds     String[]
+
+  createdAt DateTime @default(now())
+
+  inspection    Inspection     @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  nonConformity NonConformity?
+
+  @@map("findings")
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_CHECK
+  CORRECTION
+  VALIDATED
+  ISSUED
+  ARCHIVED
+}
+
+model Report {
+  id             String       @id @default(uuid(7))
+  number         String       @unique
+  inspectionId   String?      @unique
+  missionId      String
+  affairId       String
+  templateId     String?
+  authorId       String
+  checkerId      String?
+  status         ReportStatus @default(DRAFT)
+  revision       Int          @default(0)
+  revisionReason String?
+
+  submittedAt   DateTime?
+  checkedAt     DateTime?
+  issuedAt      DateTime?
+  deliveredAt   DateTime?
+  pdfDocumentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inspection    Inspection?          @relation(fields: [inspectionId], references: [id])
+  mission       Mission              @relation(fields: [missionId], references: [id])
+  affair        Affair               @relation(fields: [affairId], references: [id])
+  template      InspectionTemplate?  @relation(fields: [templateId], references: [id])
+  author        Employee             @relation("ReportAuthor", fields: [authorId], references: [id])
+  checker       Employee?            @relation("ReportChecker", fields: [checkerId], references: [id])
+  checks        ReportCheck[]
+  distributions ReportDistribution[]
+
+  @@index([status])
+  @@index([affairId])
+  @@map("reports")
+}
+
+model ReportCheck {
+  id         String   @id @default(uuid(7))
+  reportId   String
+  criterion  String
+  applicable Boolean  @default(true)
+  conform    Boolean?
+  comment    String?
+  checkerId  String?
+  checkedAt  DateTime @default(now())
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("report_checks")
+}
+
+model ReportDistribution {
+  id             String    @id @default(uuid(7))
+  reportId       String
+  contactId      String?
+  channel        String    @default("EMAIL")
+  sentAt         DateTime?
+  acknowledgedAt DateTime?
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("report_distributions")
+}
+
+enum NonConformityStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  EVIDENCE_PROVIDED
+  VERIFICATION
+  CLOSED
+  REJECTED
+}
+
+model NonConformity {
+  id               String              @id @default(uuid(7))
+  number           String              @unique
+  findingId        String?             @unique
+  affairId         String?
+  assetId          String?
+  description      String
+  severity         Severity            @default(MINOR)
+  ownerId          String?
+  dueDate          DateTime?           @db.Date
+  correctiveAction String?
+  /// Preuve documentaire de la levée : le système qualité l'exige à la clôture.
+  evidenceDocumentId String?
+  /// Motif du refus, quand le vérificateur renvoie l'écart en traitement.
+  verificationComment String?
+  status           NonConformityStatus @default(OPEN)
+  openedById       String?
+  closedAt         DateTime?
+  closedById       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  finding Finding?  @relation(fields: [findingId], references: [id])
+  affair  Affair?   @relation(fields: [affairId], references: [id])
+  asset   Asset?    @relation(fields: [assetId], references: [id])
+  owner    Employee? @relation("NonConformityOwner", fields: [ownerId], references: [id])
+  openedBy Employee? @relation("NonConformityOpener", fields: [openedById], references: [id])
+  closedBy Employee? @relation("NonConformityCloser", fields: [closedById], references: [id])
+
+  @@index([status, dueDate])
+  @@map("non_conformities")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ÉQUIPEMENTS
+// ═══════════════════════════════════════════════════════════════
+
+model Asset {
+  id                String    @id @default(uuid(7))
+  clientId          String
+  siteId            String?
+  tag               String
+  type              String?
+  brand             String?
+  model             String?
+  serialNumber      String?
+  specs             Json?     @db.JsonB
+  commissioningDate DateTime? @db.Date
+  /// Périodicité réglementaire, en mois : c'est elle qui reporte l'échéance
+  /// après chaque inspection, plutôt qu'une saisie à refaire à la main.
+  inspectionIntervalM Int?
+  /// Texte qui impose le contrôle — arrêté, décret, norme.
+  regulatoryRef     String?
+  nextInspectionDue DateTime? @db.Date
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  client          Client          @relation(fields: [clientId], references: [id])
+  site            Site?           @relation(fields: [siteId], references: [id])
+  inspections     Inspection[]
+  nonConformities NonConformity[]
+
+  @@unique([clientId, tag])
+  @@map("assets")
+}
+
+enum DeviceStatus {
+  AVAILABLE
+  IN_USE
+  DUE_CALIBRATION
+  IN_CALIBRATION
+  EXPIRED
+  OUT_OF_SERVICE
+}
+
+/// Parc d'instruments de mesure d'I2S — étalonnage bloquant. Voir docs/00 §3.6.
+model MeasuringDevice {
+  id                    String       @id @default(uuid(7))
+  companyId             String
+  code                  String
+  type                  String
+  brand                 String?
+  model                 String?
+  serialNumber          String?
+  departmentId          String?
+  holderId              String?
+  calibrationValidUntil DateTime?    @db.Date
+  calibrationIntervalM  Int          @default(12)
+  status                DeviceStatus @default(AVAILABLE)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company      Company             @relation(fields: [companyId], references: [id])
+  department   Department?         @relation(fields: [departmentId], references: [id])
+  holder       Employee?           @relation("DeviceHolder", fields: [holderId], references: [id])
+  calibrations CalibrationRecord[]
+  inspections  InspectionDevice[]
+
+  @@unique([companyId, code])
+  @@index([calibrationValidUntil])
+  @@map("measuring_devices")
+}
+
+model CalibrationRecord {
+  id                String   @id @default(uuid(7))
+  deviceId          String
+  date              DateTime @db.Date
+  provider          String?
+  certificateNumber String?
+  validUntil        DateTime @db.Date
+  result            String   @default("CONFORM")
+  documentId        String?
+  cost              Decimal? @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+
+  device MeasuringDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@map("calibration_records")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FLOTTE
+// ═══════════════════════════════════════════════════════════════
+
+enum VehicleType {
+  SERVICE
+  FUNCTION
+}
+
+enum VehicleOwnership {
+  OWNED
+  LLD
+  LCD
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+model Vehicle {
+  id              String           @id @default(uuid(7))
+  companyId       String
+  plate           String
+  brand           String?
+  model           String?
+  type            VehicleType      @default(SERVICE)
+  departmentId    String?
+  assignedToId    String?
+  ownership       VehicleOwnership @default(OWNED)
+  monthlyFee      Decimal?         @db.Decimal(12, 2)
+  contractEndDate DateTime?        @db.Date
+  currentKm       Int?
+  status          VehicleStatus    @default(AVAILABLE)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company      Company              @relation(fields: [companyId], references: [id])
+  department   Department?          @relation(fields: [departmentId], references: [id])
+  assignedTo   Employee?            @relation("VehicleAssignee", fields: [assignedToId], references: [id])
+  bookings     VehicleBooking[]
+  maintenances VehicleMaintenance[]
+  insurances   VehicleInsurance[]
+  fuelLogs     FuelLog[]
+  missions     Mission[]
+
+  @@unique([companyId, plate])
+  @@map("vehicles")
+}
+
+model VehicleBooking {
+  id        String   @id @default(uuid(7))
+  vehicleId String
+  missionId String?
+  driverId  String?
+  fromDate  DateTime
+  toDate    DateTime
+  startKm   Int?
+  endKm     Int?
+
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  mission Mission?  @relation(fields: [missionId], references: [id])
+  driver  Employee? @relation(fields: [driverId], references: [id])
+
+  @@index([vehicleId, fromDate, toDate])
+  @@map("vehicle_bookings")
+}
+
+model VehicleMaintenance {
+  id          String    @id @default(uuid(7))
+  vehicleId   String
+  type        String
+  date        DateTime  @db.Date
+  km          Int?
+  cost        Decimal?  @db.Decimal(12, 2)
+  provider    String?
+  documentId  String?
+  nextDueKm   Int?
+  nextDueDate DateTime? @db.Date
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_maintenances")
+}
+
+model VehicleInsurance {
+  id           String   @id @default(uuid(7))
+  vehicleId    String
+  policyNumber String
+  insurer      String?
+  validFrom    DateTime @db.Date
+  validTo      DateTime @db.Date
+  premium      Decimal? @db.Decimal(12, 2)
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_insurances")
+}
+
+model FuelLog {
+  id            String   @id @default(uuid(7))
+  vehicleId     String
+  date          DateTime @db.Date
+  liters        Decimal? @db.Decimal(8, 2)
+  amount        Decimal  @db.Decimal(12, 2)
+  km            Int?
+  expenseLineId String?
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("fuel_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ATTACHEMENTS, FACTURATION, ENCAISSEMENT
+// ═══════════════════════════════════════════════════════════════
+
+enum AttachmentStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_CHECK
+  CORRECTION
+  VALIDATED
+  BILLABLE
+  INVOICED
+}
+
+model AttachmentSheet {
+  id                   String           @id @default(uuid(7))
+  number               String           @unique
+  affairId             String
+  clientId             String
+  periodStart          DateTime         @db.Date
+  periodEnd            DateTime         @db.Date
+  status               AttachmentStatus @default(DRAFT)
+  totalHT              Decimal          @default(0) @db.Decimal(14, 2)
+  submittedAt          DateTime?
+  validatedAt          DateTime?
+  validatedById        String?
+  clientSignatureDocId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  affair   Affair              @relation(fields: [affairId], references: [id])
+  client   Client              @relation(fields: [clientId], references: [id])
+  lines    AttachmentLine[]
+  invoices InvoiceAttachment[]
+
+  @@index([affairId, status])
+  @@map("attachment_sheets")
+}
+
+model AttachmentLine {
+  id                String  @id @default(uuid(7))
+  attachmentSheetId String
+  missionId         String?
+  employeeId        String?
+  designation       String
+  days              Decimal @db.Decimal(6, 2)
+  unitRate          Decimal @db.Decimal(14, 2)
+  amountHT          Decimal @db.Decimal(14, 2)
+
+  attachmentSheet AttachmentSheet @relation(fields: [attachmentSheetId], references: [id], onDelete: Cascade)
+  mission         Mission?        @relation(fields: [missionId], references: [id])
+  employee        Employee?       @relation(fields: [employeeId], references: [id])
+  timesheetDays   TimesheetDay[]
+
+  @@map("attachment_lines")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id            String        @id @default(uuid(7))
+  companyId     String
+  number        String
+  clientId      String
+  affairId      String?
+  issueDate     DateTime      @db.Date
+  dueDate       DateTime      @db.Date
+  totalHT       Decimal       @db.Decimal(14, 2)
+  vatRate       Decimal       @default(20) @db.Decimal(5, 2)
+  totalTTC      Decimal       @db.Decimal(14, 2)
+  status        InvoiceStatus @default(DRAFT)
+  pdfDocumentId String?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company             @relation(fields: [companyId], references: [id])
+  client      Client              @relation(fields: [clientId], references: [id])
+  affair      Affair?             @relation(fields: [affairId], references: [id])
+  lines       InvoiceLine[]
+  attachments InvoiceAttachment[]
+  payments    Payment[]
+  creditNotes CreditNote[]
+  dunnings    Dunning[]
+
+  @@unique([companyId, number])
+  @@index([status, dueDate])
+  @@map("invoices")
+}
+
+model InvoiceAttachment {
+  invoiceId         String
+  attachmentSheetId String
+
+  invoice         Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  attachmentSheet AttachmentSheet @relation(fields: [attachmentSheetId], references: [id])
+
+  @@id([invoiceId, attachmentSheetId])
+  @@map("invoice_attachments")
+}
+
+model InvoiceLine {
+  id          String  @id @default(uuid(7))
+  invoiceId   String
+  position    Int     @default(1)
+  designation String
+  quantity    Decimal @db.Decimal(12, 2)
+  unitPrice   Decimal @db.Decimal(14, 2)
+  amountHT    Decimal @db.Decimal(14, 2)
+  vatRate     Decimal @default(20) @db.Decimal(5, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_lines")
+}
+
+model CreditNote {
+  id        String   @id @default(uuid(7))
+  invoiceId String
+  number    String   @unique
+  amount    Decimal  @db.Decimal(14, 2)
+  reason    String
+  issueDate DateTime @db.Date
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("credit_notes")
+}
+
+model Payment {
+  id            String    @id @default(uuid(7))
+  invoiceId     String
+  date          DateTime  @db.Date
+  amount        Decimal   @db.Decimal(14, 2)
+  method        String    @default("TRANSFER")
+  bankReference String?
+  reconciledAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("payments")
+}
+
+model Dunning {
+  id        String    @id @default(uuid(7))
+  invoiceId String
+  level     Int       @default(1)
+  sentAt    DateTime?
+  channel   String    @default("EMAIL")
+  response  String?
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("dunnings")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FRAIS & AVANCES
+// ═══════════════════════════════════════════════════════════════
+
+enum ExpenseCapType {
+  NONE
+  DAILY
+  MONTHLY
+  PER_NIGHT
+}
+
+model ExpenseCategory {
+  id                    String         @id @default(uuid(7))
+  code                  String         @unique
+  label                 String
+  capType               ExpenseCapType @default(NONE)
+  capAmount             Decimal?       @db.Decimal(12, 2)
+  requiresReceipt       Boolean        @default(true)
+  requiresPriorApproval Boolean        @default(false)
+  glAccount             String?
+  isActive              Boolean        @default(true)
+  position              Int            @default(0)
+
+  lines ExpenseLine[]
+
+  @@map("expense_categories")
+}
+
+enum ExpenseReportType {
+  MISSION
+  OFF_MISSION
+}
+
+enum ExpenseReportStatus {
+  DRAFT
+  SUBMITTED
+  CONFIRMED_N1
+  CHECKED_HR_CG
+  ACCOUNTED
+  APPROVED_DG
+  READY_TO_PAY
+  PAID
+  REJECTED
+}
+
+model ExpenseReport {
+  id          String              @id @default(uuid(7))
+  number      String              @unique
+  companyId   String
+  employeeId  String
+  periodMonth DateTime            @db.Date
+  type        ExpenseReportType   @default(MISSION)
+  status      ExpenseReportStatus @default(DRAFT)
+
+  totalGross       Decimal   @default(0) @db.Decimal(14, 2)
+  advanceDeduction Decimal   @default(0) @db.Decimal(14, 2)
+  netPayable       Decimal   @default(0) @db.Decimal(14, 2)
+  paymentMethod    String    @default("TRANSFER")
+  paidAt           DateTime?
+  bankReference    String?
+  rejectReason     String?
+  observation      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company             @relation(fields: [companyId], references: [id])
+  employee    Employee            @relation(fields: [employeeId], references: [id])
+  lines       ExpenseLine[]
+  approvals   ExpenseApproval[]
+  settlements AdvanceSettlement[]
+
+  @@unique([employeeId, periodMonth, type])
+  @@index([status])
+  @@map("expense_reports")
+}
+
+enum ExpenseLineStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model ExpenseLine {
+  id                String            @id @default(uuid(7))
+  expenseReportId   String
+  date              DateTime          @db.Date
+  categoryId        String
+  affairId          String?
+  missionId         String?
+  missionOrderId    String?
+  departmentId      String?
+  clientSiteLabel   String?
+  serviceType       String?
+  description       String?
+  amount            Decimal           @db.Decimal(12, 2)
+  receiptDocumentId String?
+  comment           String?
+  status            ExpenseLineStatus @default(PENDING)
+  rejectReason      String?
+  capWarning        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenseReport ExpenseReport   @relation(fields: [expenseReportId], references: [id], onDelete: Cascade)
+  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
+  affair        Affair?         @relation(fields: [affairId], references: [id])
+  mission       Mission?        @relation(fields: [missionId], references: [id])
+  department    Department?     @relation(fields: [departmentId], references: [id])
+
+  @@index([expenseReportId])
+  @@index([affairId])
+  @@map("expense_lines")
+}
+
+model ExpenseApproval {
+  id              String           @id @default(uuid(7))
+  expenseReportId String
+  step            Int
+  roleCode        String
+  userId          String?
+  decision        ApprovalDecision
+  comment         String?
+  decidedAt       DateTime         @default(now())
+
+  expenseReport ExpenseReport @relation(fields: [expenseReportId], references: [id], onDelete: Cascade)
+
+  @@map("expense_approvals")
+}
+
+enum AdvanceStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  PARTIALLY_SETTLED
+  SETTLED
+  CANCELLED
+}
+
+model Advance {
+  id            String        @id @default(uuid(7))
+  employeeId    String
+  date          DateTime      @db.Date
+  amount        Decimal       @db.Decimal(12, 2)
+  reason        String?
+  affairId      String?
+  status        AdvanceStatus @default(REQUESTED)
+  /// Qui a enregistré la demande, qui l'a accordée : une avance est de la
+  /// trésorerie, elle ne se décide pas seule.
+  requestedById String?
+  approvedById  String?
+  approvedAt    DateTime?
+  rejectReason  String?
+  paidAt        DateTime?
+  settledAmount Decimal       @default(0) @db.Decimal(12, 2)
+  settledAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee    Employee            @relation(fields: [employeeId], references: [id])
+  affair      Affair?             @relation(fields: [affairId], references: [id])
+  requestedBy Employee?           @relation("AdvanceRequester", fields: [requestedById], references: [id])
+  approvedBy  Employee?           @relation("AdvanceApprover", fields: [approvedById], references: [id])
+  settlements AdvanceSettlement[]
+
+  @@map("advances")
+}
+
+model AdvanceSettlement {
+  id              String  @id @default(uuid(7))
+  advanceId       String
+  expenseReportId String
+  amount          Decimal @db.Decimal(12, 2)
+
+  advance       Advance       @relation(fields: [advanceId], references: [id], onDelete: Cascade)
+  expenseReport ExpenseReport @relation(fields: [expenseReportId], references: [id])
+
+  @@map("advance_settlements")
+}
+
+model SharedAccommodation {
+  id           String    @id @default(uuid(7))
+  label        String
+  city         String?
+  monthlyCost  Decimal   @db.Decimal(12, 2)
+  departmentId String?
+  activeFrom   DateTime  @db.Date
+  activeTo     DateTime? @db.Date
+
+  @@map("shared_accommodations")
+}
+
+model BankStatementLine {
+  id          String    @id @default(uuid(7))
+  companyId   String
+  date        DateTime  @db.Date
+  label       String
+  amount      Decimal   @db.Decimal(14, 2)
+  matchedType String?
+  matchedId   String?
+  matchedAt   DateTime?
+
+  @@index([companyId, date])
+  @@map("bank_statement_lines")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GED
+// ═══════════════════════════════════════════════════════════════
+
+enum Confidentiality {
+  PUBLIC
+  INTERNAL
+  RESTRICTED
+  CONFIDENTIAL
+}
+
+model Document {
+  id              String          @id @default(uuid(7))
+  companyId       String
+  type            String
+  qmsCode         String?
+  version         String?
+  applicationDate DateTime?       @db.Date
+  fileName        String
+  mimeType        String
+  size            Int
+  sha256          String
+  storageKey      String
+  entityType      String?
+  entityId        String?
+  affairId        String?
+  departmentId    String?
+  year            Int?
+  tags            String[]
+  confidentiality Confidentiality @default(INTERNAL)
+  uploadedById    String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company  Company           @relation(fields: [companyId], references: [id])
+  affair   Affair?           @relation(fields: [affairId], references: [id])
+  versions DocumentVersion[]
+  accesses DocumentAccess[]
+
+  @@index([entityType, entityId])
+  @@index([affairId])
+  @@index([type, year])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id          String   @id @default(uuid(7))
+  documentId  String
+  version     Int
+  storageKey  String
+  sha256      String
+  size        Int
+  comment     String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@map("document_versions")
+}
+
+model DocumentAccess {
+  id         String  @id @default(uuid(7))
+  documentId String
+  roleId     String?
+  userId     String?
+  permission String  @default("VIEW")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_accesses")
+}
+
+model DocumentRegistry {
+  id             String    @id @default(uuid(7))
+  type           String // EXTERNAL, CLIENT_ARCHIVE
+  documentId     String?
+  origin         String?
+  reference      String?
+  receivedAt     DateTime? @db.Date
+  registeredById String?
+
+  createdAt DateTime @default(now())
+
+  @@map("document_registries")
+}
