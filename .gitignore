@@ -13,8 +13,8 @@ out/
 coverage/
 .nyc_output/
 
-storage/
-uploads/
+/storage/
+/uploads/
 tmp/
 
 .DS_Store
