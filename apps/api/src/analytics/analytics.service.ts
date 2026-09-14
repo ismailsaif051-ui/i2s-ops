@@ -565,15 +565,35 @@ export class AnalyticsService {
       }),
     ]);
 
+    const yearStart = new Date(Date.UTC(to.getUTCFullYear(), 0, 1));
     const invoices = await this.prisma.invoice.findMany({
-      where: { issueDate: { gte: new Date(Date.UTC(to.getUTCFullYear(), 0, 1)) }, status: { not: 'CANCELLED' } },
-      select: { totalHT: true, payments: { select: { amount: true } } },
+      where: { issueDate: { gte: yearStart }, status: { not: 'CANCELLED' } },
+      select: {
+        totalHT: true,
+        issueDate: true,
+        payments: { select: { amount: true, date: true } },
+      },
     });
     const invoiced = invoices.reduce((s, i) => s + Number(i.totalHT), 0);
     const collected = invoices.reduce(
       (s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0),
       0,
     );
+
+    // Historique mensuel (janvier → mois courant) pour les mini-graphiques du
+    // cockpit — cumul réel à partir des mêmes factures/encaissements, jamais
+    // une valeur inventée.
+    const monthCount = to.getUTCMonth() + 1;
+    const invoicedTrend = new Array(monthCount).fill(0) as number[];
+    const collectedTrend = new Array(monthCount).fill(0) as number[];
+    for (const inv of invoices) {
+      const m = inv.issueDate.getUTCMonth();
+      if (m < monthCount) invoicedTrend[m] += Number(inv.totalHT);
+      for (const pay of inv.payments) {
+        const pm = pay.date.getUTCMonth();
+        if (pm < monthCount) collectedTrend[pm] += Number(pay.amount);
+      }
+    }
 
     // Taux de respect du délai de remise de rapport (objectif QMS < 21 j ouvrés).
     const issuedReports = await this.prisma.report.findMany({
@@ -600,6 +620,8 @@ export class AnalyticsService {
       openNonConformities,
       invoicedYtd: Math.round(invoiced),
       collectedYtd: Math.round(collected),
+      invoicedTrend: invoicedTrend.map((v) => Math.round(v)),
+      collectedTrend: collectedTrend.map((v) => Math.round(v)),
       reportOnTimeRate: onTimeRate(onTime, issuedReports.length),
       reportsIssued: issuedReports.length,
     };

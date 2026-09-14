@@ -126,6 +126,33 @@ export function PageHeader({
 
 /* ── Indicateurs ─────────────────────────────────────────────────── */
 
+/**
+ * Mini-courbe d'évolution — jamais affichée sans au moins deux points réels :
+ * une carte sans historique garde simplement son chiffre seul plutôt que de
+ * laisser deviner une tendance inventée.
+ */
+export function Sparkline({ points, tone }: { points: number[]; tone?: Tone }) {
+  if (points.length < 2) return null;
+  const w = 64;
+  const h = 22;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = w / (points.length - 1);
+  const coords = points.map((p, i) => [i * step, h - ((p - min) / span) * h] as const);
+  const path = coords.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const stroke =
+    tone === 'danger' ? 'var(--danger)' : tone === 'warning' ? 'var(--warning)' : 'var(--secondary)';
+  const [lastX, lastY] = coords[coords.length - 1];
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="shrink-0" aria-hidden="true">
+      <path d={path} fill="none" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r={1.8} fill={stroke} />
+    </svg>
+  );
+}
+
 export function KpiCard({
   label,
   value,
@@ -133,6 +160,7 @@ export function KpiCard({
   hint,
   tone,
   href,
+  trend,
 }: {
   label: string;
   value: string | number;
@@ -140,17 +168,22 @@ export function KpiCard({
   hint?: string;
   tone?: Tone;
   href?: string;
+  /** Historique réel (le plus ancien en premier) — omis si non disponible. */
+  trend?: number[];
 }) {
   const valueTone =
     tone === 'danger' ? 'text-danger' : tone === 'warning' ? 'text-warning' : 'text-text';
 
   const body = (
     <>
-      {/* Hauteur fixe : un libellé sur deux lignes ne décale pas le chiffre
-          par rapport aux cartes voisines. */}
-      <p className="flex min-h-[2.6em] items-start text-[13.5px] leading-snug text-muted">
-        {label}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        {/* Hauteur fixe : un libellé sur deux lignes ne décale pas le chiffre
+            par rapport aux cartes voisines. */}
+        <p className="flex min-h-[2.6em] items-start text-[13.5px] leading-snug text-muted">
+          {label}
+        </p>
+        {trend && <Sparkline points={trend} tone={tone} />}
+      </div>
       <p className={`title tnum mt-1 text-[32px] font-semibold leading-none tracking-[-0.02em] ${valueTone}`}>
         {value}
         {unit && <span className="ml-1.5 text-[15px] font-medium text-subtle">{unit}</span>}

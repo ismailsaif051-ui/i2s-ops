@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ROLE_LABELS, can, type RoleCode } from '@i2s/contracts';
@@ -11,6 +12,16 @@ import {
   PageHeader,
   StatusBadge,
 } from '@/components/ui';
+
+const WEEKDAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+function loadCellTone(category: string | null, conflicts: string[]): string {
+  if (conflicts.length > 0) return 'bg-danger-soft ring-1 ring-inset ring-danger';
+  if (category === 'MISSION_BILLABLE' || category === 'MISSION_NON_BILLABLE') return 'bg-accent';
+  if (category === 'LEAVE' || category === 'SICK' || category === 'TRAINING') return 'bg-neutral-soft';
+  if (category === 'UNASSIGNED') return 'border border-dashed border-border-strong';
+  return 'bg-surface-2';
+}
 
 export const metadata: Metadata = { title: 'Cockpit' };
 
@@ -30,15 +41,39 @@ interface Dashboard {
   openNonConformities: number;
   invoicedYtd: number;
   collectedYtd: number;
+  invoicedTrend: number[];
+  collectedTrend: number[];
   reportOnTimeRate: number;
   reportsIssued: number;
+}
+
+interface WeekPlanningCell {
+  date: string;
+  isWorkingDay: boolean;
+  category: string | null;
+  conflicts: string[];
+}
+interface WeekPlanningRow {
+  employeeId: string;
+  name: string;
+  department: { code: string } | null;
+  cells: WeekPlanningCell[];
+  loadRate: number;
+}
+interface WeekPlanning {
+  period: { from: string; to: string };
+  columns: Array<{ date: string; isWorkingDay: boolean }>;
+  rows: WeekPlanningRow[];
 }
 
 export default async function CockpitPage() {
   const session = await requireSession();
   const permissions = session.permissions as Parameters<typeof can>[0];
 
-  const data = await api<Dashboard>('/analytics/dashboard').catch(() => null);
+  const [data, weekPlanning] = await Promise.all([
+    api<Dashboard>('/analytics/dashboard').catch(() => null),
+    api<WeekPlanning>('/planning').catch(() => null),
+  ]);
 
   const alerts: Array<{ tone: 'danger' | 'warning'; title: string; detail: string; href: string }> = [];
   if (data) {
@@ -106,6 +141,22 @@ export default async function CockpitPage() {
         }
       />
 
+      {alerts.length > 0 && (
+        <NextActionBanner
+          tone={alerts[0].tone}
+          title={`Que dois-je faire ? — ${alerts[0].title}`}
+          detail={alerts[0].detail}
+          action={
+            <Link
+              href={alerts[0].href}
+              className="rounded-[8px] border border-border-strong bg-surface px-3.5 py-2 text-[13px] font-medium hover:bg-surface-2"
+            >
+              Ouvrir
+            </Link>
+          }
+        />
+      )}
+
       {data ? (
         <>
           <KpiRow>
@@ -124,8 +175,18 @@ export default async function CockpitPage() {
               tone={data.idleCost > 0 ? 'danger' : undefined}
               href="/pilotage/jours-non-affectes"
             />
-            <KpiCard label="Facturé (année)" value={compactDh(data.invoicedYtd)} href="/finance/factures" />
-            <KpiCard label="Encaissé (année)" value={compactDh(data.collectedYtd)} href="/finance/encaissements" />
+            <KpiCard
+              label="Facturé (année)"
+              value={compactDh(data.invoicedYtd)}
+              trend={data.invoicedTrend}
+              href="/finance/factures"
+            />
+            <KpiCard
+              label="Encaissé (année)"
+              value={compactDh(data.collectedYtd)}
+              trend={data.collectedTrend}
+              href="/finance/encaissements"
+            />
           </KpiRow>
 
           <KpiRow>
@@ -199,6 +260,52 @@ export default async function CockpitPage() {
           title="Indicateurs indisponibles"
           detail="Votre profil n’a pas accès aux tableaux de bord, ou aucune donnée n’a encore été enregistrée."
         />
+      )}
+
+      {weekPlanning && weekPlanning.rows.length > 0 && (
+        <Card
+          title="Charge inspecteurs de la semaine"
+          action={
+            <Link href="/operations/planning" className="text-[13px] font-medium text-accent hover:underline">
+              Planning complet
+            </Link>
+          }
+          className="mb-5"
+        >
+          <div className="overflow-x-auto px-5 py-4">
+            <div
+              className="grid items-center gap-x-3 gap-y-2.5"
+              style={{ gridTemplateColumns: `120px repeat(${weekPlanning.columns.length}, 24px)` }}
+            >
+              <span />
+              {weekPlanning.columns.map((col) => (
+                <span key={col.date} className="text-center text-[11px] font-medium text-subtle">
+                  {WEEKDAY_LABELS[new Date(col.date).getUTCDay() === 0 ? 6 : new Date(col.date).getUTCDay() - 1]}
+                </span>
+              ))}
+              {weekPlanning.rows.slice(0, 8).map((row) => (
+                <Fragment key={row.employeeId}>
+                  <span className="truncate text-[13px] font-medium">{row.name}</span>
+                  {row.cells.map((cell) => (
+                    <span
+                      key={cell.date}
+                      title={cell.conflicts.length > 0 ? 'Conflit détecté' : undefined}
+                      className={`h-5 w-5 justify-self-center rounded-[4px] ${
+                        cell.isWorkingDay ? loadCellTone(cell.category, cell.conflicts) : 'bg-transparent'
+                      }`}
+                    />
+                  ))}
+                </Fragment>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-subtle">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-accent" /> Mission</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-neutral-soft" /> Congé / formation</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-dashed border-border-strong" /> Non affecté</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-danger-soft ring-1 ring-inset ring-danger" /> Conflit</span>
+            </div>
+          </div>
+        </Card>
       )}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
