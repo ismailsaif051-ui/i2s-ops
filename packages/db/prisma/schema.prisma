@@ -315,6 +315,8 @@ model Employee {
   managerId    String?
   email        String?
   phone        String?
+  bankName     String?
+  bankRib      String?
   hireDate     DateTime?      @db.Date
   leaveDate    DateTime?      @db.Date
   contractType String?
@@ -1849,6 +1851,7 @@ model ExpenseReport {
   netPayable       Decimal   @default(0) @db.Decimal(14, 2)
   paymentMethod    String    @default("TRANSFER")
   paidAt           DateTime?
+  paidById         String?
   bankReference    String?
   rejectReason     String?
   observation      String?

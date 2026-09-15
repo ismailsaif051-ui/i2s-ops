@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import {
   Card,
@@ -84,11 +85,18 @@ export default async function EmployeesPage() {
             <tbody>
               {items.map((employee) => (
                 <tr key={employee.id}>
-                  <Td mono>{employee.matricule}</Td>
+                  <Td mono>
+                    <Link href={`/ressources/employes/${employee.id}`} className="hover:text-accent">
+                      {employee.matricule}
+                    </Link>
+                  </Td>
                   <Td>
-                    <span className="font-medium">
+                    <Link
+                      href={`/ressources/employes/${employee.id}`}
+                      className="font-medium hover:text-accent"
+                    >
                       {employee.lastName.toUpperCase()} {employee.firstName}
-                    </span>
+                    </Link>
                   </Td>
                   <Td>{employee.position ?? '—'}</Td>
                   <Td>{employee.department?.code ?? '—'}</Td>

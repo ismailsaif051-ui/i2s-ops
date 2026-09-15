@@ -34,8 +34,14 @@ export class EmployeesController {
 
   @Get(':id')
   @RequirePermission('employee', 'VIEW')
-  get(@CurrentUser() user: RequestUser, @Param('id') id: string) {
-    return this.employees.get(user, id);
+  async get(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    const employee = await this.employees.get(user, id);
+    return {
+      ...employee,
+      actions: {
+        update: user.permissions.some((p) => p.resource === 'employee' && p.action === 'UPDATE'),
+      },
+    };
   }
 
   @Post()

@@ -257,6 +257,7 @@ export function ExpenseActions({
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   const blocking = issues.filter((i) => i.blocking);
@@ -350,14 +351,69 @@ export function ExpenseActions({
             </>
           )}
 
-          {actions.pay && (
-            <Button variant="accent" disabled={busy !== null} onClick={() => call('regler')}>
-              {busy === 'regler' ? 'Règlement…' : 'Enregistrer le règlement'}
+          {actions.pay && !paying && (
+            <Button variant="accent" disabled={busy !== null} onClick={() => setPaying(true)}>
+              Enregistrer le règlement
             </Button>
           )}
 
           {status === 'PAID' && <StatusBadge tone="success">Réglée</StatusBadge>}
         </div>
+
+        {actions.pay && paying && (
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              await call(
+                'regler',
+                {
+                  paymentMethod: String(form.get('paymentMethod') ?? 'TRANSFER'),
+                  bankReference: String(form.get('bankReference') ?? '').trim(),
+                },
+                'regler',
+              );
+            }}
+            className="flex flex-col gap-3 border-t border-border pt-4"
+          >
+            <p className="text-[13.5px] text-muted">
+              Un ordre de virement sera généré à partir de ces informations, avec les
+              coordonnées bancaires enregistrées sur la fiche employé.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[180px]">
+                <Field label="Mode de règlement">
+                  <select
+                    name="paymentMethod"
+                    defaultValue="TRANSFER"
+                    className="h-11 w-full rounded-[10px] border border-border-strong bg-surface px-3.5 text-[15px] outline-none focus:border-accent"
+                  >
+                    <option value="TRANSFER">Virement bancaire</option>
+                    <option value="CASH">Espèces</option>
+                    <option value="CHECK">Chèque</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="min-w-[200px] flex-1">
+                <Field label="Référence" hint="N° de virement, de chèque… facultatif à ce stade.">
+                  <Input name="bankReference" maxLength={64} />
+                </Field>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button type="submit" variant="accent" disabled={busy !== null}>
+                {busy === 'regler' ? 'Règlement…' : 'Confirmer le règlement'}
+              </Button>
+              <button
+                type="button"
+                onClick={() => setPaying(false)}
+                className="text-[13.5px] text-subtle hover:underline"
+              >
+                Annuler
+              </button>
+            </div>
+          </form>
+        )}
 
         {rejecting && (
           <form

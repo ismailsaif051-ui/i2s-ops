@@ -120,6 +120,16 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
                 Ouvrir le PDF
               </a>
             )}
+            {report.status === 'PAID' && (
+              <a
+                href={`/api/frais/${report.id}/transfer-order`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium text-text shadow-sm transition-colors hover:border-accent hover:text-accent"
+              >
+                Ordre de virement
+              </a>
+            )}
           </div>
         }
       />

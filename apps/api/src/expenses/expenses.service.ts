@@ -5,6 +5,7 @@ import { NumberingService } from '../numbering/numbering.service';
 import { DocumentsService } from '../documents/documents.service';
 import { ScopeService } from '../rbac/scope.service';
 import { renderExpensePdf } from './expense-pdf';
+import { renderTransferOrderPdf } from './transfer-order-pdf';
 import type { RequestUser, ScopeDescriptor } from '../common/types';
 
 export const EXPENSE_SCOPE: ScopeDescriptor = {
@@ -97,6 +98,8 @@ export class ExpensesService {
             lastName: true,
             departmentId: true,
             position: true,
+            bankName: true,
+            bankRib: true,
             department: { select: { code: true, name: true } },
             manager: { select: { firstName: true, lastName: true } },
           },
@@ -229,6 +232,56 @@ export class ExpensesService {
       checkedAt: step2?.decidedAt ?? null,
       approvedBy: approverName(step4?.userId ?? null),
       approvedAt: step4?.decidedAt ?? null,
+    });
+  }
+
+  /**
+   * Ordre de virement — la pièce que le RAF remet à la banque une fois la
+   * note réglée. N'existe qu'à partir du règlement (docs/10-ROADMAP.md, S9 :
+   * « export virement ») : avant, il n'y a ni montant net ni date arrêtés.
+   */
+  async transferOrderPdf(user: RequestUser, id: string): Promise<Buffer> {
+    const report = await this.get(user, id);
+
+    if (report.status !== 'PAID' || !report.paidAt) {
+      throw new BadRequestException('Cette note de frais n’est pas encore réglée.');
+    }
+
+    const [company, payer] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: report.companyId },
+        select: { name: true, address: true, phone: true },
+      }),
+      report.paidById
+        ? this.prisma.user.findUnique({
+            where: { id: report.paidById },
+            select: { email: true, employee: { select: { firstName: true, lastName: true } } },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    return renderTransferOrderPdf({
+      reference: `OV-${report.number}`,
+      company,
+      issuedAt: report.paidAt,
+      beneficiary: {
+        name: `${report.employee.lastName.toUpperCase()} ${report.employee.firstName}`,
+        matricule: report.employee.matricule,
+        position: report.employee.position,
+        department: report.employee.department?.name ?? report.employee.department?.code ?? null,
+        bankName: report.employee.bankName,
+        bankRib: report.employee.bankRib,
+      },
+      expenseReportNumber: report.number,
+      periodMonth: report.periodMonth,
+      amount: Number(report.netPayable),
+      paymentMethod: report.paymentMethod,
+      bankReference: report.bankReference,
+      issuedBy: payer
+        ? payer.employee
+          ? `${payer.employee.lastName.toUpperCase()} ${payer.employee.firstName}`
+          : payer.email
+        : null,
     });
   }
 
@@ -737,6 +790,7 @@ export class ExpensesService {
         data: {
           status: 'PAID',
           paidAt,
+          paidById: user.id,
           advanceDeduction: deduction,
           netPayable: gross - deduction,
           paymentMethod: input.paymentMethod ?? report.paymentMethod,

@@ -57,6 +57,8 @@ export const createEmployeeSchema = z.object({
   managerId: z.string().uuid().optional(),
   email: z.string().email().optional(),
   phone: z.string().max(32).optional(),
+  bankName: z.string().max(120).optional(),
+  bankRib: z.string().max(34).optional(),
   hireDate: z.coerce.date().optional(),
   contractType: z.string().max(32).optional(),
   isInspector: z.boolean().default(false),

@@ -226,6 +226,24 @@ class ExpensesController {
     res.send(content);
   }
 
+  /** Ordre de virement — voir ExpensesService.transferOrderPdf. */
+  @Get(':id/transfer-order/pdf')
+  @RequirePermission('expense_report', 'VIEW')
+  async transferOrderPdf(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const content = await this.expenses.transferOrderPdf(user, id);
+    const report = await this.expenses.get(user, id);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', String(content.byteLength));
+    res.setHeader('Content-Disposition', `inline; filename="OV-${report.number}.pdf"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(content);
+  }
+
   /**
    * Missions imputables à cette note : celles de l'intéressé, dont l'ordre est
    * signé, et qui touchent le mois de la note. Proposer les autres reviendrait
