@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ApiError, api } from '@/lib/api';
-import { MISSION_STATUS_LABELS, date } from '@/lib/format';
+import { MISSION_STATUS_LABELS, date, moneyDh } from '@/lib/format';
 import { Card, EmptyState, PageHeader, StatusBadge, type Tone } from '@/components/ui';
 import {
   MissionOrderPanel,
@@ -56,6 +56,14 @@ interface MissionDetail {
   } | null;
   inspections: Array<{ id: string; status: string }>;
   reports: Array<{ id: string; number: string; status: string }>;
+  expenseLines: Array<{
+    id: string;
+    date: string;
+    amount: number;
+    status: string;
+    category: string;
+    expenseReport: { id: string; number: string; status: string };
+  }>;
   actions: { assign: boolean; issueOrder: boolean; signOrder: boolean };
 }
 
@@ -145,6 +153,44 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
           actions={mission.actions}
           defaultObject={mission.objective ?? mission.affair.title}
         />
+
+        <Card
+          title="Frais de mission"
+          action={
+            <Link
+              href="/finance/notes-de-frais"
+              className="text-[13px] font-medium text-accent hover:underline"
+            >
+              Déclarer un frais
+            </Link>
+          }
+        >
+          {mission.expenseLines.length === 0 ? (
+            <EmptyState
+              title="Aucun frais déclaré"
+              description="Les dépenses liées à cette mission (carburant, péage, hébergement…) se déclarent depuis Notes de frais, en choisissant cette mission dans la liste."
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {mission.expenseLines.map((l) => (
+                <li key={l.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                  <span className="w-24 text-[13px] text-subtle">{date(l.date)}</span>
+                  <span className="flex-1 text-[14px]">{l.category}</span>
+                  <span className="ref text-[14px] font-medium">{moneyDh(l.amount)}</span>
+                  <Link
+                    href={`/finance/notes-de-frais/${l.expenseReport.id}`}
+                    className="text-[13px] text-accent hover:underline"
+                  >
+                    {l.expenseReport.number}
+                  </Link>
+                  <StatusBadge tone={l.status === 'REJECTED' ? 'danger' : 'neutral'}>
+                    {l.status === 'PENDING' ? 'en attente' : l.status === 'ACCEPTED' ? 'acceptée' : 'rejetée'}
+                  </StatusBadge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         <Card title="Saisies et rapports">
           {mission.inspections.length === 0 && mission.reports.length === 0 ? (

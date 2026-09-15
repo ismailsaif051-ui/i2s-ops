@@ -89,6 +89,22 @@ export class MissionsService {
         missionOrder: true,
         inspections: { select: { id: true, status: true } },
         reports: { select: { id: true, number: true, status: true } },
+        // Frais imputés à cette mission — seulement ceux de l'intéressé : la
+        // note de frais d'un collègue n'a rien à faire sur cet écran.
+        expenseLines: {
+          // Un compte sans fiche employé (ex. administrateur pur) n'a aucune
+          // note de frais à voir ici — la chaîne vide ne correspond à aucun id.
+          where: { expenseReport: { employeeId: user.employeeId ?? '' } },
+          orderBy: { date: 'asc' },
+          select: {
+            id: true,
+            date: true,
+            amount: true,
+            status: true,
+            category: { select: { label: true } },
+            expenseReport: { select: { id: true, number: true, status: true } },
+          },
+        },
       },
     });
 

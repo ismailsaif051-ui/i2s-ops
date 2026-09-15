@@ -260,6 +260,14 @@ class MissionsController {
         : null,
       inspections: mission.inspections,
       reports: mission.reports,
+      expenseLines: mission.expenseLines.map((l) => ({
+        id: l.id,
+        date: l.date,
+        amount: Number(l.amount),
+        status: l.status,
+        category: l.category.label,
+        expenseReport: l.expenseReport,
+      })),
       /**
        * Gestes réellement ouverts. Les conditions sont celles que le service
        * applique : aucun bouton n'est affiché qui serait refusé au clic.
