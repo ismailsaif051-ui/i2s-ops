@@ -96,7 +96,9 @@ export class ExpensesService {
             firstName: true,
             lastName: true,
             departmentId: true,
-            department: { select: { code: true } },
+            position: true,
+            department: { select: { code: true, name: true } },
+            manager: { select: { firstName: true, lastName: true } },
           },
         },
         lines: {
@@ -138,39 +140,95 @@ export class ExpensesService {
    */
   async pdf(user: RequestUser, id: string): Promise<Buffer> {
     const report = await this.get(user, id);
-    const company = await this.prisma.company.findUniqueOrThrow({
-      where: { id: report.companyId },
-      select: { name: true, address: true, phone: true, email: true },
+
+    const approverUserIds = [
+      ...new Set(report.approvals.map((a) => a.userId).filter((v): v is string => v !== null)),
+    ];
+
+    const [company, categories, approverUsers] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: report.companyId },
+        select: { name: true, address: true, phone: true, email: true },
+      }),
+      this.prisma.expenseCategory.findMany({
+        where: { isActive: true },
+        orderBy: { position: 'asc' },
+        select: { id: true, label: true },
+      }),
+      approverUserIds.length > 0
+        ? this.prisma.user.findMany({
+            where: { id: { in: approverUserIds } },
+            select: {
+              id: true,
+              email: true,
+              employee: { select: { firstName: true, lastName: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const approverName = (userId: string | null): string | null => {
+      if (!userId) return null;
+      const u = approverUsers.find((u) => u.id === userId);
+      if (!u) return null;
+      return u.employee ? `${u.employee.lastName.toUpperCase()} ${u.employee.firstName}` : u.email;
+    };
+
+    // La semaine « courte » d'Excel : (jour du mois - 1) / 7, plafonnée à 5.
+    const weekOf = (date: Date): number => Math.min(5, Math.floor((date.getUTCDate() - 1) / 7));
+
+    const lines = report.lines.filter((l) => l.status !== 'REJECTED');
+    const gridCategories = categories.map((c) => {
+      const weeks = [0, 0, 0, 0, 0];
+      for (const l of lines) {
+        if (l.categoryId !== c.id) continue;
+        weeks[weekOf(l.date)] += Number(l.amount);
+      }
+      return { label: c.label, weeks, total: weeks.reduce((s, n) => s + n, 0) };
     });
+    const weekTotals = [0, 0, 0, 0, 0];
+    for (const row of gridCategories) row.weeks.forEach((v, i) => (weekTotals[i] += v));
+
+    const periodStart = new Date(
+      Date.UTC(report.periodMonth.getUTCFullYear(), report.periodMonth.getUTCMonth(), 1),
+    );
+    const periodEnd = new Date(
+      Date.UTC(report.periodMonth.getUTCFullYear(), report.periodMonth.getUTCMonth() + 1, 0),
+    );
+
+    const step1 = report.approvals.find((a) => a.step === 1);
+    const step2 = report.approvals.find((a) => a.step === 2);
+    const step4 = report.approvals.find((a) => a.step === 4);
 
     return renderExpensePdf({
       number: report.number,
       status: report.status,
-      type: report.type as 'MISSION' | 'OFF_MISSION',
-      month: report.periodMonth.toISOString().slice(0, 7),
       company,
       employee: {
         name: `${report.employee.lastName.toUpperCase()} ${report.employee.firstName}`,
         matricule: report.employee.matricule,
-        department: report.employee.department?.code ?? null,
+        position: report.employee.position,
+        department: report.employee.department?.name ?? report.employee.department?.code ?? null,
+        manager: report.employee.manager
+          ? `${report.employee.manager.lastName.toUpperCase()} ${report.employee.manager.firstName}`
+          : null,
       },
-      lines: report.lines
-        .filter((l) => l.status !== 'REJECTED')
-        .map((l) => ({
-          date: l.date,
-          category: l.category.label,
-          reference: l.affair?.number ?? l.mission?.number ?? l.department?.code ?? null,
-          description: l.description,
-          amount: Number(l.amount),
-        })),
+      periodStart,
+      periodEnd,
+      categories: gridCategories,
+      weekTotals,
       totalGross: Number(report.totalGross),
       advanceDeduction: Number(report.advanceDeduction),
       netPayable: Number(report.netPayable),
-      approvals: report.approvals.map((a) => ({
-        label: EXPENSE_STEPS.find((s) => s.step === a.step)?.label ?? a.roleCode,
-        decision: a.decision,
-        decidedAt: a.decidedAt,
-      })),
+      paymentMethod: report.paymentMethod,
+      observation: report.observation,
+      preparedBy: `${report.employee.lastName.toUpperCase()} ${report.employee.firstName}`,
+      confirmedBy: approverName(step1?.userId ?? null),
+      confirmedAt: step1?.decidedAt ?? null,
+      checkedBy: approverName(step2?.userId ?? null),
+      checkedAt: step2?.decidedAt ?? null,
+      approvedBy: approverName(step4?.userId ?? null),
+      approvedAt: step4?.decidedAt ?? null,
     });
   }
 
