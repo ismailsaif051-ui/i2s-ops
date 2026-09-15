@@ -22,6 +22,7 @@ import {
   type Tone,
 } from '@/components/ui';
 import { CreateLink } from '@/components/create-link';
+import { ExportLink } from '@/components/export-link';
 
 export const metadata: Metadata = { title: 'Affaires' };
 
@@ -80,7 +81,10 @@ export default async function AffairsPage() {
         title="Affaires"
         description="Deux axes de statut indépendants, comme au registre de suivi : l’avancement commercial d’un côté, l’état des travaux et de la facturation de l’autre."
         action={
-          <CreateLink href="/affaires/nouvelle" label="Ouvrir une affaire" resource="affair" />
+          <div className="flex items-center gap-2">
+            <ExportLink href="/api/affairs/export" resource="affair" />
+            <CreateLink href="/affaires/nouvelle" label="Ouvrir une affaire" resource="affair" />
+          </div>
         }
       />
 

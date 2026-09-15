@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../rbac/scope.service';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { buildXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx';
 import type { RequestUser } from '../common/types';
 
 const MONTH = /^\d{4}-\d{2}$/;
@@ -116,6 +117,66 @@ class ExpensesController {
         isMine: r.employeeId === user.employeeId,
       })),
     };
+  }
+
+  /** Extraction Excel — les notes de frais du périmètre, sans pagination. */
+  @Get('export')
+  @RequirePermission('expense_report', 'EXPORT')
+  async export(
+    @CurrentUser() user: RequestUser,
+    @Query(new ZodValidationPipe(listSchema)) query: z.infer<typeof listSchema>,
+    @Res() res: Response,
+  ) {
+    const rows = await this.prisma.expenseReport.findMany({
+      where: {
+        companyId: { in: user.companyIds },
+        ...(query.status ? { status: query.status as never } : {}),
+        ...(query.month ? { periodMonth: new Date(`${query.month}-01T00:00:00.000Z`) } : {}),
+        ...this.scope.buildWhere(user, 'expense_report', 'VIEW', EXPENSE_SCOPE),
+      },
+      orderBy: [{ periodMonth: 'desc' }, { number: 'asc' }],
+      take: 5000,
+      include: {
+        employee: {
+          select: { matricule: true, firstName: true, lastName: true, department: { select: { code: true } } },
+        },
+      },
+    });
+
+    const content = await buildXlsx(
+      'Notes de frais',
+      [
+        { header: 'N° note', key: 'number', width: 20 },
+        { header: 'Collaborateur', key: 'employee', width: 24 },
+        { header: 'Matricule', key: 'matricule', width: 12 },
+        { header: 'Département', key: 'department', width: 14 },
+        { header: 'Mois', key: 'month', width: 10 },
+        { header: 'Type', key: 'type', width: 14 },
+        { header: 'Statut', key: 'status', width: 18 },
+        { header: 'Total brut', key: 'totalGross', width: 14, numFmt: '#,##0.00' },
+        { header: 'Avances déduites', key: 'advanceDeduction', width: 16, numFmt: '#,##0.00' },
+        { header: 'Net à payer', key: 'netPayable', width: 14, numFmt: '#,##0.00' },
+        { header: 'Réglée le', key: 'paidAt', width: 12 },
+      ],
+      rows.map((r) => ({
+        number: r.number,
+        employee: `${r.employee.lastName.toUpperCase()} ${r.employee.firstName}`,
+        matricule: r.employee.matricule,
+        department: r.employee.department?.code ?? '',
+        month: r.periodMonth.toISOString().slice(0, 7),
+        type: r.type === 'MISSION' ? 'Mission' : 'Hors mission',
+        status: r.status,
+        totalGross: Number(r.totalGross),
+        advanceDeduction: Number(r.advanceDeduction),
+        netPayable: Number(r.netPayable),
+        paidAt: r.paidAt ? r.paidAt.toLocaleDateString('fr-FR') : '',
+      })),
+    );
+
+    res.setHeader('Content-Type', XLSX_CONTENT_TYPE);
+    res.setHeader('Content-Disposition', 'attachment; filename="notes-de-frais.xlsx"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(content);
   }
 
   /** Catégories de dépense et leurs plafonds — le front n'invente rien. */

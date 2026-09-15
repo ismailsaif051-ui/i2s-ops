@@ -68,6 +68,7 @@ export default async function ExpenseReportsPage() {
 
   const permissions = session.permissions as Parameters<typeof can>[0];
   const canCreate = can(permissions, 'expense_report', 'CREATE');
+  const canExport = can(permissions, 'expense_report', 'EXPORT');
 
   const pending = items.filter(
     (r) => !['PAID', 'REJECTED', 'DRAFT'].includes(r.status),
@@ -82,7 +83,19 @@ export default async function ExpenseReportsPage() {
         eyebrow="Finance"
         title="Notes de frais"
         description="Circuit à cinq visas. Les plafonds de la procédure sont contrôlés automatiquement : 100 DH/jour véhicule personnel, 150 DH/nuitée, 100 DH/mois lavage, 300 DH/mois achats."
-        action={canCreate ? <OpenExpenseReport /> : undefined}
+        action={
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <a
+                href="/api/frais/export"
+                className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium text-text shadow-sm transition-colors hover:border-accent hover:text-accent"
+              >
+                Exporter Excel
+              </a>
+            )}
+            {canCreate && <OpenExpenseReport />}
+          </div>
+        }
       />
 
       <KpiRow>

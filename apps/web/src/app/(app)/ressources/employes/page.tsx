@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, requireSession } from '@/lib/api';
+import { can } from '@i2s/contracts';
 import {
   Card,
   DataTable,
@@ -35,8 +36,12 @@ const STATUS: Record<EmployeeRow['status'], { label: string; tone: 'success' | '
   };
 
 export default async function EmployeesPage() {
-  const { items } = await api<{ items: EmployeeRow[] }>('/employees?limit=200');
+  const [session, { items }] = await Promise.all([
+    requireSession(),
+    api<{ items: EmployeeRow[] }>('/employees?limit=200'),
+  ]);
 
+  const canExport = can(session.permissions as Parameters<typeof can>[0], 'employee', 'EXPORT');
   const inspectors = items.filter((e) => e.isInspector).length;
   const withoutCost = items.filter((e) => !e.currentDailyCost).length;
 
@@ -46,6 +51,16 @@ export default async function EmployeesPage() {
         eyebrow="Ressources"
         title="Employés"
         description="Le coût journalier est historisé par période de validité : une modification ouvre une nouvelle période et n’écrase jamais l’historique."
+        action={
+          canExport ? (
+            <a
+              href="/api/employees/export"
+              className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium text-text shadow-sm transition-colors hover:border-accent hover:text-accent"
+            >
+              Exporter Excel
+            </a>
+          ) : undefined
+        }
       />
 
       <KpiRow>

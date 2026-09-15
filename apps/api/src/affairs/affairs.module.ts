@@ -9,15 +9,17 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { paginationSchema, type PaginationInput } from '@i2s/contracts';
 import { AffairsService } from './affairs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { buildXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx';
 import type { RequestUser } from '../common/types';
 
 const COMMERCIAL_STATUSES = ['GAGNEE', 'SUIVANT_OP', 'PERDUE_ANNULEE', 'DP'] as const;
@@ -160,6 +162,63 @@ class AffairsController {
     });
 
     return { items, nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null };
+  }
+
+  /** Extraction Excel — les affaires du périmètre, sans pagination. */
+  @Get('export')
+  @RequirePermission('affair', 'EXPORT')
+  async export(@CurrentUser() user: RequestUser, @Res() res: Response) {
+    const scopeWhere = this.affairs.affairWhere(user, 'VIEW');
+
+    const rows = await this.prisma.affair.findMany({
+      where: { deletedAt: null, ...scopeWhere },
+      orderBy: { number: 'desc' },
+      take: 5000,
+      include: {
+        client: { select: { name: true } },
+        department: { select: { code: true } },
+        accountManager: { select: { firstName: true, lastName: true } },
+      },
+    });
+
+    const content = await buildXlsx(
+      'Affaires',
+      [
+        { header: 'N° affaire', key: 'number', width: 14 },
+        { header: 'Désignation', key: 'title', width: 40 },
+        { header: 'Client', key: 'client', width: 26 },
+        { header: 'Service pilote', key: 'department', width: 14 },
+        { header: 'Chargé d’affaires', key: 'accountManager', width: 22 },
+        { header: 'Statut commercial', key: 'commercialStatus', width: 18 },
+        { header: 'Statut travaux', key: 'worksStatus', width: 16 },
+        { header: 'N° bon de commande', key: 'poNumber', width: 18 },
+        { header: 'Montant offre HT', key: 'offerAmount', width: 16, numFmt: '#,##0.00' },
+        { header: 'Montant BC HT', key: 'poAmount', width: 16, numFmt: '#,##0.00' },
+        { header: 'Début', key: 'startDate', width: 12 },
+        { header: 'Fin', key: 'endDate', width: 12 },
+      ],
+      rows.map((a) => ({
+        number: a.number,
+        title: a.title,
+        client: a.client?.name ?? '',
+        department: a.department?.code ?? '',
+        accountManager: a.accountManager
+          ? `${a.accountManager.lastName.toUpperCase()} ${a.accountManager.firstName}`
+          : '',
+        commercialStatus: a.commercialStatus,
+        worksStatus: a.worksStatus,
+        poNumber: a.poNumber ?? '',
+        offerAmount: a.offerAmountHT ? Number(a.offerAmountHT) : null,
+        poAmount: a.poAmountHT ? Number(a.poAmountHT) : null,
+        startDate: a.startDate ? a.startDate.toLocaleDateString('fr-FR') : '',
+        endDate: a.endDate ? a.endDate.toLocaleDateString('fr-FR') : '',
+      })),
+    );
+
+    res.setHeader('Content-Type', XLSX_CONTENT_TYPE);
+    res.setHeader('Content-Disposition', 'attachment; filename="affaires.xlsx"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(content);
   }
 
   /**

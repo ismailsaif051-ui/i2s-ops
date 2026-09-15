@@ -35,7 +35,7 @@ const RESOURCES = [
   'mission', 'mission_order', 'planning',
   'employee', 'daily_cost', 'timesheet', 'leave', 'certification',
   'inspection', 'inspection_template', 'report', 'asset', 'measuring_device', 'non_conformity',
-  'attachment', 'invoice', 'payment', 'expense_report', 'advance',
+  'attachment', 'invoice', 'payment', 'expense_report', 'advance', 'payment_batch',
   'vehicle', 'controlling', 'document', 'dashboard', 'audit',
   'user', 'role', 'setting',
 ] as const;

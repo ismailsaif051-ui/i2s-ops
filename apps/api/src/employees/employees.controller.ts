@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import {
   createEmployeeSchema,
   paginationSchema,
@@ -13,6 +13,7 @@ import { EmployeesService } from './employees.service';
 import { DailyCostService } from './daily-cost.service';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { buildXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx';
 import type { RequestUser } from '../common/types';
 
 @ApiTags('Employés')
@@ -30,6 +31,50 @@ export class EmployeesController {
     @Query(new ZodValidationPipe(paginationSchema)) query: PaginationInput,
   ) {
     return this.employees.list(user, query);
+  }
+
+  /** Extraction Excel — les employés du périmètre, sans le RIB. */
+  @Get('export')
+  @RequirePermission('employee', 'EXPORT')
+  async export(@CurrentUser() user: RequestUser, @Res() res: Response) {
+    const rows = await this.employees.exportRows(user);
+
+    const content = await buildXlsx(
+      'Employés',
+      [
+        { header: 'Matricule', key: 'matricule', width: 12 },
+        { header: 'Nom', key: 'lastName', width: 18 },
+        { header: 'Prénom', key: 'firstName', width: 16 },
+        { header: 'Fonction', key: 'position', width: 24 },
+        { header: 'Département', key: 'department', width: 14 },
+        { header: 'Inspecteur', key: 'isInspector', width: 12 },
+        { header: 'Statut', key: 'status', width: 12 },
+        { header: 'Coût journalier', key: 'dailyCost', width: 16, numFmt: '#,##0.00' },
+        { header: 'Email', key: 'email', width: 28 },
+        { header: 'Téléphone', key: 'phone', width: 16 },
+        { header: 'Embauché le', key: 'hireDate', width: 14 },
+        { header: 'Type de contrat', key: 'contractType', width: 16 },
+      ],
+      rows.map((e) => ({
+        matricule: e.matricule,
+        lastName: e.lastName.toUpperCase(),
+        firstName: e.firstName,
+        position: e.position ?? '',
+        department: e.department?.code ?? '',
+        isInspector: e.isInspector ? 'Oui' : 'Non',
+        status: e.status,
+        dailyCost: e.dailyCosts[0] ? Number(e.dailyCosts[0].amount) : null,
+        email: e.email ?? '',
+        phone: e.phone ?? '',
+        hireDate: e.hireDate ? e.hireDate.toLocaleDateString('fr-FR') : '',
+        contractType: e.contractType ?? '',
+      })),
+    );
+
+    res.setHeader('Content-Type', XLSX_CONTENT_TYPE);
+    res.setHeader('Content-Disposition', 'attachment; filename="employes.xlsx"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(content);
   }
 
   @Get(':id')

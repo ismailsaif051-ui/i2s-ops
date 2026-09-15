@@ -71,6 +71,28 @@ export class EmployeesService {
     return { items, nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null };
   }
 
+  /**
+   * Lignes pour l'extraction Excel — sans le RIB : une fiche employé se
+   * consulte une à une pour ça, un tableur circule trop facilement pour y
+   * mettre des coordonnées bancaires.
+   */
+  async exportRows(user: RequestUser) {
+    const scopeWhere = this.scope.buildWhere(user, 'employee', 'EXPORT', SCOPE);
+
+    return this.prisma.employee.findMany({
+      where: { deletedAt: null, ...scopeWhere },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      include: {
+        department: { select: { code: true } },
+        dailyCosts: {
+          where: { OR: [{ validTo: null }, { validTo: { gte: new Date() } }] },
+          orderBy: { validFrom: 'desc' },
+          take: 1,
+        },
+      },
+    });
+  }
+
   async get(user: RequestUser, id: string) {
     const scopeWhere = this.scope.buildWhere(user, 'employee', 'VIEW', SCOPE);
 
