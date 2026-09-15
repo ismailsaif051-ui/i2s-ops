@@ -51,6 +51,7 @@ interface MissionDetail {
     object: string;
     instructions: string | null;
     hseInstructions: string | null;
+    transportMode: string | null;
     signedAt: string | null;
     signatureHash: string | null;
   } | null;

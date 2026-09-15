@@ -45,6 +45,11 @@ const orderSchema = z.object({
   object: z.string().trim().min(3, 'L’objet de la mission est obligatoire.').max(300),
   instructions: z.string().trim().max(4000).optional().or(z.literal('')),
   hseInstructions: z.string().trim().max(4000).optional().or(z.literal('')),
+  transportMode: z
+    .enum(['SERVICE_VEHICLE', 'PERSONAL_VEHICLE_AUTHORIZED', 'TAXI_ORGANIZED'])
+    .optional()
+    .or(z.literal(''))
+    .transform((v) => (v ? v : undefined)),
 });
 
 function ctx(req: Request) {
@@ -254,6 +259,7 @@ class MissionsController {
             object: mission.missionOrder.object,
             instructions: mission.missionOrder.instructions,
             hseInstructions: mission.missionOrder.hseInstructions,
+            transportMode: mission.missionOrder.transportMode,
             signedAt: mission.missionOrder.signedAt,
             signatureHash: mission.missionOrder.signatureHash,
           }

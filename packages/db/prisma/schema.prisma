@@ -1113,9 +1113,11 @@ model MissionOrder {
   object          String
   instructions    String?
   hseInstructions String?
+  transportMode   TransportMode?
   status          MissionOrderStatus @default(DRAFT)
 
   issuedById    String?
+  issuedAt      DateTime?
   signedById    String?
   signedAt      DateTime?
   signatureHash String?
@@ -1129,6 +1131,12 @@ model MissionOrder {
   approvals MissionOrderApproval[]
 
   @@map("mission_orders")
+}
+
+enum TransportMode {
+  SERVICE_VEHICLE
+  PERSONAL_VEHICLE_AUTHORIZED
+  TAXI_ORGANIZED
 }
 
 enum ApprovalDecision {

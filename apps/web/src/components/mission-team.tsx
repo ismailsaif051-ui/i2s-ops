@@ -35,6 +35,16 @@ const ROLES = [
   { value: 'SUPERVISOR', label: 'Superviseur' },
 ];
 
+const TRANSPORT_MODES = [
+  { value: 'SERVICE_VEHICLE', label: 'Véhicule de société' },
+  { value: 'PERSONAL_VEHICLE_AUTHORIZED', label: 'Véhicule personnel autorisé' },
+  { value: 'TAXI_ORGANIZED', label: 'Taxi / transport organisé' },
+];
+
+const TRANSPORT_MODE_LABELS: Record<string, string> = Object.fromEntries(
+  TRANSPORT_MODES.map((m) => [m.value, m.label]),
+);
+
 /** Certification la plus lointaine — celle qui couvre la mission, si elle couvre. */
 function coverUntil(employee: EmployeeOption): string | null {
   const dates = employee.certifications
@@ -302,6 +312,7 @@ export function MissionOrderPanel({
     object: string;
     instructions: string | null;
     hseInstructions: string | null;
+    transportMode: string | null;
     signedAt: string | null;
     signatureHash: string | null;
   } | null;
@@ -346,6 +357,7 @@ export function MissionOrderPanel({
       object: String(form.get('object') ?? '').trim(),
       instructions: String(form.get('instructions') ?? '').trim(),
       hseInstructions: String(form.get('hseInstructions') ?? '').trim(),
+      transportMode: String(form.get('transportMode') ?? '').trim(),
     });
   }
 
@@ -381,6 +393,16 @@ export function MissionOrderPanel({
               <div>
                 <p className="text-[13px] uppercase tracking-[0.04em] text-subtle">Consignes HSE</p>
                 <p className="mt-1 whitespace-pre-line text-[14.5px]">{order.hseInstructions}</p>
+              </div>
+            )}
+            {order.transportMode && (
+              <div>
+                <p className="text-[13px] uppercase tracking-[0.04em] text-subtle">
+                  Moyen de transport
+                </p>
+                <p className="mt-1 text-[14.5px]">
+                  {TRANSPORT_MODE_LABELS[order.transportMode] ?? order.transportMode}
+                </p>
               </div>
             )}
             <p className="text-[13.5px] text-muted">
@@ -422,6 +444,20 @@ export function MissionOrderPanel({
                 defaultValue={order?.hseInstructions ?? ''}
                 className="w-full rounded-[10px] border border-border-strong bg-surface px-3.5 py-2.5 text-[15px] outline-none focus:border-accent"
               />
+            </Field>
+            <Field label="Moyen de transport">
+              <select
+                name="transportMode"
+                defaultValue={order?.transportMode ?? ''}
+                className="h-11 w-full rounded-[10px] border border-border-strong bg-surface px-3.5 text-[15px] outline-none focus:border-accent"
+              >
+                <option value="">Non précisé</option>
+                {TRANSPORT_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
             </Field>
             <div>
               <Button type="submit" variant="accent" disabled={busy !== null}>

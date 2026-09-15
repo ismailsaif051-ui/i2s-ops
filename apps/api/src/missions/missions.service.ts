@@ -80,7 +80,7 @@ export class MissionsService {
         },
         department: { select: { id: true, code: true, name: true } },
         site: { select: { id: true, name: true, city: true } },
-        vehicle: { select: { plate: true } },
+        vehicle: { select: { plate: true, brand: true, model: true } },
         assignments: {
           include: {
             employee: {
@@ -421,7 +421,12 @@ export class MissionsService {
   async issueOrder(
     user: RequestUser,
     id: string,
-    input: { object: string; instructions?: string | null; hseInstructions?: string | null },
+    input: {
+      object: string;
+      instructions?: string | null;
+      hseInstructions?: string | null;
+      transportMode?: 'SERVICE_VEHICLE' | 'PERSONAL_VEHICLE_AUTHORIZED' | 'TAXI_ORGANIZED' | null;
+    },
     ctx: { ip?: string | null; userAgent?: string | null },
   ) {
     const mission = await this.get(user, id);
@@ -447,8 +452,10 @@ export class MissionsService {
               object: input.object.trim(),
               instructions: input.instructions?.trim() || null,
               hseInstructions: input.hseInstructions?.trim() || null,
+              transportMode: input.transportMode || null,
               status: 'APPROVED',
               issuedById: user.employeeId,
+              issuedAt: new Date(),
             },
           })
         : await tx.missionOrder.create({
@@ -458,8 +465,10 @@ export class MissionsService {
               object: input.object.trim(),
               instructions: input.instructions?.trim() || null,
               hseInstructions: input.hseInstructions?.trim() || null,
+              transportMode: input.transportMode || null,
               status: 'APPROVED',
               issuedById: user.employeeId,
+              issuedAt: new Date(),
             },
           });
 
@@ -516,6 +525,7 @@ export class MissionsService {
           object: order.object,
           instructions: order.instructions,
           hseInstructions: order.hseInstructions,
+          transportMode: order.transportMode,
           team: mission.assignments.map((a) => a.employee.matricule).sort(),
           signedBy: user.employeeId,
           signedAt: signedAt.toISOString(),
@@ -568,7 +578,7 @@ export class MissionsService {
       throw new BadRequestException('Cet ordre de mission n’est pas encore signé.');
     }
 
-    const [company, signer] = await Promise.all([
+    const [company, signer, issuer] = await Promise.all([
       this.prisma.company.findUniqueOrThrow({
         where: { id: mission.affair.companyId },
         select: { name: true, address: true, phone: true },
@@ -579,6 +589,12 @@ export class MissionsService {
             select: { firstName: true, lastName: true },
           })
         : Promise.resolve(null),
+      order.issuedById
+        ? this.prisma.employee.findUnique({
+            where: { id: order.issuedById },
+            select: { firstName: true, lastName: true },
+          })
+        : Promise.resolve(null),
     ]);
 
     return renderMissionOrderPdf({
@@ -586,6 +602,7 @@ export class MissionsService {
       object: order.object,
       instructions: order.instructions,
       hseInstructions: order.hseInstructions,
+      transportMode: order.transportMode,
       company,
       client: mission.affair.client.name,
       affair: { number: mission.affair.number, title: mission.affair.title },
@@ -594,13 +611,16 @@ export class MissionsService {
         plannedStartDate: mission.plannedStartDate,
         plannedEndDate: mission.plannedEndDate,
       },
+      department: mission.department,
       site: mission.site,
-      vehicle: mission.vehicle?.plate ?? null,
+      vehicle: mission.vehicle,
       team: mission.assignments.map((a) => ({
         name: `${a.employee.lastName.toUpperCase()} ${a.employee.firstName}`,
         matricule: a.employee.matricule,
         role: a.role,
       })),
+      issuedBy: issuer ? `${issuer.lastName.toUpperCase()} ${issuer.firstName}` : null,
+      issuedAt: order.issuedAt,
       signedBy: signer ? `${signer.lastName.toUpperCase()} ${signer.firstName}` : null,
       signedAt: order.signedAt,
       signatureHash: order.signatureHash,
