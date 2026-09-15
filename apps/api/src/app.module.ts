@@ -27,6 +27,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { TimesheetsModule } from './timesheets/timesheets.module';
 import { DevicesModule } from './devices/devices.module';
 import { ExpensesModule } from './expenses/expenses.module';
+import { PaymentBatchesModule } from './expenses/payment-batches.module';
 import { NonConformitiesModule } from './non-conformities/non-conformities.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { CertificationsModule } from './certifications/certifications.module';
@@ -73,6 +74,7 @@ import { envSchema } from './config/env';
     TimesheetsModule,
     DevicesModule,
     ExpensesModule,
+    PaymentBatchesModule,
     NonConformitiesModule,
     LeavesModule,
     CertificationsModule,

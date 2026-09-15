@@ -44,6 +44,7 @@ model Company {
   affairs          Affair[]
   invoices         Invoice[]
   expenseReports   ExpenseReport[]
+  paymentBatches   PaymentBatch[]
   documents        Document[]
   settings         Setting[]
   numberSequences  NumberSequence[]
@@ -1852,6 +1853,7 @@ model ExpenseReport {
   paymentMethod    String    @default("TRANSFER")
   paidAt           DateTime?
   paidById         String?
+  paymentBatchId   String?
   bankReference    String?
   rejectReason     String?
   observation      String?
@@ -1859,15 +1861,49 @@ model ExpenseReport {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  company     Company             @relation(fields: [companyId], references: [id])
-  employee    Employee            @relation(fields: [employeeId], references: [id])
-  lines       ExpenseLine[]
-  approvals   ExpenseApproval[]
-  settlements AdvanceSettlement[]
+  company      Company             @relation(fields: [companyId], references: [id])
+  employee     Employee            @relation(fields: [employeeId], references: [id])
+  paymentBatch PaymentBatch?       @relation(fields: [paymentBatchId], references: [id])
+  lines        ExpenseLine[]
+  approvals    ExpenseApproval[]
+  settlements  AdvanceSettlement[]
 
   @@unique([employeeId, periodMonth, type])
   @@index([status])
   @@map("expense_reports")
+}
+
+/**
+ * Regroupe plusieurs notes « bon à payer » en un seul virement bancaire :
+ * RH prépare le lot, RAF l'exécute (docs/10-ROADMAP.md S9 « export
+ * virement »). Une note ne rejoint le lot qu'au statut READY_TO_PAY et n'en
+ * sort qu'une fois PAID (voir PaymentBatchesService).
+ */
+model PaymentBatch {
+  id            String             @id @default(uuid(7))
+  number        String             @unique
+  companyId     String
+  status        PaymentBatchStatus @default(DRAFT)
+  totalAmount   Decimal            @default(0) @db.Decimal(14, 2)
+  createdById   String?
+  validatedById String?
+  validatedAt   DateTime?
+  paidById      String?
+  paidAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company         @relation(fields: [companyId], references: [id])
+  reports ExpenseReport[]
+
+  @@map("payment_batches")
+}
+
+enum PaymentBatchStatus {
+  DRAFT
+  VALIDATED
+  PAID
 }
 
 enum ExpenseLineStatus {

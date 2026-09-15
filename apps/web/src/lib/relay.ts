@@ -12,7 +12,7 @@ import { ACCESS_COOKIE, API_URL } from '@/lib/api';
 export async function relay(
   path: string,
   request: Request,
-  method: 'POST' | 'PUT' | 'PATCH' = 'POST',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'POST',
 ): Promise<NextResponse> {
   const token = (await cookies()).get(ACCESS_COOKIE)?.value;
   if (!token) return NextResponse.json({ message: 'Session expirée.' }, { status: 401 });
@@ -20,7 +20,7 @@ export async function relay(
   const upstream = await fetch(`${API_URL}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(await request.json().catch(() => ({}))),
+    ...(method === 'DELETE' ? {} : { body: JSON.stringify(await request.json().catch(() => ({}))) }),
     cache: 'no-store',
   });
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { ROLE_LABELS, type RoleCode } from '@i2s/contracts';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import {
   Card,
   DataTable,
@@ -10,6 +10,11 @@ import {
   Td,
   Th,
 } from '@/components/ui';
+import {
+  CreateUserForm,
+  type DepartmentOption,
+  type EmployeeOption,
+} from '@/components/create-user-form';
 
 export const metadata: Metadata = { title: 'Utilisateurs' };
 
@@ -32,6 +37,15 @@ const STATUS: Record<UserRow['status'], { label: string; tone: 'success' | 'neut
 export default async function UsersPage() {
   const { items } = await api<{ items: UserRow[] }>('/users?limit=200');
 
+  let options: { employees: EmployeeOption[]; departments: DepartmentOption[] } | null = null;
+  try {
+    options = await api<{ employees: EmployeeOption[]; departments: DepartmentOption[] }>(
+      '/users/options',
+    );
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 403)) throw error;
+  }
+
   return (
     <>
       <PageHeader
@@ -39,6 +53,12 @@ export default async function UsersPage() {
         title="Utilisateurs"
         description="Un compte est rattaché à un employé et porte un ou plusieurs rôles, éventuellement par département."
       />
+
+      {options && (
+        <div className="mb-5">
+          <CreateUserForm employees={options.employees} departments={options.departments} />
+        </div>
+      )}
 
       <Card title={`Comptes — ${items.length}`}>
         {items.length === 0 ? (

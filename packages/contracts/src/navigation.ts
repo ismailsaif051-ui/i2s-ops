@@ -69,6 +69,7 @@ export const NAVIGATION: NavGroup[] = [
       { href: '/finance/factures', label: 'Factures', requires: { resource: 'invoice', action: 'VIEW' } },
       { href: '/finance/encaissements', label: 'Encaissements', requires: { resource: 'payment', action: 'VIEW' } },
       { href: '/finance/notes-de-frais', label: 'Notes de frais', requires: { resource: 'expense_report', action: 'VIEW' } },
+      { href: '/finance/virements', label: 'Ordres de virement', requires: { resource: 'payment_batch', action: 'VIEW' } },
       { href: '/finance/avances', label: 'Avances', requires: { resource: 'advance', action: 'VIEW' } },
       { href: '/finance/controle-de-gestion', label: 'Contrôle de gestion', requires: { resource: 'controlling', action: 'VIEW' } },
     ],

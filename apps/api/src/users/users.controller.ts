@@ -20,6 +20,13 @@ const statusSchema = z.object({ status: z.enum(['ACTIVE', 'SUSPENDED']) });
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 
+  /** Employés (sans compte) et départements du périmètre — pour le formulaire. */
+  @Get('users/options')
+  @RequirePermission('user', 'CREATE')
+  options(@CurrentUser() user: RequestUser) {
+    return this.users.options(user);
+  }
+
   @Get('users')
   @RequirePermission('user', 'VIEW')
   list(

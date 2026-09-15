@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
@@ -742,7 +743,53 @@ export class ExpensesService {
       );
     }
 
-    const advances = await this.prisma.advance.findMany({
+    const paidAt = input.paidAt ?? new Date();
+    const { updated, settlements } = await this.prisma.$transaction((tx) =>
+      this.settleReport(
+        tx,
+        report,
+        user.id,
+        paidAt,
+        input.paymentMethod ?? report.paymentMethod,
+        input.bankReference ?? null,
+      ),
+    );
+
+    await this.audit.record(
+      {
+        entity: 'expense_report',
+        entityId: id,
+        action: 'PAY',
+        after: {
+          gross: Number(report.totalGross),
+          advanceDeduction: Number(updated.advanceDeduction),
+          net: Number(updated.netPayable),
+          reference: input.bankReference,
+        },
+        companyId: report.companyId,
+      },
+      { user, ...ctx },
+    );
+
+    return { report: updated, settlements };
+  }
+
+  /**
+   * Cœur du règlement, factorisé pour être rejoué à l'identique — avances
+   * déduites d'abord — que la note soit payée seule ou dans un lot de
+   * virement (voir PaymentBatchesService.pay). `tx` porte toute l'opération :
+   * appelant et appelé partagent la même transaction, ou aucun des deux
+   * n'écrit.
+   */
+  async settleReport(
+    tx: Prisma.TransactionClient,
+    report: { id: string; employeeId: string; totalGross: Prisma.Decimal | number },
+    paidById: string,
+    paidAt: Date,
+    paymentMethod: string,
+    bankReference: string | null,
+  ) {
+    const advances = await tx.advance.findMany({
       where: {
         employeeId: report.employeeId,
         status: { in: ['PAID', 'PARTIALLY_SETTLED'] },
@@ -765,57 +812,38 @@ export class ExpensesService {
     }
 
     const deduction = settlements.reduce((sum, s) => sum + s.amount, 0);
-    const paidAt = input.paidAt ?? new Date();
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      for (const s of settlements) {
-        await tx.advanceSettlement.create({
-          data: { advanceId: s.advanceId, expenseReportId: id, amount: s.amount },
-        });
+    for (const s of settlements) {
+      await tx.advanceSettlement.create({
+        data: { advanceId: s.advanceId, expenseReportId: report.id, amount: s.amount },
+      });
 
-        const advance = advances.find((a) => a.id === s.advanceId)!;
-        const settled = Number(advance.settledAmount) + s.amount;
-        await tx.advance.update({
-          where: { id: s.advanceId },
-          data: {
-            settledAmount: settled,
-            status: settled >= Number(advance.amount) ? 'SETTLED' : 'PARTIALLY_SETTLED',
-            settledAt: settled >= Number(advance.amount) ? paidAt : null,
-          },
-        });
-      }
-
-      return tx.expenseReport.update({
-        where: { id },
+      const advance = advances.find((a) => a.id === s.advanceId)!;
+      const settled = Number(advance.settledAmount) + s.amount;
+      await tx.advance.update({
+        where: { id: s.advanceId },
         data: {
-          status: 'PAID',
-          paidAt,
-          paidById: user.id,
-          advanceDeduction: deduction,
-          netPayable: gross - deduction,
-          paymentMethod: input.paymentMethod ?? report.paymentMethod,
-          bankReference: input.bankReference?.trim() || null,
+          settledAmount: settled,
+          status: settled >= Number(advance.amount) ? 'SETTLED' : 'PARTIALLY_SETTLED',
+          settledAt: settled >= Number(advance.amount) ? paidAt : null,
         },
       });
+    }
+
+    const updated = await tx.expenseReport.update({
+      where: { id: report.id },
+      data: {
+        status: 'PAID',
+        paidAt,
+        paidById,
+        advanceDeduction: deduction,
+        netPayable: gross - deduction,
+        paymentMethod,
+        bankReference: bankReference?.trim() || null,
+      },
     });
 
-    await this.audit.record(
-      {
-        entity: 'expense_report',
-        entityId: id,
-        action: 'PAY',
-        after: {
-          gross,
-          advanceDeduction: deduction,
-          net: gross - deduction,
-          reference: input.bankReference,
-        },
-        companyId: report.companyId,
-      },
-      { user, ...ctx },
-    );
-
-    return { report: updated, settlements };
+    return { updated, settlements };
   }
 
   /* ── Files d'attente ──────────────────────────────────────────── */

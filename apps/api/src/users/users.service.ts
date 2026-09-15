@@ -14,6 +14,36 @@ export class UsersService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Employés et départements du périmètre — pour le formulaire de création. */
+  async options(user: RequestUser) {
+    const companyId = user.companyIds[0];
+    if (!companyId) return { companyId: null, employees: [], departments: [] };
+
+    const [employees, departments] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: { companyId, deletedAt: null, status: 'ACTIVE', user: null },
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        select: { id: true, matricule: true, firstName: true, lastName: true, position: true },
+      }),
+      this.prisma.department.findMany({
+        where: { companyId },
+        orderBy: { code: 'asc' },
+        select: { id: true, code: true, name: true },
+      }),
+    ]);
+
+    return {
+      companyId,
+      employees: employees.map((e) => ({
+        id: e.id,
+        matricule: e.matricule,
+        name: `${e.lastName.toUpperCase()} ${e.firstName}`,
+        position: e.position,
+      })),
+      departments,
+    };
+  }
+
   async list(user: RequestUser, query: { limit: number; cursor?: string; q?: string }) {
     const rows = await this.prisma.user.findMany({
       where: {

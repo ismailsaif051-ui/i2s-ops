@@ -14,6 +14,7 @@ export const NUMBER_SCOPES = [
   'NON_CONFORMITY',
   'OFFER',
   'CREDIT_NOTE',
+  'PAYMENT_BATCH',
 ] as const;
 export type NumberScope = (typeof NUMBER_SCOPES)[number];
 
@@ -28,6 +29,7 @@ export const DEFAULT_PATTERNS: Record<NumberScope, string> = {
   NON_CONFORMITY: 'NC-{YY}-{SEQ}',
   OFFER: 'OFF-{YY}-{SEQ}',
   CREDIT_NOTE: 'AV-{YY}-{SEQ}',
+  PAYMENT_BATCH: 'VIR-{YY}{MM}-{SEQ}',
 };
 
 export interface NumberTokens {
