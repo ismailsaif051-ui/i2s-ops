@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { ScopeService } from '../rbac/scope.service';
 import { AffairsService } from '../affairs/affairs.service';
+import { renderMissionOrderPdf } from './mission-order-pdf';
 import type { RequestUser, ScopeDescriptor } from '../common/types';
 
 export const MISSION_SCOPE: ScopeDescriptor = {
@@ -79,6 +80,7 @@ export class MissionsService {
         },
         department: { select: { id: true, code: true, name: true } },
         site: { select: { id: true, name: true, city: true } },
+        vehicle: { select: { plate: true } },
         assignments: {
           include: {
             employee: {
@@ -551,6 +553,59 @@ export class MissionsService {
     );
 
     return signed;
+  }
+
+  /**
+   * Pièce imprimable de l'ordre de mission — celle que l'inspecteur emporte
+   * sur site. N'existe qu'à partir de la signature : avant, il n'y a rien
+   * d'immuable à remettre (docs/05-WORKFLOWS.md, W3).
+   */
+  async orderPdf(user: RequestUser, id: string): Promise<Buffer> {
+    const mission = await this.get(user, id);
+    const order = mission.missionOrder;
+
+    if (!order || !['SIGNED', 'IN_PROGRESS', 'COMPLETED'].includes(order.status)) {
+      throw new BadRequestException('Cet ordre de mission n’est pas encore signé.');
+    }
+
+    const [company, signer] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: mission.affair.companyId },
+        select: { name: true, address: true, phone: true },
+      }),
+      order.signedById
+        ? this.prisma.employee.findUnique({
+            where: { id: order.signedById },
+            select: { firstName: true, lastName: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    return renderMissionOrderPdf({
+      number: order.number,
+      object: order.object,
+      instructions: order.instructions,
+      hseInstructions: order.hseInstructions,
+      company,
+      client: mission.affair.client.name,
+      affair: { number: mission.affair.number, title: mission.affair.title },
+      mission: {
+        number: mission.number,
+        plannedStartDate: mission.plannedStartDate,
+        plannedEndDate: mission.plannedEndDate,
+      },
+      site: mission.site,
+      vehicle: mission.vehicle?.plate ?? null,
+      team: mission.assignments.map((a) => ({
+        name: `${a.employee.lastName.toUpperCase()} ${a.employee.firstName}`,
+        matricule: a.employee.matricule,
+        role: a.role,
+      })),
+      signedBy: signer ? `${signer.lastName.toUpperCase()} ${signer.firstName}` : null,
+      signedAt: order.signedAt,
+      signatureHash: order.signatureHash,
+      signatureIp: order.signatureIp,
+    });
   }
 
   /* ── Calendrier ───────────────────────────────────────────────── */

@@ -390,6 +390,14 @@ export function MissionOrderPanel({
             <p className="text-[13.5px] text-subtle">
               La saisie terrain est ouverte : les inspecteurs affectés peuvent démarrer.
             </p>
+            <a
+              href={`/api/missions/${missionId}/order-pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 w-fit items-center rounded-[10px] bg-accent px-4 text-[14px] font-medium text-white shadow-sm transition-colors hover:bg-accent-hover"
+            >
+              Ouvrir le PDF signé
+            </a>
           </>
         ) : actions.issueOrder ? (
           <form onSubmit={issue} className="flex flex-col gap-4">

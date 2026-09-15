@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Module, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Module, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { paginationSchema, type PaginationInput } from '@i2s/contracts';
 import { MISSION_SCOPE, MissionsService } from './missions.service';
@@ -323,6 +323,23 @@ class MissionsController {
   @RequirePermission('mission_order', 'APPROVE')
   signOrder(@CurrentUser() user: RequestUser, @Param('id') id: string, @Req() req: Request) {
     return this.missions.signOrder(user, id, ctx(req));
+  }
+
+  /** Pièce imprimable de l'ordre signé — voir MissionsService.orderPdf. */
+  @Get(':id/order/pdf')
+  @RequirePermission('mission_order', 'VIEW')
+  async orderPdf(@CurrentUser() user: RequestUser, @Param('id') id: string, @Res() res: Response) {
+    const content = await this.missions.orderPdf(user, id);
+    const mission = await this.missions.get(user, id);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', String(content.byteLength));
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${mission.missionOrder?.number ?? mission.number}.pdf"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(content);
   }
 }
 
