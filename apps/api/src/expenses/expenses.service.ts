@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { DocumentsService } from '../documents/documents.service';
 import { ScopeService } from '../rbac/scope.service';
+import { renderExpensePdf } from './expense-pdf';
 import type { RequestUser, ScopeDescriptor } from '../common/types';
 
 export const EXPENSE_SCOPE: ScopeDescriptor = {
@@ -128,6 +129,49 @@ export class ExpensesService {
     if (!allowed) throw new ForbiddenException('Cette note de frais est hors de votre périmètre.');
 
     return report;
+  }
+
+  /**
+   * Pièce imprimable — celle qu'on agrafe aux justificatifs, et que chaque
+   * signataire du circuit reçoit. Générée à la volée : une note de frais
+   * change de statut trop souvent pour figer un PDF à un instant donné.
+   */
+  async pdf(user: RequestUser, id: string): Promise<Buffer> {
+    const report = await this.get(user, id);
+    const company = await this.prisma.company.findUniqueOrThrow({
+      where: { id: report.companyId },
+      select: { name: true, address: true, phone: true, email: true },
+    });
+
+    return renderExpensePdf({
+      number: report.number,
+      status: report.status,
+      type: report.type as 'MISSION' | 'OFF_MISSION',
+      month: report.periodMonth.toISOString().slice(0, 7),
+      company,
+      employee: {
+        name: `${report.employee.lastName.toUpperCase()} ${report.employee.firstName}`,
+        matricule: report.employee.matricule,
+        department: report.employee.department?.code ?? null,
+      },
+      lines: report.lines
+        .filter((l) => l.status !== 'REJECTED')
+        .map((l) => ({
+          date: l.date,
+          category: l.category.label,
+          reference: l.affair?.number ?? l.mission?.number ?? l.department?.code ?? null,
+          description: l.description,
+          amount: Number(l.amount),
+        })),
+      totalGross: Number(report.totalGross),
+      advanceDeduction: Number(report.advanceDeduction),
+      netPayable: Number(report.netPayable),
+      approvals: report.approvals.map((a) => ({
+        label: EXPENSE_STEPS.find((s) => s.step === a.step)?.label ?? a.roleCode,
+        decision: a.decision,
+        decidedAt: a.decidedAt,
+      })),
+    });
   }
 
   /* ── Ouverture du mois ────────────────────────────────────────── */

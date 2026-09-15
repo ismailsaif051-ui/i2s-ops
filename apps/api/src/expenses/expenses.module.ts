@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Module, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Module, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { EXPENSE_SCOPE, EXPENSE_STEPS, ExpensesService } from './expenses.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -210,6 +210,20 @@ class ExpensesController {
           (user.roleCodes.includes('RAF') || user.roleCodes.includes('ADMIN')),
       },
     };
+  }
+
+  /** Pièce imprimable de la note — voir ExpensesService.pdf. */
+  @Get(':id/pdf')
+  @RequirePermission('expense_report', 'VIEW')
+  async pdf(@CurrentUser() user: RequestUser, @Param('id') id: string, @Res() res: Response) {
+    const content = await this.expenses.pdf(user, id);
+    const report = await this.expenses.get(user, id);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', String(content.byteLength));
+    res.setHeader('Content-Disposition', `inline; filename="${report.number}.pdf"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(content);
   }
 
   /**

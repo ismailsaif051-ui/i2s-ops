@@ -107,7 +107,21 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
         description={`${report.employee.name} · ${report.employee.department ?? '—'} · ${
           report.type === 'MISSION' ? 'frais de mission' : 'frais hors mission'
         } · ${report.month}`}
-        action={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
+        action={
+          <div className="flex items-center gap-3">
+            <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+            {report.lines.length > 0 && (
+              <a
+                href={`/api/frais/${report.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-10 items-center rounded-[10px] bg-accent px-4 text-[14px] font-medium text-white shadow-sm transition-colors hover:bg-accent-hover"
+              >
+                Ouvrir le PDF
+              </a>
+            )}
+          </div>
+        }
       />
 
       {report.rejectReason && (
