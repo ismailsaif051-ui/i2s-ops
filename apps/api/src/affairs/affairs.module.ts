@@ -95,7 +95,7 @@ class AffairsController {
         : {}),
     };
 
-    const [rows, commercialCounts, worksCounts, departments] = await Promise.all([
+    const [rows, total, commercialCounts, worksCounts, departments] = await Promise.all([
       this.prisma.affair.findMany({
         where,
         orderBy: { number: 'desc' },
@@ -108,6 +108,7 @@ class AffairsController {
           _count: { select: { missions: true, reports: true, invoices: true } },
         },
       }),
+      this.prisma.affair.count({ where }),
       this.prisma.affair.groupBy({ by: ['commercialStatus'], where: baseWhere, _count: true }),
       this.prisma.affair.groupBy({ by: ['worksStatus'], where: baseWhere, _count: true }),
       this.prisma.department.findMany({
@@ -180,6 +181,7 @@ class AffairsController {
 
     return {
       items,
+      total,
       nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
       facets: {
         commercialStatuses: commercialCounts.map((c) => ({

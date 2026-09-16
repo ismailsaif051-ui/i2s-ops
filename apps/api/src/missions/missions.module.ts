@@ -102,7 +102,7 @@ class MissionsController {
         : {}),
     };
 
-    const [rows, statusCounts, departments] = await Promise.all([
+    const [rows, total, statusCounts, departments] = await Promise.all([
       this.prisma.mission.findMany({
         where,
         orderBy: { plannedStartDate: 'desc' },
@@ -122,6 +122,7 @@ class MissionsController {
           _count: { select: { reports: true } },
         },
       }),
+      this.prisma.mission.count({ where }),
       this.prisma.mission.groupBy({ by: ['status'], where: baseWhere, _count: true }),
       this.prisma.department.findMany({
         where: { companyId: { in: user.companyIds } },
@@ -151,6 +152,7 @@ class MissionsController {
 
     return {
       items,
+      total,
       nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
       facets: {
         statuses: statusCounts.map((s) => ({ value: s.status, count: s._count })),

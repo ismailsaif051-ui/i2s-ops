@@ -21,6 +21,7 @@ export const metadata: Metadata = { title: 'Missions' };
 
 interface MissionList {
   items: MissionRow[];
+  total: number;
   facets: {
     statuses: Array<{ value: string; count: number }>;
     departments: Array<{ id: string; code: string; name: string }>;
@@ -80,7 +81,7 @@ export default async function MissionsPage({
   const filtered = Object.keys(active).length > 0;
 
   const query = new URLSearchParams({ ...active, limit: '150' });
-  const { items, facets } = await api<MissionList>(`/missions?${query.toString()}`);
+  const { items, total, facets } = await api<MissionList>(`/missions?${query.toString()}`);
 
   const inProgress = items.filter((m) => m.status === 'IN_PROGRESS').length;
   const today = new Date();
@@ -110,7 +111,7 @@ export default async function MissionsPage({
       <KpiRow>
         <KpiCard
           label={filtered ? 'Missions sélectionnées' : 'Missions'}
-          value={items.length}
+          value={total}
           hint={filtered ? 'selon les filtres' : 'dans votre périmètre'}
         />
         <KpiCard label="En cours" value={inProgress} tone={inProgress > 0 ? 'primary' : undefined} />
@@ -185,7 +186,13 @@ export default async function MissionsPage({
       </Card>
 
       <div className="mt-5">
-      <Card title={filtered ? `${items.length} mission(s) sélectionnée(s)` : `${items.length} missions`}>
+      <Card
+        title={
+          filtered
+            ? `${total} mission(s) sélectionnée(s)${items.length < total ? ` — ${items.length} affichées` : ''}`
+            : `${items.length} missions${items.length < total ? ` sur ${total}` : ''}`
+        }
+      >
         {items.length === 0 ? (
           filtered ? (
             <EmptyState

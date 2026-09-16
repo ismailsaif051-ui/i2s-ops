@@ -47,6 +47,7 @@ interface AffairRow {
 
 interface AffairList {
   items: AffairRow[];
+  total: number;
   facets: {
     commercialStatuses: Array<{ value: string | null; count: number }>;
     worksStatuses: Array<{ value: string | null; count: number }>;
@@ -91,7 +92,7 @@ export default async function AffairsPage({
   const filtered = Object.keys(active).length > 0;
 
   const query = new URLSearchParams({ ...active, limit: '200' });
-  const { items, facets } = await api<AffairList>(`/affairs?${query.toString()}`);
+  const { items, total, facets } = await api<AffairList>(`/affairs?${query.toString()}`);
   const exportHref = filtered ? `/api/affairs/export?${query.toString()}` : '/api/affairs/export';
 
   const won = items.filter((a) => a.commercialStatus === 'GAGNEE');
@@ -217,7 +218,13 @@ export default async function AffairsPage({
       </Card>
 
       <div className="mt-5">
-      <Card title={filtered ? `${items.length} affaire(s) sélectionnée(s)` : `${items.length} affaires`}>
+      <Card
+        title={
+          filtered
+            ? `${total} affaire(s) sélectionnée(s)${items.length < total ? ` — ${items.length} affichées` : ''}`
+            : `${items.length} affaires${items.length < total ? ` sur ${total}` : ''}`
+        }
+      >
         {items.length === 0 ? (
           filtered ? (
             <EmptyState
