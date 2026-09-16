@@ -60,9 +60,51 @@ class CommercialController {
    */
   @Get('consultations')
   @RequirePermission('opportunity', 'VIEW')
-  async consultations(@CurrentUser() user: RequestUser) {
+  async consultations(
+    @CurrentUser() user: RequestUser,
+    @Query('q') q?: string,
+    @Query('stage') stage?: string,
+    @Query('nature') nature?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    // Périmètre adressable, filtres exclus : c'est lui qui compte les facettes,
+    // pour que les choix proposés ne dépendent pas de la sélection en cours.
+    const baseWhere = { deletedAt: null, client: { companyId: { in: user.companyIds } } };
+
+    const where = {
+      ...baseWhere,
+      ...(stage ? { stage: stage as never } : {}),
+      ...(departmentId ? { departmentId } : {}),
+      // La nature ne se stocke pas : un appel d'offres est une demande qui
+      // porte une référence d'AO, une consultation directe n'en a pas.
+      ...(nature === 'APPEL_OFFRES'
+        ? { tenders: { some: {} } }
+        : nature === 'CONSULTATION'
+          ? { tenders: { none: {} } }
+          : {}),
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: 'insensitive' as const } },
+              { client: { name: { contains: q, mode: 'insensitive' as const } } },
+              { tenders: { some: { reference: { contains: q, mode: 'insensitive' as const } } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [stageCounts, natureCounts, departments] = await Promise.all([
+      this.prisma.opportunity.groupBy({ by: ['stage'], where: baseWhere, _count: true }),
+      this.prisma.opportunity.count({ where: { ...baseWhere, tenders: { some: {} } } }),
+      this.prisma.department.findMany({
+        where: { companyId: { in: user.companyIds } },
+        orderBy: { code: 'asc' },
+        select: { id: true, code: true, name: true },
+      }),
+    ]);
+
     const rows = await this.prisma.opportunity.findMany({
-      where: { deletedAt: null, client: { companyId: { in: user.companyIds } } },
+      where,
       orderBy: [{ createdAt: 'desc' }],
       include: {
         client: { select: { id: true, name: true } },
@@ -159,10 +201,24 @@ class CommercialController {
     const lostAmount = lost.reduce((s, i) => s + (i.amount ?? 0), 0);
     const actionableLost = byCause.filter((c) => c.actionable);
 
+    const baseTotal = stageCounts.reduce((s, g) => s + g._count, 0);
+
     return {
       items,
       lostCauses: byCause,
       causeOptions: LOST_CAUSES.map((c) => ({ value: c, label: LOST_CAUSE_LABELS[c] })),
+      facets: {
+        stages: stageCounts.map((g) => ({
+          value: g.stage,
+          label: STAGE_LABELS[g.stage as keyof typeof STAGE_LABELS] ?? g.stage,
+          count: g._count,
+        })),
+        natures: [
+          { value: 'CONSULTATION', label: 'Consultation directe', count: baseTotal - natureCounts },
+          { value: 'APPEL_OFFRES', label: 'Appel d’offres', count: natureCounts },
+        ],
+        departments,
+      },
       totals: {
         all: items.length,
         open: open.length,

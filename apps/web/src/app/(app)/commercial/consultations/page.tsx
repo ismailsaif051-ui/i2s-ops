@@ -17,6 +17,8 @@ import {
   type Tone,
 } from '@/components/ui';
 import { OpenOpportunity, type ClientOption } from '@/components/opportunity-forms';
+import { AutoSubmitForm } from '@/components/auto-submit-form';
+import { ConsultationsKanban } from '@/components/consultations-kanban';
 
 export const metadata: Metadata = { title: 'Consultations & appels d’offres' };
 
@@ -56,6 +58,11 @@ interface ConsultationRow {
 
 interface ConsultationList {
   items: ConsultationRow[];
+  facets: {
+    stages: Array<{ value: string; label: string; count: number }>;
+    natures: Array<{ value: string; label: string; count: number }>;
+    departments: Array<{ id: string; code: string; name: string }>;
+  };
   lostCauses: Array<{
     cause: string;
     label: string;
@@ -111,97 +118,44 @@ function deadlineState(row: ConsultationRow): { label: string; tone: Tone | null
   return { label: `${row.daysLeft} j restants`, tone: null };
 }
 
-const STAGE_ORDER = [
-  'NEW',
-  'CONSULTATION',
-  'OFFER_DRAFT',
-  'OFFER_SENT',
-  'FOLLOW_UP',
-  'NEGOTIATION',
-  'WON',
-  'LOST',
-];
+const FILTER_KEYS = ['q', 'stage', 'nature', 'departmentId'] as const;
+type FilterKey = (typeof FILTER_KEYS)[number];
 
-function ConsultationCard({ row }: { row: ConsultationRow }) {
-  const state = deadlineState(row);
-  return (
-    <Link
-      href={`/commercial/consultations/${row.id}`}
-      className="block rounded-[10px] border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-2"
-    >
-      <p className="mb-1 line-clamp-2 text-[13px] font-medium leading-snug">{row.title}</p>
-      <p className="mb-2 text-[12px] text-subtle">{row.client.name}</p>
-      <div className="flex items-center justify-between gap-2">
-        <span className="tnum text-[12.5px] font-medium">
-          {moneyDh(row.offerAmountHT ?? row.amount)}
-        </span>
-        {state && (
-          <span
-            className={`text-[11px] ${
-              state.tone === 'danger'
-                ? 'text-danger'
-                : state.tone === 'warning'
-                  ? 'text-warning'
-                  : 'text-subtle'
-            }`}
-          >
-            {state.label}
-          </span>
-        )}
-      </div>
-    </Link>
-  );
-}
-
-function ConsultationsKanban({ items }: { items: ConsultationRow[] }) {
-  const map = new Map<string, ConsultationRow[]>();
-  for (const row of items) {
-    if (!map.has(row.stage)) map.set(row.stage, []);
-    map.get(row.stage)!.push(row);
-  }
-  const orderedStages = [
-    ...STAGE_ORDER.filter((s) => map.has(s)),
-    ...[...map.keys()].filter((s) => !STAGE_ORDER.includes(s)),
-  ];
-
-  return (
-    <div className="flex gap-4 overflow-x-auto px-5 py-5">
-      {orderedStages.map((stage) => {
-        const rows = map.get(stage)!;
-        const sum = rows.reduce((acc, r) => acc + (r.offerAmountHT ?? r.amount ?? 0), 0);
-        return (
-          <div key={stage} className="flex w-[260px] flex-none flex-col gap-2.5">
-            <div className="flex items-baseline justify-between px-1">
-              <span className="text-[12.5px] font-medium">{rows[0]?.stageLabel ?? stage}</span>
-              <span className="tnum text-[11.5px] text-subtle">{rows.length}</span>
-            </div>
-            <span className="px-1 text-[11px] text-subtle">{moneyDh(sum)}</span>
-            <div className="flex flex-col gap-2">
-              {rows.map((row) => (
-                <ConsultationCard key={row.id} row={row} />
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+const inputClass =
+  'h-10 w-full rounded-[8px] border border-border-strong bg-surface px-3 text-[14px] outline-none focus:border-accent';
 
 export default async function ConsultationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<Partial<Record<FilterKey, string>> & { view?: string }>;
 }) {
-  const [session, data, params] = await Promise.all([
-    requireSession(),
-    api<ConsultationList>('/consultations'),
-    searchParams,
-  ]);
+  const params = await searchParams;
+
+  const active: Partial<Record<FilterKey, string>> = {};
+  for (const key of FILTER_KEYS) {
+    const value = params[key]?.trim();
+    if (value) active[key] = value;
+  }
+  const filtered = Object.keys(active).length > 0;
   const view = params.view === 'kanban' ? 'kanban' : 'table';
+
+  const query = new URLSearchParams(active);
+  const [session, data] = await Promise.all([
+    requireSession(),
+    api<ConsultationList>(`/consultations?${query.toString()}`),
+  ]);
+
+  /** Les liens de bascule gardent la sélection en cours. */
+  const viewHref = (target: 'table' | 'kanban') => {
+    const next = new URLSearchParams(active);
+    if (target === 'kanban') next.set('view', 'kanban');
+    const qs = next.toString();
+    return qs ? `?${qs}` : '/commercial/consultations';
+  };
 
   const permissions = session.permissions as Parameters<typeof can>[0];
   const canCreate = can(permissions, 'opportunity', 'CREATE');
+  const canUpdate = can(permissions, 'opportunity', 'UPDATE');
 
   const clients: ClientOption[] = canCreate
     ? await api<{ items: Array<{ id: string; name: string; code: string }> }>('/clients')
@@ -277,37 +231,132 @@ export default async function ConsultationsPage({
       )}
 
       <Card
-        title={`${data.items.length} demande(s) de prix`}
+        title="Filtrer les demandes"
         action={
-          data.items.length === 0 ? undefined : (
-            <div className="flex items-center gap-3 text-[13px]">
-              <Link
-                href="?view=table"
-                className={
-                  view === 'table' ? 'font-medium text-accent' : 'text-muted hover:text-text'
-                }
-              >
-                Tableau
-              </Link>
-              <Link
-                href="?view=kanban"
-                className={
-                  view === 'kanban' ? 'font-medium text-accent' : 'text-muted hover:text-text'
-                }
-              >
-                Kanban
-              </Link>
-            </div>
-          )
+          filtered ? (
+            <Link
+              href="/commercial/consultations"
+              className="text-[13.5px] font-medium text-accent hover:underline"
+            >
+              Effacer les filtres
+            </Link>
+          ) : undefined
+        }
+      >
+        <AutoSubmitForm className="grid gap-3 px-5 py-4 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          {view === 'kanban' && <input type="hidden" name="view" value="kanban" />}
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[12.5px] font-medium text-muted">Recherche</span>
+            <input
+              type="search"
+              name="q"
+              defaultValue={active.q ?? ''}
+              placeholder="Objet, client, référence AO…"
+              className={inputClass}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[12.5px] font-medium text-muted">Étape</span>
+            <select name="stage" defaultValue={active.stage ?? ''} className={inputClass}>
+              <option value="">Toutes les étapes</option>
+              {data.facets.stages.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label} ({s.count})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[12.5px] font-medium text-muted">Nature</span>
+            <select name="nature" defaultValue={active.nature ?? ''} className={inputClass}>
+              <option value="">Toutes</option>
+              {data.facets.natures.map((n) => (
+                <option key={n.value} value={n.value}>
+                  {n.label} ({n.count})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[12.5px] font-medium text-muted">Service</span>
+            <select
+              name="departmentId"
+              defaultValue={active.departmentId ?? ''}
+              className={inputClass}
+            >
+              <option value="">Tous</option>
+              {data.facets.departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.code}
+                </option>
+              ))}
+            </select>
+          </label>
+        </AutoSubmitForm>
+      </Card>
+
+      <div className="mt-5">
+      <Card
+        title={
+          filtered
+            ? `${data.items.length} demande(s) sélectionnée(s)`
+            : `${data.items.length} demande(s) de prix`
+        }
+        action={
+          <div className="flex items-center gap-3 text-[13px]">
+            <Link
+              href={viewHref('table')}
+              className={view === 'table' ? 'font-medium text-accent' : 'text-muted hover:text-text'}
+            >
+              Tableau
+            </Link>
+            <Link
+              href={viewHref('kanban')}
+              className={
+                view === 'kanban' ? 'font-medium text-accent' : 'text-muted hover:text-text'
+              }
+            >
+              Kanban
+            </Link>
+          </div>
         }
       >
         {data.items.length === 0 ? (
-          <EmptyState
-            title="Aucune consultation"
-            description="Enregistrez la demande dès qu’elle arrive : c’est ce qui permet de mesurer, en fin d’année, ce qu’on a gagné et pourquoi on a perdu le reste."
-          />
+          filtered ? (
+            <EmptyState
+              title="Aucune demande ne correspond à ces filtres"
+              description="Élargissez la sélection ou retirez un filtre."
+              action={
+                <Link
+                  href="/commercial/consultations"
+                  className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium transition-colors hover:bg-surface-2"
+                >
+                  Effacer les filtres
+                </Link>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="Aucune consultation"
+              description="Enregistrez la demande dès qu’elle arrive : c’est ce qui permet de mesurer, en fin d’année, ce qu’on a gagné et pourquoi on a perdu le reste."
+            />
+          )
         ) : view === 'kanban' ? (
-          <ConsultationsKanban items={data.items} />
+          <ConsultationsKanban
+            canUpdate={canUpdate}
+            items={data.items.map((row) => ({
+              id: row.id,
+              stage: row.stage,
+              title: row.title,
+              client: row.client.name,
+              amount: row.offerAmountHT ?? row.amount,
+              deadline: deadlineState(row),
+            }))}
+          />
         ) : (
           <DataTable>
             <thead>
@@ -422,6 +471,7 @@ export default async function ConsultationsPage({
           </DataTable>
         )}
       </Card>
+      </div>
 
       {data.lostCauses.length > 0 && (
         <div className="mt-5">
