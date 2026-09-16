@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
 import type { Metadata } from 'next';
 import { api } from '@/lib/api';
 import {
@@ -61,6 +62,61 @@ type FilterKey = (typeof FILTER_KEYS)[number];
 const inputClass =
   'h-10 w-full rounded-[8px] border border-border-strong bg-surface px-3 text-[14px] outline-none focus:border-accent';
 
+function AffairRowLine({ affair }: { affair: AffairRow }) {
+  const gap =
+    affair.marginRate !== null && affair.budgetMarginRate !== null
+      ? affair.marginRate - affair.budgetMarginRate
+      : null;
+  return (
+    <tr>
+      <Td mono>
+        <Link href={`/affaires/${affair.id}`} className="text-primary hover:underline">
+          {affair.number}
+        </Link>
+      </Td>
+      <Td>{affair.client.name}</Td>
+      <Td className="max-w-[320px]">
+        <span className="line-clamp-2">{affair.title}</span>
+      </Td>
+      <Td>{affair.department ?? '—'}</Td>
+      <Td>
+        {affair.commercialStatus ? (
+          <StatusBadge tone={COMMERCIAL_TONE[affair.commercialStatus] ?? 'neutral'}>
+            {AFFAIR_COMMERCIAL_LABELS[affair.commercialStatus] ?? affair.commercialStatus}
+          </StatusBadge>
+        ) : (
+          '—'
+        )}
+      </Td>
+      <Td>
+        {affair.worksStatus ? (
+          <StatusBadge tone={WORKS_TONE[affair.worksStatus] ?? 'neutral'}>
+            {AFFAIR_WORKS_LABELS[affair.worksStatus] ?? affair.worksStatus}
+          </StatusBadge>
+        ) : (
+          '—'
+        )}
+      </Td>
+      <Td align="right" mono>
+        {moneyDh(affair.contractAmount)}
+      </Td>
+      <Td align="right" mono>
+        {moneyDh(affair.invoiced)}
+      </Td>
+      <Td align="right">
+        {affair.marginRate === null ? (
+          <span className="text-subtle">—</span>
+        ) : (
+          <span className="flex items-center justify-end gap-2">
+            <span className="tnum ref text-[12px]">{percent(affair.marginRate, 0)}</span>
+            {gap !== null && gap < -5 && <StatusBadge tone="danger">{points(gap)}</StatusBadge>}
+          </span>
+        )}
+      </Td>
+    </tr>
+  );
+}
+
 const COMMERCIAL_TONE: Record<string, Tone> = {
   GAGNEE: 'success',
   SUIVANT_OP: 'warning',
@@ -77,10 +133,12 @@ const WORKS_TONE: Record<string, Tone> = {
   PERDU_ANNULE: 'danger',
 };
 
+type GroupKey = 'department' | 'commercialStatus';
+
 export default async function AffairsPage({
   searchParams,
 }: {
-  searchParams: Promise<Partial<Record<FilterKey, string>>>;
+  searchParams: Promise<Partial<Record<FilterKey, string>> & { groupBy?: string }>;
 }) {
   const params = await searchParams;
 
@@ -90,10 +148,39 @@ export default async function AffairsPage({
     if (value) active[key] = value;
   }
   const filtered = Object.keys(active).length > 0;
+  const groupBy: GroupKey | null =
+    params.groupBy === 'department' || params.groupBy === 'commercialStatus'
+      ? params.groupBy
+      : null;
 
   const query = new URLSearchParams({ ...active, limit: '200' });
   const { items, total, facets } = await api<AffairList>(`/affairs?${query.toString()}`);
   const exportHref = filtered ? `/api/affairs/export?${query.toString()}` : '/api/affairs/export';
+
+  const groups = groupBy
+    ? (() => {
+        const map = new Map<
+          string,
+          { label: string; rows: AffairRow[]; contractAmount: number; invoiced: number }
+        >();
+        for (const a of items) {
+          const key =
+            groupBy === 'department' ? (a.department ?? '—') : (a.commercialStatus ?? '—');
+          const label =
+            groupBy === 'department'
+              ? (a.department ?? 'Sans service')
+              : a.commercialStatus
+                ? (AFFAIR_COMMERCIAL_LABELS[a.commercialStatus] ?? a.commercialStatus)
+                : 'Non défini';
+          if (!map.has(key)) map.set(key, { label, rows: [], contractAmount: 0, invoiced: 0 });
+          const g = map.get(key)!;
+          g.rows.push(a);
+          g.contractAmount += a.contractAmount ?? 0;
+          g.invoiced += a.invoiced;
+        }
+        return [...map.values()].sort((a, b) => b.rows.length - a.rows.length);
+      })()
+    : null;
 
   const won = items.filter((a) => a.commercialStatus === 'GAGNEE');
   const awaiting = items.filter((a) => a.commercialStatus === 'SUIVANT_OP');
@@ -206,7 +293,15 @@ export default async function AffairsPage({
             </label>
           </div>
 
-          <div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-medium text-muted">Regrouper par</span>
+              <select name="groupBy" defaultValue={groupBy ?? ''} className={inputClass}>
+                <option value="">Aucun regroupement</option>
+                <option value="department">Service pilote</option>
+                <option value="commercialStatus">Statut commercial</option>
+              </select>
+            </label>
             <button
               type="submit"
               className="inline-flex h-9 items-center rounded-[8px] bg-accent px-4 text-[13.5px] font-medium text-white hover:bg-accent-hover"
@@ -261,64 +356,26 @@ export default async function AffairsPage({
               </tr>
             </thead>
             <tbody>
-              {items.map((affair) => {
-                const gap =
-                  affair.marginRate !== null && affair.budgetMarginRate !== null
-                    ? affair.marginRate - affair.budgetMarginRate
-                    : null;
-                return (
-                  <tr key={affair.id}>
-                    <Td mono>
-                      <Link href={`/affaires/${affair.id}`} className="text-primary hover:underline">
-                        {affair.number}
-                      </Link>
-                    </Td>
-                    <Td>{affair.client.name}</Td>
-                    <Td className="max-w-[320px]">
-                      <span className="line-clamp-2">{affair.title}</span>
-                    </Td>
-                    <Td>{affair.department ?? '—'}</Td>
-                    <Td>
-                      {affair.commercialStatus ? (
-                        <StatusBadge tone={COMMERCIAL_TONE[affair.commercialStatus] ?? 'neutral'}>
-                          {AFFAIR_COMMERCIAL_LABELS[affair.commercialStatus] ?? affair.commercialStatus}
-                        </StatusBadge>
-                      ) : (
-                        '—'
-                      )}
-                    </Td>
-                    <Td>
-                      {affair.worksStatus ? (
-                        <StatusBadge tone={WORKS_TONE[affair.worksStatus] ?? 'neutral'}>
-                          {AFFAIR_WORKS_LABELS[affair.worksStatus] ?? affair.worksStatus}
-                        </StatusBadge>
-                      ) : (
-                        '—'
-                      )}
-                    </Td>
-                    <Td align="right" mono>
-                      {moneyDh(affair.contractAmount)}
-                    </Td>
-                    <Td align="right" mono>
-                      {moneyDh(affair.invoiced)}
-                    </Td>
-                    <Td align="right">
-                      {affair.marginRate === null ? (
-                        <span className="text-subtle">—</span>
-                      ) : (
-                        <span className="flex items-center justify-end gap-2">
-                          <span className="tnum ref text-[12px]">
-                            {percent(affair.marginRate, 0)}
+              {groups
+                ? groups.map((group) => (
+                    <Fragment key={group.label}>
+                      <tr>
+                        <td
+                          colSpan={9}
+                          className="border-b border-border bg-surface-2 px-5 py-2 text-[13px] font-medium text-muted"
+                        >
+                          <span className="tnum">
+                            {group.label} · {group.rows.length} · {moneyDh(group.contractAmount)}{' '}
+                            gagné · {moneyDh(group.invoiced)} facturé
                           </span>
-                          {gap !== null && gap < -5 && (
-                            <StatusBadge tone="danger">{points(gap)}</StatusBadge>
-                          )}
-                        </span>
-                      )}
-                    </Td>
-                  </tr>
-                );
-              })}
+                        </td>
+                      </tr>
+                      {group.rows.map((affair) => (
+                        <AffairRowLine key={affair.id} affair={affair} />
+                      ))}
+                    </Fragment>
+                  ))
+                : items.map((affair) => <AffairRowLine key={affair.id} affair={affair} />)}
             </tbody>
           </DataTable>
         )}

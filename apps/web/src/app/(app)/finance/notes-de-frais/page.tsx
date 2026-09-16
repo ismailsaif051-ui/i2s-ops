@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
 import type { Metadata } from 'next';
 import { api, requireSession } from '@/lib/api';
 import { can } from '@i2s/contracts';
@@ -76,10 +77,63 @@ const CIRCUIT = [
   'PAID',
 ];
 
+function ExpenseRowLine({ report }: { report: ExpenseRow }) {
+  const step = Math.max(0, CIRCUIT.indexOf(report.status));
+  return (
+    <tr>
+      <Td mono>{report.number}</Td>
+      <Td>
+        <span className="font-medium">{report.employee}</span>
+        <span className="ml-2 ref text-[11px] text-subtle">{report.matricule}</span>
+      </Td>
+      <Td>{report.department ?? '—'}</Td>
+      <Td>{monthLabel(report.periodMonth)}</Td>
+      <Td align="right" mono>
+        {report.lineCount}
+        {report.capWarnings > 0 && (
+          <span className="ml-1.5 text-danger" title="Dépassement de plafond">
+            ⚠{report.capWarnings}
+          </span>
+        )}
+      </Td>
+      <Td align="right" mono>
+        {moneyDh(report.totalGross)}
+      </Td>
+      <Td align="right" mono>
+        {moneyDh(report.netPayable)}
+      </Td>
+      <Td>
+        <span className="flex gap-0.5" title={`Étape ${step + 1} sur ${CIRCUIT.length}`}>
+          {CIRCUIT.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 w-3 rounded-[1px] ${
+                i <= step
+                  ? report.status === 'REJECTED'
+                    ? 'bg-danger'
+                    : 'bg-primary'
+                  : 'bg-surface-3'
+              }`}
+            />
+          ))}
+        </span>
+      </Td>
+      <Td>
+        <StatusBadge tone={TONE[report.status] ?? 'neutral'}>
+          {EXPENSE_STATUS_LABELS[report.status] ?? report.status}
+        </StatusBadge>
+        {report.paidAt && <span className="ml-2 text-[11.5px] text-subtle">{date(report.paidAt)}</span>}
+      </Td>
+    </tr>
+  );
+}
+
+type GroupKey = 'department' | 'status';
+
 export default async function ExpenseReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<Partial<Record<FilterKey, string>>>;
+  searchParams: Promise<Partial<Record<FilterKey, string>> & { groupBy?: string }>;
 }) {
   const params = await searchParams;
 
@@ -89,6 +143,8 @@ export default async function ExpenseReportsPage({
     if (value) active[key] = value;
   }
   const filtered = Object.keys(active).length > 0;
+  const groupBy: GroupKey | null =
+    params.groupBy === 'department' || params.groupBy === 'status' ? params.groupBy : null;
 
   const query = new URLSearchParams({ ...active, limit: '300' });
   const [session, data] = await Promise.all([
@@ -96,6 +152,27 @@ export default async function ExpenseReportsPage({
     api<ExpenseList>(`/expense-reports?${query.toString()}`),
   ]);
   const { items, facets } = data;
+
+  const groups = groupBy
+    ? (() => {
+        const map = new Map<
+          string,
+          { label: string; rows: ExpenseRow[]; netPayable: number }
+        >();
+        for (const r of items) {
+          const key = groupBy === 'department' ? (r.department ?? '—') : r.status;
+          const label =
+            groupBy === 'department'
+              ? (r.department ?? 'Sans département')
+              : (EXPENSE_STATUS_LABELS[r.status] ?? r.status);
+          if (!map.has(key)) map.set(key, { label, rows: [], netPayable: 0 });
+          const g = map.get(key)!;
+          g.rows.push(r);
+          g.netPayable += r.netPayable;
+        }
+        return [...map.values()].sort((a, b) => b.rows.length - a.rows.length);
+      })()
+    : null;
 
   const permissions = session.permissions as Parameters<typeof can>[0];
   const canCreate = can(permissions, 'expense_report', 'CREATE');
@@ -216,7 +293,15 @@ export default async function ExpenseReportsPage({
             </label>
           </div>
 
-          <div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-medium text-muted">Regrouper par</span>
+              <select name="groupBy" defaultValue={groupBy ?? ''} className={inputClass}>
+                <option value="">Aucun regroupement</option>
+                <option value="department">Département</option>
+                <option value="status">Statut</option>
+              </select>
+            </label>
             <button
               type="submit"
               className="inline-flex h-9 items-center rounded-[8px] bg-accent px-4 text-[13.5px] font-medium text-white hover:bg-accent-hover"
@@ -271,56 +356,25 @@ export default async function ExpenseReportsPage({
               </tr>
             </thead>
             <tbody>
-              {items.map((report) => {
-                const step = Math.max(0, CIRCUIT.indexOf(report.status));
-                return (
-                  <tr key={report.id}>
-                    <Td mono>{report.number}</Td>
-                    <Td>
-                      <span className="font-medium">{report.employee}</span>
-                      <span className="ml-2 ref text-[11px] text-subtle">
-                        {report.matricule}
-                      </span>
-                    </Td>
-                    <Td>{report.department ?? '—'}</Td>
-                    <Td>{monthLabel(report.periodMonth)}</Td>
-                    <Td align="right" mono>
-                      {report.lineCount}
-                      {report.capWarnings > 0 && (
-                        <span className="ml-1.5 text-danger" title="Dépassement de plafond">
-                          ⚠{report.capWarnings}
-                        </span>
-                      )}
-                    </Td>
-                    <Td align="right" mono>{moneyDh(report.totalGross)}</Td>
-                    <Td align="right" mono>{moneyDh(report.netPayable)}</Td>
-                    <Td>
-                      <span className="flex gap-0.5" title={`Étape ${step + 1} sur ${CIRCUIT.length}`}>
-                        {CIRCUIT.map((_, i) => (
-                          <span
-                            key={i}
-                            className={`h-1.5 w-3 rounded-[1px] ${
-                              i <= step
-                                ? report.status === 'REJECTED'
-                                  ? 'bg-danger'
-                                  : 'bg-primary'
-                                : 'bg-surface-3'
-                            }`}
-                          />
-                        ))}
-                      </span>
-                    </Td>
-                    <Td>
-                      <StatusBadge tone={TONE[report.status] ?? 'neutral'}>
-                        {EXPENSE_STATUS_LABELS[report.status] ?? report.status}
-                      </StatusBadge>
-                      {report.paidAt && (
-                        <span className="ml-2 text-[11.5px] text-subtle">{date(report.paidAt)}</span>
-                      )}
-                    </Td>
-                  </tr>
-                );
-              })}
+              {groups
+                ? groups.map((group) => (
+                    <Fragment key={group.label}>
+                      <tr>
+                        <td
+                          colSpan={9}
+                          className="border-b border-border bg-surface-2 px-5 py-2 text-[13px] font-medium text-muted"
+                        >
+                          <span className="tnum">
+                            {group.label} · {group.rows.length} · {moneyDh(group.netPayable)} net
+                          </span>
+                        </td>
+                      </tr>
+                      {group.rows.map((report) => (
+                        <ExpenseRowLine key={report.id} report={report} />
+                      ))}
+                    </Fragment>
+                  ))
+                : items.map((report) => <ExpenseRowLine key={report.id} report={report} />)}
             </tbody>
           </DataTable>
         )}

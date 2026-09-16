@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
 import type { Metadata } from 'next';
 import { api } from '@/lib/api';
 import { MISSION_STATUS_LABELS, date } from '@/lib/format';
@@ -52,6 +53,44 @@ interface MissionRow {
   reportCount: number;
 }
 
+function MissionRowLine({ m }: { m: MissionRow }) {
+  return (
+    <tr>
+      <Td mono>
+        <Link href={`/operations/missions/${m.id}`} className="hover:text-accent">
+          {m.number}
+        </Link>
+      </Td>
+      <Td>
+        <Link href={`/affaires/${m.affair.id}`} className="ref text-[12px] text-primary hover:underline">
+          {m.affair.number}
+        </Link>
+        <span className="ml-2 text-subtle">{m.affair.client.name}</span>
+      </Td>
+      <Td className="max-w-[240px]">
+        <span className="line-clamp-1">{m.objective ?? '—'}</span>
+      </Td>
+      <Td>{m.inspectors.join(', ') || '—'}</Td>
+      <Td>{m.site?.name ?? '—'}</Td>
+      <Td mono>
+        {date(m.plannedStartDate)} → {date(m.plannedEndDate)}
+      </Td>
+      <Td mono>
+        {m.missionOrder ? (
+          <span title={`Statut : ${m.missionOrder.status}`}>{m.missionOrder.number}</span>
+        ) : (
+          <span className="text-subtle">—</span>
+        )}
+      </Td>
+      <Td>
+        <StatusBadge tone={STATUS_TONE[m.status] ?? 'neutral'}>
+          {MISSION_STATUS_LABELS[m.status] ?? m.status}
+        </StatusBadge>
+      </Td>
+    </tr>
+  );
+}
+
 const STATUS_TONE: Record<string, Tone> = {
   REQUESTED: 'neutral',
   PLANNED: 'info',
@@ -66,10 +105,12 @@ const STATUS_TONE: Record<string, Tone> = {
   CANCELLED: 'danger',
 };
 
+type GroupKey = 'department' | 'status';
+
 export default async function MissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<Partial<Record<FilterKey, string>>>;
+  searchParams: Promise<Partial<Record<FilterKey, string>> & { groupBy?: string }>;
 }) {
   const params = await searchParams;
 
@@ -79,9 +120,27 @@ export default async function MissionsPage({
     if (value) active[key] = value;
   }
   const filtered = Object.keys(active).length > 0;
+  const groupBy: GroupKey | null =
+    params.groupBy === 'department' || params.groupBy === 'status' ? params.groupBy : null;
 
   const query = new URLSearchParams({ ...active, limit: '150' });
   const { items, total, facets } = await api<MissionList>(`/missions?${query.toString()}`);
+
+  const groups = groupBy
+    ? (() => {
+        const map = new Map<string, { label: string; rows: MissionRow[] }>();
+        for (const m of items) {
+          const key = groupBy === 'department' ? (m.department ?? '—') : m.status;
+          const label =
+            groupBy === 'department'
+              ? (m.department ?? 'Sans département')
+              : (MISSION_STATUS_LABELS[m.status] ?? m.status);
+          if (!map.has(key)) map.set(key, { label, rows: [] });
+          map.get(key)!.rows.push(m);
+        }
+        return [...map.values()].sort((a, b) => b.rows.length - a.rows.length);
+      })()
+    : null;
 
   const inProgress = items.filter((m) => m.status === 'IN_PROGRESS').length;
   const today = new Date();
@@ -174,7 +233,15 @@ export default async function MissionsPage({
             </label>
           </div>
 
-          <div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-medium text-muted">Regrouper par</span>
+              <select name="groupBy" defaultValue={groupBy ?? ''} className={inputClass}>
+                <option value="">Aucun regroupement</option>
+                <option value="department">Département</option>
+                <option value="status">Statut</option>
+              </select>
+            </label>
             <button
               type="submit"
               className="inline-flex h-9 items-center rounded-[8px] bg-accent px-4 text-[13.5px] font-medium text-white hover:bg-accent-hover"
@@ -228,44 +295,23 @@ export default async function MissionsPage({
               </tr>
             </thead>
             <tbody>
-              {items.map((m) => (
-                <tr key={m.id}>
-                  <Td mono>
-                    <Link href={`/operations/missions/${m.id}`} className="hover:text-accent">
-                      {m.number}
-                    </Link>
-                  </Td>
-                  <Td>
-                    <Link
-                      href={`/affaires/${m.affair.id}`}
-                      className="ref text-[12px] text-primary hover:underline"
-                    >
-                      {m.affair.number}
-                    </Link>
-                    <span className="ml-2 text-subtle">{m.affair.client.name}</span>
-                  </Td>
-                  <Td className="max-w-[240px]">
-                    <span className="line-clamp-1">{m.objective ?? '—'}</span>
-                  </Td>
-                  <Td>{m.inspectors.join(', ') || '—'}</Td>
-                  <Td>{m.site?.name ?? '—'}</Td>
-                  <Td mono>
-                    {date(m.plannedStartDate)} → {date(m.plannedEndDate)}
-                  </Td>
-                  <Td mono>
-                    {m.missionOrder ? (
-                      <span title={`Statut : ${m.missionOrder.status}`}>{m.missionOrder.number}</span>
-                    ) : (
-                      <span className="text-subtle">—</span>
-                    )}
-                  </Td>
-                  <Td>
-                    <StatusBadge tone={STATUS_TONE[m.status] ?? 'neutral'}>
-                      {MISSION_STATUS_LABELS[m.status] ?? m.status}
-                    </StatusBadge>
-                  </Td>
-                </tr>
-              ))}
+              {groups
+                ? groups.map((group) => (
+                    <Fragment key={group.label}>
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="border-b border-border bg-surface-2 px-5 py-2 text-[13px] font-medium text-muted"
+                        >
+                          {group.label} · {group.rows.length}
+                        </td>
+                      </tr>
+                      {group.rows.map((m) => (
+                        <MissionRowLine key={m.id} m={m} />
+                      ))}
+                    </Fragment>
+                  ))
+                : items.map((m) => <MissionRowLine key={m.id} m={m} />)}
             </tbody>
           </DataTable>
         )}
