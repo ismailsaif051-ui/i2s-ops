@@ -2,8 +2,36 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NAVIGATION, ROLE_LABELS, can, type RoleCode, type SessionUser } from '@i2s/contracts';
+
+/**
+ * Rubriques repliées, par utilisateur et par navigateur.
+ *
+ * Le menu porte huit rubriques : un profil qui ne travaille que sur deux
+ * d'entre elles doit pouvoir ranger les autres, et les retrouver rangées au
+ * retour. C'est une préférence d'affichage, elle ne remonte pas au serveur.
+ */
+const COLLAPSED_KEY = 'i2s-ops.nav-collapsed';
+
+function Chevron({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 transition-transform duration-150 ${collapsed ? '-rotate-90' : ''}`}
+    >
+      <path
+        d="M4 6.5 8 10.5 12 6.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 /**
  * Le menu est CONSTRUIT à partir des droits effectifs de l'utilisateur.
@@ -24,6 +52,32 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  // Lu après le rendu : le serveur ne connaît pas le stockage du navigateur, et
+  // l'initialiser avant l'hydratation ferait diverger les deux rendus.
+  useEffect(() => {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? 'null');
+      if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+        setCollapsed(stored as Record<string, boolean>);
+      }
+    } catch {
+      // Stockage indisponible (navigation privée) : le menu reste déplié.
+    }
+  }, []);
+
+  function toggleGroup(key: string) {
+    setCollapsed((current) => {
+      const next = { ...current, [key]: !current[key] };
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      } catch {
+        // Idem : le repli fonctionne pour la session en cours, sans mémoire.
+      }
+      return next;
+    });
+  }
 
   const permissions = session.permissions as Parameters<typeof can>[0];
 
@@ -66,29 +120,52 @@ export function AppShell({
         </div>
 
         <nav className="px-3 pb-6">
-          {groups.map((group) => (
-            <div key={group.key} className="mb-5">
-              <p className="px-3 pb-1.5 text-[12.5px] font-medium text-rail-muted">{group.label}</p>
-              {group.items.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    aria-current={active ? 'page' : undefined}
-                    className={`mb-0.5 block rounded-[10px] px-3 py-2 text-[14.5px] transition-colors ${
-                      active
-                        ? 'bg-rail-active font-medium text-accent'
-                        : 'text-rail-text hover:bg-surface-2 hover:text-[var(--rail-text-strong)]'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+          {groups.map((group) => {
+            const isCollapsed = collapsed[group.key] === true;
+            const holdsActive = group.items.some(
+              (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+            );
+
+            return (
+              <div key={group.key} className="mb-5">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.key)}
+                  aria-expanded={!isCollapsed}
+                  aria-controls={`nav-${group.key}`}
+                  className={`flex w-full items-center justify-between rounded-[8px] px-3 pb-1.5 pt-1 text-[12.5px] font-medium transition-colors hover:text-[var(--rail-text-strong)] ${
+                    // Repliée, une rubrique qui contient la page ouverte le dit :
+                    // sinon on ne sait plus où l'on se trouve.
+                    isCollapsed && holdsActive ? 'text-accent' : 'text-rail-muted'
+                  }`}
+                >
+                  {group.label}
+                  <Chevron collapsed={isCollapsed} />
+                </button>
+
+                <div id={`nav-${group.key}`} hidden={isCollapsed}>
+                  {group.items.map((item) => {
+                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        aria-current={active ? 'page' : undefined}
+                        className={`mb-0.5 block rounded-[10px] px-3 py-2 text-[14.5px] transition-colors ${
+                          active
+                            ? 'bg-rail-active font-medium text-accent'
+                            : 'text-rail-text hover:bg-surface-2 hover:text-[var(--rail-text-strong)]'
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </nav>
       </aside>
 
