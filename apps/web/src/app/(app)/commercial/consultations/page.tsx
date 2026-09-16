@@ -111,11 +111,94 @@ function deadlineState(row: ConsultationRow): { label: string; tone: Tone | null
   return { label: `${row.daysLeft} j restants`, tone: null };
 }
 
-export default async function ConsultationsPage() {
-  const [session, data] = await Promise.all([
+const STAGE_ORDER = [
+  'NEW',
+  'CONSULTATION',
+  'OFFER_DRAFT',
+  'OFFER_SENT',
+  'FOLLOW_UP',
+  'NEGOTIATION',
+  'WON',
+  'LOST',
+];
+
+function ConsultationCard({ row }: { row: ConsultationRow }) {
+  const state = deadlineState(row);
+  return (
+    <Link
+      href={`/commercial/consultations/${row.id}`}
+      className="block rounded-[10px] border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-2"
+    >
+      <p className="mb-1 line-clamp-2 text-[13px] font-medium leading-snug">{row.title}</p>
+      <p className="mb-2 text-[12px] text-subtle">{row.client.name}</p>
+      <div className="flex items-center justify-between gap-2">
+        <span className="tnum text-[12.5px] font-medium">
+          {moneyDh(row.offerAmountHT ?? row.amount)}
+        </span>
+        {state && (
+          <span
+            className={`text-[11px] ${
+              state.tone === 'danger'
+                ? 'text-danger'
+                : state.tone === 'warning'
+                  ? 'text-warning'
+                  : 'text-subtle'
+            }`}
+          >
+            {state.label}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function ConsultationsKanban({ items }: { items: ConsultationRow[] }) {
+  const map = new Map<string, ConsultationRow[]>();
+  for (const row of items) {
+    if (!map.has(row.stage)) map.set(row.stage, []);
+    map.get(row.stage)!.push(row);
+  }
+  const orderedStages = [
+    ...STAGE_ORDER.filter((s) => map.has(s)),
+    ...[...map.keys()].filter((s) => !STAGE_ORDER.includes(s)),
+  ];
+
+  return (
+    <div className="flex gap-4 overflow-x-auto px-5 py-5">
+      {orderedStages.map((stage) => {
+        const rows = map.get(stage)!;
+        const sum = rows.reduce((acc, r) => acc + (r.offerAmountHT ?? r.amount ?? 0), 0);
+        return (
+          <div key={stage} className="flex w-[260px] flex-none flex-col gap-2.5">
+            <div className="flex items-baseline justify-between px-1">
+              <span className="text-[12.5px] font-medium">{rows[0]?.stageLabel ?? stage}</span>
+              <span className="tnum text-[11.5px] text-subtle">{rows.length}</span>
+            </div>
+            <span className="px-1 text-[11px] text-subtle">{moneyDh(sum)}</span>
+            <div className="flex flex-col gap-2">
+              {rows.map((row) => (
+                <ConsultationCard key={row.id} row={row} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default async function ConsultationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const [session, data, params] = await Promise.all([
     requireSession(),
     api<ConsultationList>('/consultations'),
+    searchParams,
   ]);
+  const view = params.view === 'kanban' ? 'kanban' : 'table';
 
   const permissions = session.permissions as Parameters<typeof can>[0];
   const canCreate = can(permissions, 'opportunity', 'CREATE');
@@ -193,12 +276,38 @@ export default async function ConsultationsPage() {
         />
       )}
 
-      <Card title={`${data.items.length} demande(s) de prix`}>
+      <Card
+        title={`${data.items.length} demande(s) de prix`}
+        action={
+          data.items.length === 0 ? undefined : (
+            <div className="flex items-center gap-3 text-[13px]">
+              <Link
+                href="?view=table"
+                className={
+                  view === 'table' ? 'font-medium text-accent' : 'text-muted hover:text-text'
+                }
+              >
+                Tableau
+              </Link>
+              <Link
+                href="?view=kanban"
+                className={
+                  view === 'kanban' ? 'font-medium text-accent' : 'text-muted hover:text-text'
+                }
+              >
+                Kanban
+              </Link>
+            </div>
+          )
+        }
+      >
         {data.items.length === 0 ? (
           <EmptyState
             title="Aucune consultation"
             description="Enregistrez la demande dès qu’elle arrive : c’est ce qui permet de mesurer, en fin d’année, ce qu’on a gagné et pourquoi on a perdu le reste."
           />
+        ) : view === 'kanban' ? (
+          <ConsultationsKanban items={data.items} />
         ) : (
           <DataTable>
             <thead>
