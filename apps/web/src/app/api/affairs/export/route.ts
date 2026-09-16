@@ -3,11 +3,12 @@ import { cookies } from 'next/headers';
 import { ACCESS_COOKIE, API_URL } from '@/lib/api';
 
 /** Relaie l'extraction Excel des affaires — même flux que les PDF du dossier. */
-export async function GET() {
+export async function GET(request: Request) {
   const token = (await cookies()).get(ACCESS_COOKIE)?.value;
   if (!token) return NextResponse.json({ message: 'Session expirée.' }, { status: 401 });
 
-  const upstream = await fetch(`${API_URL}/affairs/export`, {
+  const search = new URL(request.url).search;
+  const upstream = await fetch(`${API_URL}/affairs/export${search}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   });

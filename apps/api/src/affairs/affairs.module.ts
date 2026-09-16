@@ -72,33 +72,50 @@ class AffairsController {
   async list(
     @CurrentUser() user: RequestUser,
     @Query(new ZodValidationPipe(paginationSchema)) query: PaginationInput,
+    @Query('commercialStatus') commercialStatus?: string,
+    @Query('worksStatus') worksStatus?: string,
+    @Query('departmentId') departmentId?: string,
   ) {
     const scopeWhere = this.affairs.affairWhere(user, 'VIEW');
+    const baseWhere = { deletedAt: null, ...scopeWhere };
 
-    const rows = await this.prisma.affair.findMany({
-      where: {
-        deletedAt: null,
-        ...scopeWhere,
-        ...(query.q
-          ? {
-              OR: [
-                { number: { contains: query.q, mode: 'insensitive' as const } },
-                { title: { contains: query.q, mode: 'insensitive' as const } },
-                { client: { name: { contains: query.q, mode: 'insensitive' as const } } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { number: 'desc' },
-      take: query.limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      include: {
-        client: { select: { id: true, name: true } },
-        department: { select: { code: true } },
-        accountManager: { select: { firstName: true, lastName: true } },
-        _count: { select: { missions: true, reports: true, invoices: true } },
-      },
-    });
+    const where = {
+      ...baseWhere,
+      ...(commercialStatus ? { commercialStatus: commercialStatus as never } : {}),
+      ...(worksStatus ? { worksStatus: worksStatus as never } : {}),
+      ...(departmentId ? { departmentId } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { number: { contains: query.q, mode: 'insensitive' as const } },
+              { title: { contains: query.q, mode: 'insensitive' as const } },
+              { client: { name: { contains: query.q, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [rows, commercialCounts, worksCounts, departments] = await Promise.all([
+      this.prisma.affair.findMany({
+        where,
+        orderBy: { number: 'desc' },
+        take: query.limit + 1,
+        ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+        include: {
+          client: { select: { id: true, name: true } },
+          department: { select: { code: true } },
+          accountManager: { select: { firstName: true, lastName: true } },
+          _count: { select: { missions: true, reports: true, invoices: true } },
+        },
+      }),
+      this.prisma.affair.groupBy({ by: ['commercialStatus'], where: baseWhere, _count: true }),
+      this.prisma.affair.groupBy({ by: ['worksStatus'], where: baseWhere, _count: true }),
+      this.prisma.department.findMany({
+        where: { companyId: { in: user.companyIds } },
+        orderBy: { code: 'asc' },
+        select: { id: true, code: true, name: true },
+      }),
+    ]);
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
@@ -161,17 +178,50 @@ class AffairsController {
       };
     });
 
-    return { items, nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null };
+    return {
+      items,
+      nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
+      facets: {
+        commercialStatuses: commercialCounts.map((c) => ({
+          value: c.commercialStatus,
+          count: c._count,
+        })),
+        worksStatuses: worksCounts.map((w) => ({ value: w.worksStatus, count: w._count })),
+        departments,
+      },
+    };
   }
 
-  /** Extraction Excel — les affaires du périmètre, sans pagination. */
+  /** Extraction Excel — les affaires du périmètre (mêmes filtres que la liste), sans pagination. */
   @Get('export')
   @RequirePermission('affair', 'EXPORT')
-  async export(@CurrentUser() user: RequestUser, @Res() res: Response) {
+  async export(
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+    @Query('q') q?: string,
+    @Query('commercialStatus') commercialStatus?: string,
+    @Query('worksStatus') worksStatus?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
     const scopeWhere = this.affairs.affairWhere(user, 'VIEW');
 
     const rows = await this.prisma.affair.findMany({
-      where: { deletedAt: null, ...scopeWhere },
+      where: {
+        deletedAt: null,
+        ...scopeWhere,
+        ...(commercialStatus ? { commercialStatus: commercialStatus as never } : {}),
+        ...(worksStatus ? { worksStatus: worksStatus as never } : {}),
+        ...(departmentId ? { departmentId } : {}),
+        ...(q
+          ? {
+              OR: [
+                { number: { contains: q, mode: 'insensitive' as const } },
+                { title: { contains: q, mode: 'insensitive' as const } },
+                { client: { name: { contains: q, mode: 'insensitive' as const } } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { number: 'desc' },
       take: 5000,
       include: {

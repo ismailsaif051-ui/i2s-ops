@@ -76,6 +76,7 @@ class MissionsController {
     @CurrentUser() user: RequestUser,
     @Query(new ZodValidationPipe(paginationSchema)) query: PaginationInput,
     @Query('status') status?: string,
+    @Query('departmentId') departmentId?: string,
   ) {
     const scopeLevel = this.scope.requireScope(user, 'mission', 'VIEW');
 
@@ -85,37 +86,49 @@ class MissionsController {
         ? { assignments: { some: { employeeId: user.employeeId ?? '' } } }
         : this.scope.buildWhere(user, 'mission', 'VIEW', MISSION_SCOPE);
 
-    const rows = await this.prisma.mission.findMany({
-      where: {
-        deletedAt: null,
-        ...scopeWhere,
-        ...(status ? { status: status as never } : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { number: { contains: query.q, mode: 'insensitive' as const } },
-                { objective: { contains: query.q, mode: 'insensitive' as const } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { plannedStartDate: 'desc' },
-      take: query.limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      include: {
-        affair: {
-          select: { id: true, number: true, title: true, client: { select: { name: true } } },
+    const baseWhere = { deletedAt: null, ...scopeWhere };
+
+    const where = {
+      ...baseWhere,
+      ...(status ? { status: status as never } : {}),
+      ...(departmentId ? { departmentId } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { number: { contains: query.q, mode: 'insensitive' as const } },
+              { objective: { contains: query.q, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [rows, statusCounts, departments] = await Promise.all([
+      this.prisma.mission.findMany({
+        where,
+        orderBy: { plannedStartDate: 'desc' },
+        take: query.limit + 1,
+        ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+        include: {
+          affair: {
+            select: { id: true, number: true, title: true, client: { select: { name: true } } },
+          },
+          site: { select: { name: true, city: true } },
+          department: { select: { code: true } },
+          vehicle: { select: { plate: true } },
+          missionOrder: { select: { number: true, status: true } },
+          assignments: {
+            include: { employee: { select: { matricule: true, firstName: true, lastName: true } } },
+          },
+          _count: { select: { reports: true } },
         },
-        site: { select: { name: true, city: true } },
-        department: { select: { code: true } },
-        vehicle: { select: { plate: true } },
-        missionOrder: { select: { number: true, status: true } },
-        assignments: {
-          include: { employee: { select: { matricule: true, firstName: true, lastName: true } } },
-        },
-        _count: { select: { reports: true } },
-      },
-    });
+      }),
+      this.prisma.mission.groupBy({ by: ['status'], where: baseWhere, _count: true }),
+      this.prisma.department.findMany({
+        where: { companyId: { in: user.companyIds } },
+        orderBy: { code: 'asc' },
+        select: { id: true, code: true, name: true },
+      }),
+    ]);
 
     const hasMore = rows.length > query.limit;
     const items = (hasMore ? rows.slice(0, query.limit) : rows).map((m) => ({
@@ -136,7 +149,14 @@ class MissionsController {
       reportCount: m._count.reports,
     }));
 
-    return { items, nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null };
+    return {
+      items,
+      nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
+      facets: {
+        statuses: statusCounts.map((s) => ({ value: s.status, count: s._count })),
+        departments,
+      },
+    };
   }
 
   /** Affaires ouvrables et intervenants disponibles, pour le formulaire. */

@@ -23,6 +23,7 @@ import {
 } from '@/components/ui';
 import { CreateLink } from '@/components/create-link';
 import { ExportLink } from '@/components/export-link';
+import { AutoSubmitForm } from '@/components/auto-submit-form';
 
 export const metadata: Metadata = { title: 'Affaires' };
 
@@ -44,6 +45,21 @@ interface AffairRow {
   counts: { missions: number; reports: number; invoices: number };
 }
 
+interface AffairList {
+  items: AffairRow[];
+  facets: {
+    commercialStatuses: Array<{ value: string | null; count: number }>;
+    worksStatuses: Array<{ value: string | null; count: number }>;
+    departments: Array<{ id: string; code: string; name: string }>;
+  };
+}
+
+const FILTER_KEYS = ['q', 'commercialStatus', 'worksStatus', 'departmentId'] as const;
+type FilterKey = (typeof FILTER_KEYS)[number];
+
+const inputClass =
+  'h-10 w-full rounded-[8px] border border-border-strong bg-surface px-3 text-[14px] outline-none focus:border-accent';
+
 const COMMERCIAL_TONE: Record<string, Tone> = {
   GAGNEE: 'success',
   SUIVANT_OP: 'warning',
@@ -60,8 +76,23 @@ const WORKS_TONE: Record<string, Tone> = {
   PERDU_ANNULE: 'danger',
 };
 
-export default async function AffairsPage() {
-  const { items } = await api<{ items: AffairRow[] }>('/affairs?limit=200');
+export default async function AffairsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Partial<Record<FilterKey, string>>>;
+}) {
+  const params = await searchParams;
+
+  const active: Partial<Record<FilterKey, string>> = {};
+  for (const key of FILTER_KEYS) {
+    const value = params[key]?.trim();
+    if (value) active[key] = value;
+  }
+  const filtered = Object.keys(active).length > 0;
+
+  const query = new URLSearchParams({ ...active, limit: '200' });
+  const { items, facets } = await api<AffairList>(`/affairs?${query.toString()}`);
+  const exportHref = filtered ? `/api/affairs/export?${query.toString()}` : '/api/affairs/export';
 
   const won = items.filter((a) => a.commercialStatus === 'GAGNEE');
   const awaiting = items.filter((a) => a.commercialStatus === 'SUIVANT_OP');
@@ -82,7 +113,7 @@ export default async function AffairsPage() {
         description="Deux axes de statut indépendants, comme au registre de suivi : l’avancement commercial d’un côté, l’état des travaux et de la facturation de l’autre."
         action={
           <div className="flex items-center gap-2">
-            <ExportLink href="/api/affairs/export" resource="affair" />
+            <ExportLink href={exportHref} resource="affair" />
             <CreateLink href="/affaires/nouvelle" label="Ouvrir une affaire" resource="affair" />
           </div>
         }
@@ -106,12 +137,107 @@ export default async function AffairsPage() {
         />
       </KpiRow>
 
-      <Card title={`${items.length} affaires`}>
+      <Card
+        title="Filtrer les affaires"
+        action={
+          filtered ? (
+            <Link href="/affaires" className="text-[13.5px] font-medium text-accent hover:underline">
+              Effacer les filtres
+            </Link>
+          ) : undefined
+        }
+      >
+        <AutoSubmitForm className="flex flex-col gap-3 px-5 py-4">
+          <div className="grid gap-3 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-medium text-muted">Recherche</span>
+              <input
+                type="search"
+                name="q"
+                defaultValue={active.q ?? ''}
+                placeholder="N° d’affaire, désignation, client…"
+                className={inputClass}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-medium text-muted">Statut commercial</span>
+              <select
+                name="commercialStatus"
+                defaultValue={active.commercialStatus ?? ''}
+                className={inputClass}
+              >
+                <option value="">Tous</option>
+                {facets.commercialStatuses
+                  .filter((s): s is { value: string; count: number } => s.value !== null)
+                  .map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {AFFAIR_COMMERCIAL_LABELS[s.value] ?? s.value} ({s.count})
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-medium text-muted">État travaux</span>
+              <select name="worksStatus" defaultValue={active.worksStatus ?? ''} className={inputClass}>
+                <option value="">Tous</option>
+                {facets.worksStatuses
+                  .filter((s): s is { value: string; count: number } => s.value !== null)
+                  .map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {AFFAIR_WORKS_LABELS[s.value] ?? s.value} ({s.count})
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-medium text-muted">Service pilote</span>
+              <select name="departmentId" defaultValue={active.departmentId ?? ''} className={inputClass}>
+                <option value="">Tous</option>
+                {facets.departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.code}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              className="inline-flex h-9 items-center rounded-[8px] bg-accent px-4 text-[13.5px] font-medium text-white hover:bg-accent-hover"
+            >
+              Filtrer
+            </button>
+          </div>
+        </AutoSubmitForm>
+      </Card>
+
+      <div className="mt-5">
+      <Card title={filtered ? `${items.length} affaire(s) sélectionnée(s)` : `${items.length} affaires`}>
         {items.length === 0 ? (
+          filtered ? (
+            <EmptyState
+              title="Aucune affaire ne correspond à ces filtres"
+              description="Élargissez la sélection ou retirez un filtre."
+              action={
+                <Link
+                  href="/affaires"
+                  className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium transition-colors hover:bg-surface-2"
+                >
+                  Effacer les filtres
+                </Link>
+              }
+            />
+          ) : (
           <EmptyState
             title="Aucune affaire"
             description="Une affaire naît d’une offre gagnée, ou se crée directement à réception d’un bon de commande."
           />
+          )
         ) : (
           <DataTable>
             <thead>
@@ -196,6 +322,7 @@ export default async function AffairsPage() {
         main-d’œuvre. Le détail complet — frais, véhicules, sous-traitance, comparaison au budget —
         se trouve sur la fiche de chaque affaire.
       </p>
+      </div>
     </>
   );
 }

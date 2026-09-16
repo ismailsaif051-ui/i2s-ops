@@ -15,6 +15,8 @@ const MONTH = /^\d{4}-\d{2}$/;
 const listSchema = z.object({
   status: z.string().trim().max(30).optional(),
   month: z.string().regex(MONTH, 'Mois attendu au format AAAA-MM.').optional(),
+  departmentId: z.string().uuid().optional(),
+  q: z.string().trim().max(120).optional(),
   limit: z.coerce.number().int().min(1).max(300).default(100),
 });
 
@@ -72,30 +74,54 @@ class ExpensesController {
     @CurrentUser() user: RequestUser,
     @Query(new ZodValidationPipe(listSchema)) query: z.infer<typeof listSchema>,
   ) {
-    const rows = await this.prisma.expenseReport.findMany({
-      where: {
-        companyId: { in: user.companyIds },
-        ...(query.status ? { status: query.status as never } : {}),
-        ...(query.month
-          ? { periodMonth: new Date(`${query.month}-01T00:00:00.000Z`) }
-          : {}),
-        ...this.scope.buildWhere(user, 'expense_report', 'VIEW', EXPENSE_SCOPE),
-      },
-      orderBy: [{ periodMonth: 'desc' }, { number: 'asc' }],
-      take: query.limit,
-      include: {
-        employee: {
-          select: {
-            matricule: true,
-            firstName: true,
-            lastName: true,
-            department: { select: { code: true } },
+    const baseWhere = {
+      companyId: { in: user.companyIds },
+      ...this.scope.buildWhere(user, 'expense_report', 'VIEW', EXPENSE_SCOPE),
+    };
+
+    const where = {
+      ...baseWhere,
+      ...(query.status ? { status: query.status as never } : {}),
+      ...(query.month ? { periodMonth: new Date(`${query.month}-01T00:00:00.000Z`) } : {}),
+      ...(query.departmentId ? { employee: { departmentId: query.departmentId } } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { number: { contains: query.q, mode: 'insensitive' as const } },
+              { employee: { firstName: { contains: query.q, mode: 'insensitive' as const } } },
+              { employee: { lastName: { contains: query.q, mode: 'insensitive' as const } } },
+              { employee: { matricule: { contains: query.q, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [rows, total, statusCounts, departments] = await Promise.all([
+      this.prisma.expenseReport.findMany({
+        where,
+        orderBy: [{ periodMonth: 'desc' }, { number: 'asc' }],
+        take: query.limit,
+        include: {
+          employee: {
+            select: {
+              matricule: true,
+              firstName: true,
+              lastName: true,
+              department: { select: { code: true } },
+            },
           },
+          _count: { select: { lines: true } },
+          lines: { where: { capWarning: { not: null } }, select: { id: true } },
         },
-        _count: { select: { lines: true } },
-        lines: { where: { capWarning: { not: null } }, select: { id: true } },
-      },
-    });
+      }),
+      this.prisma.expenseReport.count({ where }),
+      this.prisma.expenseReport.groupBy({ by: ['status'], where: baseWhere, _count: true }),
+      this.prisma.department.findMany({
+        where: { companyId: { in: user.companyIds } },
+        orderBy: { code: 'asc' },
+        select: { id: true, code: true, name: true },
+      }),
+    ]);
 
     return {
       items: rows.map((r) => ({
@@ -116,6 +142,11 @@ class ExpensesController {
         paidAt: r.paidAt,
         isMine: r.employeeId === user.employeeId,
       })),
+      total,
+      facets: {
+        statuses: statusCounts.map((s) => ({ value: s.status, count: s._count })),
+        departments,
+      },
     };
   }
 
@@ -130,9 +161,20 @@ class ExpensesController {
     const rows = await this.prisma.expenseReport.findMany({
       where: {
         companyId: { in: user.companyIds },
+        ...this.scope.buildWhere(user, 'expense_report', 'VIEW', EXPENSE_SCOPE),
         ...(query.status ? { status: query.status as never } : {}),
         ...(query.month ? { periodMonth: new Date(`${query.month}-01T00:00:00.000Z`) } : {}),
-        ...this.scope.buildWhere(user, 'expense_report', 'VIEW', EXPENSE_SCOPE),
+        ...(query.departmentId ? { employee: { departmentId: query.departmentId } } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { number: { contains: query.q, mode: 'insensitive' as const } },
+                { employee: { firstName: { contains: query.q, mode: 'insensitive' as const } } },
+                { employee: { lastName: { contains: query.q, mode: 'insensitive' as const } } },
+                { employee: { matricule: { contains: query.q, mode: 'insensitive' as const } } },
+              ],
+            }
+          : {}),
       },
       orderBy: [{ periodMonth: 'desc' }, { number: 'asc' }],
       take: 5000,
