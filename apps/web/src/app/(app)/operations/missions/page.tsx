@@ -29,7 +29,7 @@ interface MissionList {
   };
 }
 
-const FILTER_KEYS = ['q', 'status', 'departmentId'] as const;
+const FILTER_KEYS = ['q', 'status', 'departmentId', 'affairId'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 const inputClass =

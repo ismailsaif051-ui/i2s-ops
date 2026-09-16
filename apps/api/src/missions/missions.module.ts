@@ -77,6 +77,7 @@ class MissionsController {
     @Query(new ZodValidationPipe(paginationSchema)) query: PaginationInput,
     @Query('status') status?: string,
     @Query('departmentId') departmentId?: string,
+    @Query('affairId') affairId?: string,
   ) {
     const scopeLevel = this.scope.requireScope(user, 'mission', 'VIEW');
 
@@ -92,6 +93,7 @@ class MissionsController {
       ...baseWhere,
       ...(status ? { status: status as never } : {}),
       ...(departmentId ? { departmentId } : {}),
+      ...(affairId ? { affairId } : {}),
       ...(query.q
         ? {
             OR: [

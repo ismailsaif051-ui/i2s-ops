@@ -315,7 +315,19 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Card title={`Missions — ${detail.missions.length}`}>
+        <Card
+          title={`Missions — ${detail.missions.length}`}
+          action={
+            detail.missions.length > 12 ? (
+              <Link
+                href={`/operations/missions?affairId=${detail.id}`}
+                className="text-[13px] font-medium text-accent hover:underline"
+              >
+                Voir les {detail.missions.length}
+              </Link>
+            ) : undefined
+          }
+        >
           {detail.missions.length === 0 ? (
             <EmptyState title="Aucune mission" description="Planifiez une mission depuis le planning." />
           ) : (
@@ -332,7 +344,11 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
               <tbody>
                 {detail.missions.slice(0, 12).map((m) => (
                   <tr key={m.id}>
-                    <Td mono>{m.number}</Td>
+                    <Td mono>
+                      <Link href={`/operations/missions/${m.id}`} className="hover:text-accent">
+                        {m.number}
+                      </Link>
+                    </Td>
                     <Td className="max-w-[220px]">
                       <span className="line-clamp-1">{m.objective ?? '—'}</span>
                     </Td>
@@ -378,7 +394,11 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
                   const paid = inv.payments.reduce((s, p2) => s + Number(p2.amount), 0);
                   return (
                     <tr key={inv.id}>
-                      <Td mono>{inv.number}</Td>
+                      <Td mono>
+                        <Link href={`/finance/factures/${inv.id}`} className="hover:text-accent">
+                          {inv.number}
+                        </Link>
+                      </Td>
                       <Td mono>{date(inv.issueDate)}</Td>
                       <Td mono>{date(inv.dueDate)}</Td>
                       <Td align="right" mono>{moneyDh(inv.totalTTC)}</Td>
@@ -427,7 +447,11 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
               <tbody>
                 {detail.reports.map((r) => (
                   <tr key={r.id}>
-                    <Td mono>{r.number}</Td>
+                    <Td mono>
+                      <Link href={`/operations/rapports/${r.id}`} className="hover:text-accent">
+                        {r.number}
+                      </Link>
+                    </Td>
                     <Td>
                       <StatusBadge
                         tone={
@@ -458,7 +482,12 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
               {detail.nonConformities.map((nc) => (
                 <li key={nc.id} className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="ref text-[12px]">{nc.number}</span>
+                    <Link
+                      href={`/operations/non-conformites/${nc.id}`}
+                      className="ref text-[12px] text-primary hover:underline"
+                    >
+                      {nc.number}
+                    </Link>
                     <StatusBadge tone={SEVERITY_TONE[nc.severity] ?? 'neutral'}>
                       {nc.severity === 'CRITICAL'
                         ? 'Critique'
