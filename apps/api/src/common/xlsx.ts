@@ -51,3 +51,36 @@ export async function buildXlsx(
 
 export const XLSX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/**
+ * Lit un classeur Excel en lignes indexées par en-tête de colonne — le
+ * pendant de buildXlsx. L'ordre des colonnes n'a pas d'importance, seul
+ * l'intitulé compte : un classeur exporté puis réimporté fonctionne tel quel.
+ */
+export async function readXlsxRows(buffer: Buffer): Promise<Array<Record<string, unknown>>> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
+
+  const headers: string[] = [];
+  sheet.getRow(1).eachCell({ includeEmpty: false }, (cell, colNumber) => {
+    headers[colNumber] = String(cell.value ?? '').trim();
+  });
+
+  const rows: Array<Record<string, unknown>> = [];
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const record: Record<string, unknown> = {};
+    let hasValue = false;
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      const header = headers[colNumber];
+      if (!header) return;
+      record[header] = cell.value;
+      hasValue = true;
+    });
+    if (hasValue) rows.push(record);
+  });
+
+  return rows;
+}

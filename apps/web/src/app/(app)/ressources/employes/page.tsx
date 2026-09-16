@@ -13,6 +13,7 @@ import {
   Td,
   Th,
 } from '@/components/ui';
+import { ImportEmployeesForm } from '@/components/import-employees-form';
 
 export const metadata: Metadata = { title: 'Employés' };
 
@@ -41,7 +42,9 @@ export default async function EmployeesPage() {
     api<{ items: EmployeeRow[] }>('/employees?limit=200'),
   ]);
 
-  const canExport = can(session.permissions as Parameters<typeof can>[0], 'employee', 'EXPORT');
+  const permissions = session.permissions as Parameters<typeof can>[0];
+  const canExport = can(permissions, 'employee', 'EXPORT');
+  const canCreate = can(permissions, 'employee', 'CREATE');
   const inspectors = items.filter((e) => e.isInspector).length;
   const withoutCost = items.filter((e) => !e.currentDailyCost).length;
 
@@ -52,14 +55,17 @@ export default async function EmployeesPage() {
         title="Employés"
         description="Le coût journalier est historisé par période de validité : une modification ouvre une nouvelle période et n’écrase jamais l’historique."
         action={
-          canExport ? (
-            <a
-              href="/api/employees/export"
-              className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium text-text shadow-sm transition-colors hover:border-accent hover:text-accent"
-            >
-              Exporter Excel
-            </a>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <a
+                href="/api/employees/export"
+                className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium text-text shadow-sm transition-colors hover:border-accent hover:text-accent"
+              >
+                Exporter Excel
+              </a>
+            )}
+            {canCreate && <ImportEmployeesForm />}
+          </div>
         }
       />
 

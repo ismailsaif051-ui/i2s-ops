@@ -13,6 +13,30 @@ const SCOPE = {
   teamPath: 'id',
 } as const;
 
+/** Cellule Excel → texte propre, quel que soit le type d'origine. */
+function cell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toISOString();
+  return String(value).trim();
+}
+
+/** Accepte une date Excel native ou un texte JJ/MM/AAAA — le format de l'export. */
+function parseFrenchDate(value: unknown): Date | null {
+  if (value instanceof Date) return value;
+  const text = cell(value);
+  const m = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1])));
+}
+
+function parseAmount(value: unknown): number | null {
+  if (typeof value === 'number') return value;
+  const text = cell(value).replace(',', '.');
+  if (!text) return null;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
 @Injectable()
 export class EmployeesService {
   constructor(
@@ -91,6 +115,144 @@ export class EmployeesService {
         },
       },
     });
+  }
+
+  /**
+   * Import en masse — mêmes colonnes que exportRows, pour un aller-retour
+   * Excel naturel. Un matricule déjà connu est ignoré, jamais réécrit : un
+   * import ne doit pas pouvoir écraser une fiche existante en silence.
+   */
+  async importRows(
+    user: RequestUser,
+    rows: Array<Record<string, unknown>>,
+    ctx: { ip?: string | null; userAgent?: string | null },
+  ) {
+    this.scope.requireScope(user, 'employee', 'CREATE');
+
+    const companyId = user.companyIds[0];
+    if (!companyId) {
+      throw new Error('Aucune société associée à votre compte.');
+    }
+
+    const departments = await this.prisma.department.findMany({
+      where: { companyId },
+      select: { id: true, code: true },
+    });
+    const deptByCode = new Map(departments.map((d) => [d.code.toUpperCase(), d.id]));
+
+    const details: Array<{
+      row: number;
+      matricule: string;
+      status: 'created' | 'skipped' | 'error';
+      message?: string;
+    }> = [];
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const r = rows[i];
+      const rowNumber = i + 2;
+      const matricule = cell(r['Matricule']);
+      const lastName = cell(r['Nom']);
+      const firstName = cell(r['Prénom']);
+
+      if (!matricule || !lastName || !firstName) {
+        details.push({
+          row: rowNumber,
+          matricule: matricule || '—',
+          status: 'error',
+          message: 'Matricule, nom et prénom sont obligatoires.',
+        });
+        continue;
+      }
+
+      const existing = await this.prisma.employee.findFirst({
+        where: { companyId, matricule },
+        select: { id: true },
+      });
+      if (existing) {
+        details.push({
+          row: rowNumber,
+          matricule,
+          status: 'skipped',
+          message: 'Un employé porte déjà ce matricule — fiche inchangée.',
+        });
+        continue;
+      }
+
+      const deptCode = cell(r['Département']).toUpperCase();
+      const departmentId = deptCode ? (deptByCode.get(deptCode) ?? null) : null;
+      if (deptCode && !departmentId) {
+        details.push({
+          row: rowNumber,
+          matricule,
+          status: 'error',
+          message: `Département inconnu : ${deptCode}.`,
+        });
+        continue;
+      }
+
+      const hireDate = parseFrenchDate(r['Embauché le']);
+      const dailyCostAmount = parseAmount(r['Coût journalier']);
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const employee = await tx.employee.create({
+            data: {
+              companyId,
+              matricule,
+              firstName,
+              lastName,
+              departmentId,
+              position: cell(r['Fonction']) || null,
+              email: cell(r['Email']) || null,
+              phone: cell(r['Téléphone']) || null,
+              isInspector: /^oui$/i.test(cell(r['Inspecteur'])),
+              contractType: cell(r['Type de contrat']) || null,
+              hireDate,
+              createdById: user.id,
+              updatedById: user.id,
+            },
+          });
+
+          if (dailyCostAmount !== null && dailyCostAmount > 0) {
+            await tx.employeeDailyCost.create({
+              data: {
+                employeeId: employee.id,
+                validFrom: hireDate ?? new Date(),
+                amount: dailyCostAmount,
+                reason: 'Import initial',
+                createdById: user.id,
+              },
+            });
+          }
+        });
+
+        details.push({ row: rowNumber, matricule, status: 'created' });
+      } catch (error) {
+        details.push({
+          row: rowNumber,
+          matricule,
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Erreur inconnue.',
+        });
+      }
+    }
+
+    const created = details.filter((d) => d.status === 'created').length;
+    const skipped = details.filter((d) => d.status === 'skipped').length;
+    const errors = details.filter((d) => d.status === 'error').length;
+
+    await this.audit.record(
+      {
+        entity: 'employee',
+        entityId: 'import',
+        action: 'IMPORT',
+        after: { created, skipped, errors, total: rows.length },
+        companyId,
+      },
+      { user, ...ctx },
+    );
+
+    return { created, skipped, errors, details };
   }
 
   async get(user: RequestUser, id: string) {

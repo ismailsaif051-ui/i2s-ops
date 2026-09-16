@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 import {
   createEmployeeSchema,
   paginationSchema,
@@ -13,8 +14,13 @@ import { EmployeesService } from './employees.service';
 import { DailyCostService } from './daily-cost.service';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { buildXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx';
+import { buildXlsx, readXlsxRows, XLSX_CONTENT_TYPE } from '../common/xlsx';
 import type { RequestUser } from '../common/types';
+
+const importSchema = z.object({
+  fileName: z.string().trim().min(1).max(200),
+  contentBase64: z.string().min(1).max(11_000_000),
+});
 
 @ApiTags('Employés')
 @Controller('employees')
@@ -75,6 +81,19 @@ export class EmployeesController {
     res.setHeader('Content-Disposition', 'attachment; filename="employes.xlsx"');
     res.setHeader('Cache-Control', 'private, no-store');
     res.send(content);
+  }
+
+  /** Import en masse — mêmes colonnes que l'export, matricule non écrasé. */
+  @Post('import')
+  @RequirePermission('employee', 'CREATE')
+  async import(
+    @CurrentUser() user: RequestUser,
+    @Body(new ZodValidationPipe(importSchema)) body: z.infer<typeof importSchema>,
+    @Req() req: Request,
+  ) {
+    const buffer = Buffer.from(body.contentBase64, 'base64');
+    const rows = await readXlsxRows(buffer);
+    return this.employees.importRows(user, rows, ctx(req));
   }
 
   @Get(':id')
