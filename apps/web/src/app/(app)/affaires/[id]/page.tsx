@@ -369,15 +369,17 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
                     <p className="mt-1.5 text-[13px] text-subtle">Aucun site rattaché.</p>
                   ) : (
                     <ul className="mt-2.5 flex flex-col gap-2.5">
-                      {project.sites.map((site) => (
+                      {project.sites.map((site) => {
+                        // Beaucoup de sites portent le nom de leur ville : la
+                        // répéter donnerait « Jorf Lasfar · Jorf Lasfar ».
+                        const lieu = [site.city, site.region]
+                          .filter((v): v is string => Boolean(v) && v !== site.name)
+                          .join(' · ');
+                        return (
                         <li key={site.id} className="border-l-2 border-border pl-3">
                           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                             <span className="text-[13.5px] font-medium">{site.name}</span>
-                            {(site.city || site.region) && (
-                              <span className="text-[12.5px] text-muted">
-                                {[site.city, site.region].filter(Boolean).join(' · ')}
-                              </span>
-                            )}
+                            {lieu && <span className="text-[12.5px] text-muted">{lieu}</span>}
                             {site.distanceFromHqKm !== null && (
                               <span className="tnum text-[12.5px] text-subtle">
                                 {site.distanceFromHqKm} km du siège
@@ -395,7 +397,8 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
                             </p>
                           )}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   )}
                 </li>
