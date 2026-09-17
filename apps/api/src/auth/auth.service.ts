@@ -19,6 +19,9 @@ const ARGON_OPTIONS = { memoryCost: 19456, timeCost: 2, parallelism: 1 } as cons
 /** Verrouillage progressif : au-delà du seuil, le compte se bloque temporairement. */
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
+/** Délai pendant lequel un jeton tout juste renouvelé peut encore servir (requêtes simultanées). */
+const ROTATION_GRACE_MS = 30_000;
+const MAX_GRACE_SESSIONS = 5;
 
 export interface ClientContext {
   ip?: string | null;
@@ -106,6 +109,36 @@ export class AuthService {
     });
 
     if (!stored) throw new UnauthorizedException('Session invalide.');
+
+    // Même règle qu'à la connexion : un compte suspendu ne prolonge pas sa
+    // session. Sans ce contrôle, il resterait connecté jusqu'à 30 jours.
+    if (stored.user.status !== 'ACTIVE') {
+      await this.prisma.refreshToken.updateMany({
+        where: { family: stored.family, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Compte désactivé. Contactez l’administrateur.');
+    }
+
+    // Quand l'accès expire, le navigateur envoie souvent plusieurs requêtes à
+    // la fois, toutes avec le même jeton : la première le fait tourner, les
+    // suivantes présentent un jeton déjà révoqué. Dans les secondes qui
+    // suivent une rotation — et tant que la famille garde un jeton actif, ce
+    // qui exclut une déconnexion — ce n'est pas un vol, c'est une course.
+    if (
+      stored.revokedAt &&
+      Date.now() - stored.revokedAt.getTime() < ROTATION_GRACE_MS &&
+      stored.expiresAt > new Date()
+    ) {
+      const active = await this.prisma.refreshToken.count({
+        where: { family: stored.family, revokedAt: null },
+      });
+      // Une course produit une poignée de requêtes ; au-delà, c'est une
+      // répétition suspecte, traitée comme une réutilisation.
+      if (active > 0 && active < MAX_GRACE_SESSIONS) {
+        return this.issueTokens(stored.userId, stored.user.email, stored.family, ctx);
+      }
+    }
 
     if (stored.revokedAt) {
       await this.prisma.refreshToken.updateMany({

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { ACCESS_COOKIE, API_URL } from '@/lib/api';
+import { fetchAwakening, servedByHost } from './awaken';
+import { ACCESS_COOKIE, API_URL } from './session';
 
 /**
  * Relaie une écriture du navigateur vers l'API.
@@ -17,12 +18,30 @@ export async function relay(
   const token = (await cookies()).get(ACCESS_COOKIE)?.value;
   if (!token) return NextResponse.json({ message: 'Session expirée.' }, { status: 401 });
 
-  const upstream = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    ...(method === 'DELETE' ? {} : { body: JSON.stringify(await request.json().catch(() => ({}))) }),
-    cache: 'no-store',
-  });
+  const body = method === 'DELETE' ? undefined : JSON.stringify(await request.json().catch(() => ({})));
+
+  const upstream = await fetchAwakening(
+    `${API_URL}${path}`,
+    {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body,
+      cache: 'no-store',
+    },
+    'write',
+  ).catch(() => null);
+
+  // Sans ces deux gardes, une API injoignable ou une page d'attente de
+  // l'hébergeur ressortaient en succès vide : l'écran croyait l'action faite.
+  if (!upstream) {
+    return NextResponse.json({ message: 'Le service est injoignable. Réessayez.' }, { status: 503 });
+  }
+  if (servedByHost(upstream)) {
+    return NextResponse.json(
+      { message: 'Le service redémarre. Réessayez dans un instant.' },
+      { status: 503 },
+    );
+  }
 
   const payload = await upstream.json().catch(() => ({}));
   return NextResponse.json(payload, { status: upstream.status });

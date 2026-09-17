@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Field, Input } from '@/components/ui';
 
@@ -10,6 +10,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
+
+  // Après une période sans usage, le service met jusqu'à une minute à
+  // redémarrer : sans explication, « Connexion… » ressemble à une panne.
+  useEffect(() => {
+    if (!busy) {
+      setSlow(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlow(true), 5000);
+    return () => clearTimeout(timer);
+  }, [busy]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -117,6 +129,13 @@ export default function LoginPage() {
             <Button type="submit" variant="primary" disabled={busy} className="w-full">
               {busy ? 'Connexion…' : 'Se connecter'}
             </Button>
+
+            {slow && (
+              <p role="status" className="text-[13px] leading-relaxed text-muted">
+                Le service redémarre après une période d&rsquo;inactivité. Cela peut prendre
+                jusqu&rsquo;à une minute — inutile de recliquer.
+              </p>
+            )}
           </div>
 
           <p className="mt-8 text-[12px] text-subtle">

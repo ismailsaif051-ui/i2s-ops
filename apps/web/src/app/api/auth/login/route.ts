@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loginSchema, type AuthTokens } from '@i2s/contracts';
-import { ACCESS_COOKIE, API_URL, REFRESH_COOKIE } from '@/lib/api';
+import { fetchAwakening, servedByHost } from '@/lib/awaken';
+import { ACCESS_COOKIE, API_URL, REFRESH_COOKIE, REFRESH_MAX_AGE, sessionCookie } from '@/lib/session';
 
 /**
  * Point d'entrée de connexion côté Next : appelle l'API puis dépose les jetons
@@ -15,16 +16,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const upstream = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(parsed.data),
-    cache: 'no-store',
-  }).catch(() => null);
+  const upstream = await fetchAwakening(
+    `${API_URL}/auth/login`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(parsed.data),
+      cache: 'no-store',
+    },
+    'write',
+  ).catch(() => null);
 
-  if (!upstream) {
+  if (!upstream || servedByHost(upstream)) {
     return NextResponse.json(
-      { message: "L'API est injoignable. Vérifiez qu'elle est démarrée." },
+      { message: 'Le service redémarre après une période d’inactivité. Réessayez dans un instant.' },
       { status: 503 },
     );
   }
@@ -34,29 +39,16 @@ export async function POST(request: Request) {
   };
 
   if (!upstream.ok || !payload.accessToken || !payload.refreshToken) {
+    // Jamais un statut de succès ici : l'écran de connexion s'y fierait et
+    // enverrait vers l'application sans session.
     return NextResponse.json(
       { message: payload.message ?? 'Identifiants invalides.' },
-      { status: upstream.status || 401 },
+      { status: upstream.ok ? 502 : upstream.status },
     );
   }
 
   const response = NextResponse.json({ ok: true });
-  const secure = process.env.NODE_ENV === 'production';
-
-  response.cookies.set(ACCESS_COOKIE, payload.accessToken, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure,
-    path: '/',
-    maxAge: payload.expiresIn ?? 900,
-  });
-  response.cookies.set(REFRESH_COOKIE, payload.refreshToken, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure,
-    path: '/',
-    maxAge: 60 * 60 * 24 * 30,
-  });
-
+  response.cookies.set(ACCESS_COOKIE, payload.accessToken, sessionCookie(payload.expiresIn ?? 900));
+  response.cookies.set(REFRESH_COOKIE, payload.refreshToken, sessionCookie(REFRESH_MAX_AGE));
   return response;
 }
