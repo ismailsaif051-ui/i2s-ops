@@ -41,7 +41,8 @@ interface ExpenseRow {
 interface ExpenseList {
   items: ExpenseRow[];
   total: number;
-  facets: {
+  /** Absent le temps qu'un déploiement aligne l'API sur le web. */
+  facets?: {
     statuses: Array<{ value: string; count: number }>;
     departments: Array<{ id: string; code: string; name: string }>;
   };
@@ -151,7 +152,9 @@ export default async function ExpenseReportsPage({
     requireSession(),
     api<ExpenseList>(`/expense-reports?${query.toString()}`),
   ]);
-  const { items, facets } = data;
+  // Le web et l'API se déploient séparément : pendant le court décalage, la
+  // liste doit s'afficher sans ses compteurs plutôt que de ne pas s'afficher.
+  const { items, facets = { statuses: [], departments: [] } } = data;
 
   const groups = groupBy
     ? (() => {

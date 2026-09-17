@@ -43,7 +43,8 @@ interface Facet {
 interface ReportList {
   items: ReportRow[];
   total: number;
-  facets: {
+  /** Absent le temps qu'un déploiement aligne l'API sur le web. */
+  facets?: {
     templates: Array<{ id: string; formCode: string; title: string; department: string | null; count: number }>;
     statuses: Array<{ value: string; label: string; count: number }>;
     departments: Array<{ id: string; code: string; name: string; count: number }>;
@@ -96,7 +97,19 @@ export default async function ReportsPage({
 
   const query = new URLSearchParams({ ...active, limit: '300' });
   const data = await api<ReportList>(`/reports?${query.toString()}`);
-  const { items, facets } = data;
+  // Le web et l'API se déploient séparément : pendant le court décalage, la
+  // liste doit s'afficher sans ses compteurs plutôt que de ne pas s'afficher.
+  const {
+    items,
+    facets = {
+      templates: [],
+      statuses: [],
+      departments: [],
+      authors: [],
+      clients: [],
+      untyped: 0,
+    },
+  } = data;
 
   /** L'adresse de la page avec un filtre changé, les autres gardés. */
   const hrefWith = (patch: Partial<Record<FilterKey, string | null>>) => {
@@ -110,7 +123,7 @@ export default async function ReportsPage({
   };
 
   const deptName = new Map(facets.departments.map((d) => [d.code, d.name]));
-  const typesByDept = new Map<string, ReportList['facets']['templates']>();
+  const typesByDept = new Map<string, NonNullable<ReportList['facets']>['templates']>();
   for (const t of facets.templates) {
     const key = t.department ?? 'Autres';
     typesByDept.set(key, [...(typesByDept.get(key) ?? []), t]);

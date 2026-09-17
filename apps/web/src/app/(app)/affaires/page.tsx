@@ -49,7 +49,8 @@ interface AffairRow {
 interface AffairList {
   items: AffairRow[];
   total: number;
-  facets: {
+  /** Absent le temps qu'un déploiement aligne l'API sur le web. */
+  facets?: {
     commercialStatuses: Array<{ value: string | null; count: number }>;
     worksStatuses: Array<{ value: string | null; count: number }>;
     departments: Array<{ id: string; code: string; name: string }>;
@@ -154,7 +155,13 @@ export default async function AffairsPage({
       : null;
 
   const query = new URLSearchParams({ ...active, limit: '200' });
-  const { items, total, facets } = await api<AffairList>(`/affairs?${query.toString()}`);
+  // Le web et l'API se déploient séparément : pendant le court décalage, la
+  // liste doit s'afficher sans ses compteurs plutôt que de ne pas s'afficher.
+  const {
+    items,
+    total,
+    facets = { commercialStatuses: [], worksStatuses: [], departments: [] },
+  } = await api<AffairList>(`/affairs?${query.toString()}`);
   const exportHref = filtered ? `/api/affairs/export?${query.toString()}` : '/api/affairs/export';
 
   const groups = groupBy

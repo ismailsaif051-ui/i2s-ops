@@ -58,7 +58,8 @@ interface ConsultationRow {
 
 interface ConsultationList {
   items: ConsultationRow[];
-  facets: {
+  /** Absent le temps qu'un déploiement aligne l'API sur le web. */
+  facets?: {
     stages: Array<{ value: string; label: string; count: number }>;
     natures: Array<{ value: string; label: string; count: number }>;
     departments: Array<{ id: string; code: string; name: string }>;
@@ -144,6 +145,10 @@ export default async function ConsultationsPage({
     requireSession(),
     api<ConsultationList>(`/consultations?${query.toString()}`),
   ]);
+
+  // Le web et l'API se déploient séparément : pendant le court décalage, la
+  // liste doit s'afficher sans ses compteurs plutôt que de ne pas s'afficher.
+  const facets = data.facets ?? { stages: [], natures: [], departments: [] };
 
   /** Les liens de bascule gardent la sélection en cours. */
   const viewHref = (target: 'table' | 'kanban') => {
@@ -261,7 +266,7 @@ export default async function ConsultationsPage({
             <span className="text-[12.5px] font-medium text-muted">Étape</span>
             <select name="stage" defaultValue={active.stage ?? ''} className={inputClass}>
               <option value="">Toutes les étapes</option>
-              {data.facets.stages.map((s) => (
+              {facets.stages.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label} ({s.count})
                 </option>
@@ -273,7 +278,7 @@ export default async function ConsultationsPage({
             <span className="text-[12.5px] font-medium text-muted">Nature</span>
             <select name="nature" defaultValue={active.nature ?? ''} className={inputClass}>
               <option value="">Toutes</option>
-              {data.facets.natures.map((n) => (
+              {facets.natures.map((n) => (
                 <option key={n.value} value={n.value}>
                   {n.label} ({n.count})
                 </option>
@@ -289,7 +294,7 @@ export default async function ConsultationsPage({
               className={inputClass}
             >
               <option value="">Tous</option>
-              {data.facets.departments.map((d) => (
+              {facets.departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.code}
                 </option>

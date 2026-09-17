@@ -23,7 +23,8 @@ export const metadata: Metadata = { title: 'Missions' };
 interface MissionList {
   items: MissionRow[];
   total: number;
-  facets: {
+  /** Absent le temps qu'un déploiement aligne l'API sur le web. */
+  facets?: {
     statuses: Array<{ value: string; count: number }>;
     departments: Array<{ id: string; code: string; name: string }>;
   };
@@ -124,7 +125,13 @@ export default async function MissionsPage({
     params.groupBy === 'department' || params.groupBy === 'status' ? params.groupBy : null;
 
   const query = new URLSearchParams({ ...active, limit: '150' });
-  const { items, total, facets } = await api<MissionList>(`/missions?${query.toString()}`);
+  // Le web et l'API se déploient séparément : pendant le court décalage, la
+  // liste doit s'afficher sans ses compteurs plutôt que de ne pas s'afficher.
+  const {
+    items,
+    total,
+    facets = { statuses: [], departments: [] },
+  } = await api<MissionList>(`/missions?${query.toString()}`);
 
   const groups = groupBy
     ? (() => {

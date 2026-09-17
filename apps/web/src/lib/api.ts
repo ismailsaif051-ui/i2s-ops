@@ -25,22 +25,62 @@ interface ApiOptions extends Omit<RequestInit, 'body'> {
 }
 
 /**
+ * Réveil de l'API endormie.
+ *
+ * L'hébergement met le service en veille après une période sans trafic : la
+ * première requête tombe alors sur une connexion refusée ou une passerelle qui
+ * répond 502/503 le temps du démarrage. Sans ce rattrapage, la page rendue
+ * côté serveur lève et l'utilisateur voit une erreur applicative alors que
+ * rien n'est cassé — c'est ce qui donnait l'impression que « les accès ne
+ * marchent pas ».
+ *
+ * On ne rejoue que des lectures : rejouer une écriture la ferait deux fois.
+ */
+const WAKING_STATUS = new Set([502, 503, 504]);
+const RETRY_DELAYS_MS = [1000, 3000, 6000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchAwakening(
+  url: string,
+  init: RequestInit,
+  replayable: boolean,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const last = attempt >= RETRY_DELAYS_MS.length;
+    try {
+      const response = await fetch(url, init);
+      if (!replayable || last || !WAKING_STATUS.has(response.status)) return response;
+    } catch (error) {
+      if (!replayable || last) throw error;
+    }
+    await sleep(RETRY_DELAYS_MS[attempt]);
+  }
+}
+
+/**
  * Appel serveur vers l'API. Le jeton vit dans un cookie httpOnly : il n'est
  * jamais exposé au JavaScript du navigateur.
  */
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const token = options.token ?? (await cookies()).get(ACCESS_COOKIE)?.value;
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
+  const response = await fetchAwakening(
+    `${API_URL}${path}`,
+    {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      cache: 'no-store',
     },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    cache: 'no-store',
-  });
+    options.body === undefined && (options.method ?? 'GET').toUpperCase() === 'GET',
+  );
 
   if (response.status === 204) return undefined as T;
 
