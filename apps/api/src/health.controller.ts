@@ -22,6 +22,9 @@ export class HealthController {
       status: database === 'up' ? 'ok' : 'degraded',
       database,
       uptimeSeconds: Math.round(process.uptime()),
+      // Sans ça, impossible de savoir quelle version répond : deux commits qui
+      // ne changent rien de visible produisent des pages identiques.
+      commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'inconnu',
       timestamp: new Date().toISOString(),
     };
   }

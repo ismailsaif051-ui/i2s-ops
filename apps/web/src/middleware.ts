@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login'];
+// La version doit être lisible sans session : c'est ce qui permet de vérifier
+// qu'un déploiement est bien en ligne avant de se connecter.
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/version'];
 
 /**
  * Garde de premier niveau : sans cookie de session, on n'entre pas dans
