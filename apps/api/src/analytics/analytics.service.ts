@@ -13,6 +13,7 @@ import {
 } from '@i2s/calc';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../rbac/scope.service';
+import { REPORT_SCOPE, isOnTime } from '../reports/reports.service';
 import type { RequestUser } from '../common/types';
 
 /** Statuts d'attachement qui valorisent une journée comme « facturée ». */
@@ -626,6 +627,123 @@ export class AnalyticsService {
       reportsIssued: issuedReports.length,
     };
   }
+
+  /* ── Qualité ─────────────────────────────────────────────────── */
+
+  /**
+   * Respect du délai de remise des rapports, l'indicateur QMS.
+   *
+   * La règle n'est pas redéfinie ici : `isOnTime` et l'échéance portée par la
+   * mission font foi, exactement comme dans la file des rapports. Une seule
+   * définition, sinon deux écrans finissent par annoncer deux taux.
+   *
+   * Contrairement au tableau de bord, la mesure est filtrée par le périmètre
+   * de l'utilisateur : un chef de département lit la performance de son
+   * département, pas celle de la société.
+   */
+  async quality(user: RequestUser) {
+    const scopeWhere = this.scope.buildWhere(user, 'report', 'VIEW', REPORT_SCOPE);
+    const year = new Date().getUTCFullYear();
+    const from = new Date(Date.UTC(year, 0, 1));
+
+    const reports = await this.prisma.report.findMany({
+      where: { deliveredAt: { not: null }, issuedAt: { gte: from }, ...scopeWhere },
+      select: {
+        id: true,
+        number: true,
+        deliveredAt: true,
+        mission: {
+          select: {
+            reportDueDate: true,
+            department: { select: { code: true, name: true } },
+            affair: { select: { client: { select: { name: true } } } },
+          },
+        },
+      },
+    });
+
+    const lignes = reports.map((r) => ({
+      id: r.id,
+      number: r.number,
+      deliveredAt: r.deliveredAt,
+      dueDate: r.mission.reportDueDate,
+      department: r.mission.department?.code ?? null,
+      client: r.mission.affair.client.name,
+      onTime: isOnTime(r.deliveredAt, r.mission.reportDueDate),
+      // Négatif = remis en avance. C'est la marge sur l'échéance, qui dit
+      // combien de jours ont manqué ou restaient.
+      daysVsDue:
+        r.deliveredAt && r.mission.reportDueDate
+          ? Math.round(
+              (startOfUtcDay(r.deliveredAt).getTime() -
+                startOfUtcDay(r.mission.reportDueDate).getTime()) /
+                86_400_000,
+            )
+          : null,
+    }));
+
+    /** Les rapports dont l'échéance est inconnue ne comptent ni pour ni contre. */
+    const mesurables = lignes.filter((l) => l.onTime !== null);
+    const tenus = mesurables.filter((l) => l.onTime === true).length;
+
+    const parCle = <T>(items: T[], cle: (t: T) => string | null) => {
+      const map = new Map<string, T[]>();
+      for (const item of items) {
+        const k = cle(item);
+        if (k === null) continue;
+        if (!map.has(k)) map.set(k, []);
+        map.get(k)!.push(item);
+      }
+      return map;
+    };
+
+    const parDepartement = [...parCle(mesurables, (l) => l.department).entries()]
+      .map(([code, rows]) => ({
+        code,
+        total: rows.length,
+        onTime: rows.filter((r) => r.onTime).length,
+        rate: onTimeRate(rows.filter((r) => r.onTime).length, rows.length),
+      }))
+      .sort((a, b) => a.rate - b.rate);
+
+    const parTrimestre = [...parCle(mesurables, (l) =>
+      l.deliveredAt ? `T${Math.floor(l.deliveredAt.getUTCMonth() / 3) + 1}` : null,
+    ).entries()]
+      .map(([quarter, rows]) => ({
+        quarter,
+        total: rows.length,
+        onTime: rows.filter((r) => r.onTime).length,
+        rate: onTimeRate(rows.filter((r) => r.onTime).length, rows.length),
+      }))
+      .sort((a, b) => a.quarter.localeCompare(b.quarter));
+
+    const marges = mesurables.map((l) => l.daysVsDue).filter((d): d is number => d !== null);
+
+    const retards = mesurables
+      .filter((l) => l.onTime === false)
+      .sort((a, b) => (b.daysVsDue ?? 0) - (a.daysVsDue ?? 0))
+      .slice(0, 20);
+
+    return {
+      year,
+      total: mesurables.length,
+      onTime: tenus,
+      rate: onTimeRate(tenus, mesurables.length),
+      /** Remis sans échéance connue : hors mesure, mais on le dit. */
+      unmeasured: lignes.length - mesurables.length,
+      averageDaysVsDue: marges.length
+        ? Math.round((marges.reduce((s, d) => s + d, 0) / marges.length) * 10) / 10
+        : null,
+      byDepartment: parDepartement,
+      byQuarter: parTrimestre,
+      late: retards,
+    };
+  }
+}
+
+/** Minuit UTC, pour comparer des dates sans que l'heure ne décide. */
+function startOfUtcDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
 /* ── Utilitaires ──────────────────────────────────────────────── */

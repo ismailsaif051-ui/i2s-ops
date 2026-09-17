@@ -28,6 +28,12 @@ class AnalyticsController {
     return this.analytics.dashboard(user, query);
   }
 
+  @Get('quality')
+  @RequirePermission('report', 'VIEW')
+  quality(@CurrentUser() user: RequestUser) {
+    return this.analytics.quality(user);
+  }
+
   @Get('productivity')
   @RequirePermission('timesheet', 'VIEW')
   productivity(
