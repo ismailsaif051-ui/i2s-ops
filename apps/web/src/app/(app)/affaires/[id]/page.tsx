@@ -87,6 +87,25 @@ interface AffairDetail {
     issuedAt: string | null;
     deliveredAt: string | null;
   }>;
+  projects: Array<{
+    id: string;
+    code: string;
+    name: string;
+    manager: string | null;
+    status: string;
+    startDate: string | null;
+    endDate: string | null;
+    sites: Array<{
+      id: string;
+      name: string;
+      city: string | null;
+      region: string | null;
+      address: string | null;
+      distanceFromHqKm: number | null;
+      accessConstraints: string | null;
+      hseRequirements: string | null;
+    }>;
+  }>;
   attachments: Array<{ id: string; number: string; status: string; periodStart: string; totalHT: string }>;
   invoices: Array<{
     id: string;
@@ -146,6 +165,7 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
     ['SUBMITTED', 'UNDER_CHECK', 'CORRECTION'].includes(r.status),
   );
   const openNc = detail.nonConformities.filter((n) => !['CLOSED', 'REJECTED'].includes(n.status));
+  const siteCount = detail.projects.reduce((sum, p) => sum + p.sites.length, 0);
 
   return (
     <>
@@ -312,6 +332,77 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
             </p>
           </Card>
         )}
+      </div>
+
+      <div className="mt-5">
+        <Card
+          title={`Projets & sites — ${detail.projects.length}`}
+          action={
+            <span className="text-[13.5px] text-muted">
+              {siteCount} site(s) d’intervention
+            </span>
+          }
+        >
+          {detail.projects.length === 0 ? (
+            <EmptyState
+              title="Aucun projet"
+              description="Un projet découpe l’affaire en lots, et porte les sites où les inspecteurs se rendent."
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {detail.projects.map((project) => (
+                <li key={project.id} className="px-4 py-3.5">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="ref text-[12px]">{project.code}</span>
+                    <span className="text-[14px] font-medium">{project.name}</span>
+                    {project.manager && (
+                      <span className="text-[12.5px] text-subtle">{project.manager}</span>
+                    )}
+                    {(project.startDate || project.endDate) && (
+                      <span className="tnum text-[12.5px] text-subtle">
+                        {date(project.startDate)} → {date(project.endDate)}
+                      </span>
+                    )}
+                  </div>
+
+                  {project.sites.length === 0 ? (
+                    <p className="mt-1.5 text-[13px] text-subtle">Aucun site rattaché.</p>
+                  ) : (
+                    <ul className="mt-2.5 flex flex-col gap-2.5">
+                      {project.sites.map((site) => (
+                        <li key={site.id} className="border-l-2 border-border pl-3">
+                          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                            <span className="text-[13.5px] font-medium">{site.name}</span>
+                            {(site.city || site.region) && (
+                              <span className="text-[12.5px] text-muted">
+                                {[site.city, site.region].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                            {site.distanceFromHqKm !== null && (
+                              <span className="tnum text-[12.5px] text-subtle">
+                                {site.distanceFromHqKm} km du siège
+                              </span>
+                            )}
+                          </div>
+                          {site.accessConstraints && (
+                            <p className="mt-0.5 text-[12.5px] leading-snug text-subtle">
+                              {site.accessConstraints}
+                            </p>
+                          )}
+                          {site.hseRequirements && (
+                            <p className="mt-0.5 text-[12.5px] leading-snug text-subtle">
+                              HSE — {site.hseRequirements}
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">

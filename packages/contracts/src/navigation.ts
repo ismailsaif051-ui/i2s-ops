@@ -23,7 +23,7 @@ export const NAVIGATION: NavGroup[] = [
     key: 'pilotage',
     label: 'Pilotage',
     items: [
-      { href: '/cockpit', label: 'Cockpit', requires: { resource: 'dashboard', action: 'VIEW' } },
+      { href: '/cockpit', label: 'Dashboard', requires: { resource: 'dashboard', action: 'VIEW' } },
       { href: '/pilotage/productivite', label: 'Productivité', requires: { resource: 'timesheet', action: 'VIEW' } },
       { href: '/pilotage/jours-non-affectes', label: 'Jours non affectés', requires: { resource: 'timesheet', action: 'VIEW' } },
       { href: '/pilotage/rentabilite', label: 'Rentabilité', requires: { resource: 'controlling', action: 'VIEW' } },

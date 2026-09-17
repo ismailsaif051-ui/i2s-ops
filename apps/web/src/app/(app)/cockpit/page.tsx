@@ -23,7 +23,7 @@ function loadCellTone(category: string | null, conflicts: string[]): string {
   return 'bg-surface-2';
 }
 
-export const metadata: Metadata = { title: 'Cockpit' };
+export const metadata: Metadata = { title: 'Dashboard' };
 
 interface Dashboard {
   period: { label: string };
@@ -130,7 +130,7 @@ export default async function CockpitPage() {
   return (
     <>
       <PageHeader
-        eyebrow={data?.period.label ?? 'Cockpit'}
+        eyebrow={data?.period.label ?? 'Dashboard'}
         title={`Bonjour ${session.employee?.firstName ?? session.email}`}
         description={
           session.roles.length > 0
