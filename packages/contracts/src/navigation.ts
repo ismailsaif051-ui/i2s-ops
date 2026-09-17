@@ -43,8 +43,9 @@ export const NAVIGATION: NavGroup[] = [
     key: 'affaires',
     label: 'Affaires',
     items: [
+      // Les projets et leurs sites se consultent dans la fiche de l'affaire qui
+      // les porte : ils n'ont pas d'existence séparée d'elle.
       { href: '/affaires', label: 'Affaires', requires: { resource: 'affair', action: 'VIEW' } },
-      { href: '/affaires/projets', label: 'Projets & sites', requires: { resource: 'project', action: 'VIEW' } },
     ],
   },
   {
