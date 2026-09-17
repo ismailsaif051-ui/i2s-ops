@@ -30,8 +30,9 @@ interface Dashboard {
   affairsInProgress: number;
   missionsInProgress: number;
   missionsUpcoming: number;
-  unassignedDays: number;
-  idleCost: number;
+  /** Absent quand l'utilisateur n'a pas le droit timesheet:VIEW. */
+  unassignedDays: number | null;
+  idleCost: number | null;
   pendingReports: number;
   pendingExpenses: number;
   /** Absent quand l'utilisateur n'a pas le droit invoice:VIEW. */
@@ -94,7 +95,7 @@ export default async function CockpitPage() {
         href: '/operations/parc-mesure',
       });
     }
-    if (data.unassignedDays > 0) {
+    if (data.unassignedDays !== null && data.unassignedDays > 0) {
       alerts.push({
         tone: 'warning',
         title: `${data.unassignedDays} jours non affectés — ${compactDh(data.idleCost)}`,
@@ -163,19 +164,23 @@ export default async function CockpitPage() {
           <KpiRow>
             <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
             <KpiCard label="Missions en cours" value={data.missionsInProgress} href="/operations/missions" />
-            <KpiCard
-              label="Jours non affectés"
-              value={data.unassignedDays}
-              tone={data.unassignedDays > 0 ? 'danger' : undefined}
-              href="/pilotage/jours-non-affectes"
-            />
-            <KpiCard
-              label="Coût d'inactivité"
-              value={money(data.idleCost)}
-              unit="DH"
-              tone={data.idleCost > 0 ? 'danger' : undefined}
-              href="/pilotage/jours-non-affectes"
-            />
+            {data.unassignedDays !== null && (
+              <KpiCard
+                label="Jours non affectés"
+                value={data.unassignedDays}
+                tone={data.unassignedDays > 0 ? 'danger' : undefined}
+                href="/pilotage/jours-non-affectes"
+              />
+            )}
+            {data.idleCost !== null && (
+              <KpiCard
+                label="Coût d'inactivité"
+                value={money(data.idleCost)}
+                unit="DH"
+                tone={data.idleCost > 0 ? 'danger' : undefined}
+                href="/pilotage/jours-non-affectes"
+              />
+            )}
             {data.invoicedYtd !== null && (
               <KpiCard
                 label="Facturé (année)"

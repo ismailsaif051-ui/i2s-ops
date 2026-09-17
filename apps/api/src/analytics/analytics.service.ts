@@ -534,7 +534,13 @@ export class AnalyticsService {
 
   async dashboard(user: RequestUser, period: PeriodInput) {
     const { from, to, label } = resolvePeriod(period);
-    const timesheetScope = this.scope.buildWhere(user, 'timesheet', 'VIEW', TIMESHEET_SCOPE);
+    // Même règle que pour les factures, dans l'autre sens : le tableau de bord
+    // exigeait le droit « timesheet » dès sa première ligne, alors que le RAF
+    // et la facturation ne le détiennent pas — leur page d'accueil répondait
+    // 403 sans qu'aucune tuile ne les concerne.
+    const timesheetScope = can(user.permissions, 'timesheet', 'VIEW')
+      ? this.scope.buildWhere(user, 'timesheet', 'VIEW', TIMESHEET_SCOPE)
+      : null;
 
     // Les chiffres de facturation suivent le droit sur les factures, pas celui
     // sur le tableau de bord : un inspecteur n'a aucun droit « invoice » et
@@ -562,11 +568,13 @@ export class AnalyticsService {
       this.prisma.mission.count({
         where: { status: { in: ['CONFIRMED', 'ORDER_ISSUED', 'PLANNED'] }, plannedStartDate: { gte: to } },
       }),
-      this.prisma.timesheetDay.aggregate({
-        where: { date: { gte: from, lte: to }, category: 'UNASSIGNED', ...timesheetScope },
-        _count: true,
-        _sum: { dailyCostSnapshot: true },
-      }),
+      timesheetScope
+        ? this.prisma.timesheetDay.aggregate({
+            where: { date: { gte: from, lte: to }, category: 'UNASSIGNED', ...timesheetScope },
+            _count: true,
+            _sum: { dailyCostSnapshot: true },
+          })
+        : Promise.resolve(null),
       this.prisma.report.count({
         where: { status: { in: ['SUBMITTED', 'UNDER_CHECK', 'CORRECTION'] } },
       }),
@@ -635,8 +643,8 @@ export class AnalyticsService {
       affairsInProgress,
       missionsInProgress,
       missionsUpcoming,
-      unassignedDays: unassigned._count,
-      idleCost: Math.round(Number(unassigned._sum.dailyCostSnapshot ?? 0)),
+      unassignedDays: unassigned ? unassigned._count : null,
+      idleCost: unassigned ? Math.round(Number(unassigned._sum.dailyCostSnapshot ?? 0)) : null,
       pendingReports,
       pendingExpenses,
       overdueInvoices: overdueInvoices ? overdueInvoices._count : null,
