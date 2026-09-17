@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { dh } from '../common/pdf-format';
 
 /**
  * Ordre de virement — pièce remise à la banque (ou classée en comptabilité)
@@ -46,13 +47,6 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 
 const fr = (date: Date | null | undefined): string =>
   date ? date.toLocaleDateString('fr-FR') : '—';
-
-// Helvetica n'a pas l'espace fine insécable de fr-FR pour grouper les
-// milliers : on la remplace par une espace normale (voir expense-pdf.ts).
-const dh = (amount: number): string =>
-  `${amount
-    .toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    .replace(/[  ]/g, ' ')} DH`;
 
 const monthLabel = (date: Date): string =>
   date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });

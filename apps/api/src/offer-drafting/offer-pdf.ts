@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { NATURE_LABELS, NATURE_SECTIONS, SECTIONS } from './offer-drafting.prompt';
 import type { OfferDocumentNature } from './offer-drafting.types';
+import { dh } from '../common/pdf-format';
 
 type Doc = PDFKit.PDFDocument;
 
@@ -38,8 +39,7 @@ export interface OfferPdfInput {
   vatRate: number;
 }
 
-const money = (value: number): string =>
-  `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`;
+const money = dh;
 
 const fr = (date: Date | null): string =>
   date ? date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';

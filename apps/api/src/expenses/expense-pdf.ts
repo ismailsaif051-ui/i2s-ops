@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { dh } from '../common/pdf-format';
 
 /**
  * Rendu PDF de la note de frais — décompte mensuel par poste et par semaine.
@@ -70,14 +71,6 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 
 const fr = (date: Date | null | undefined): string =>
   date ? date.toLocaleDateString('fr-FR') : '—';
-
-// Helvetica (police de base de pdfkit) n'a pas l'espace fine insécable que
-// fr-FR utilise pour grouper les milliers : elle s'affiche comme un glyphe
-// erroné. On la remplace par une espace normale, supportée par la police.
-const dh = (amount: number): string =>
-  `${amount
-    .toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    .replace(/[  ]/g, ' ')} DH`;
 
 /* ── Éléments de mise en page (mêmes réglages que report-pdf.ts) ──── */
 
