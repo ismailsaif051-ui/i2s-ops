@@ -34,15 +34,16 @@ interface Dashboard {
   idleCost: number;
   pendingReports: number;
   pendingExpenses: number;
-  overdueInvoices: number;
-  overdueAmount: number;
+  /** Absent quand l'utilisateur n'a pas le droit invoice:VIEW. */
+  overdueInvoices: number | null;
+  overdueAmount: number | null;
   expiringCertifications: number;
   expiredDevices: number;
   openNonConformities: number;
-  invoicedYtd: number;
-  collectedYtd: number;
-  invoicedTrend: number[];
-  collectedTrend: number[];
+  invoicedYtd: number | null;
+  collectedYtd: number | null;
+  invoicedTrend: number[] | null;
+  collectedTrend: number[] | null;
   reportOnTimeRate: number;
   reportsIssued: number;
 }
@@ -77,7 +78,7 @@ export default async function CockpitPage() {
 
   const alerts: Array<{ tone: 'danger' | 'warning'; title: string; detail: string; href: string }> = [];
   if (data) {
-    if (data.overdueInvoices > 0) {
+    if (data.overdueInvoices !== null && data.overdueInvoices > 0) {
       alerts.push({
         tone: 'danger',
         title: `${data.overdueInvoices} facture(s) échue(s) — ${compactDh(data.overdueAmount)}`,
@@ -175,18 +176,22 @@ export default async function CockpitPage() {
               tone={data.idleCost > 0 ? 'danger' : undefined}
               href="/pilotage/jours-non-affectes"
             />
-            <KpiCard
-              label="Facturé (année)"
-              value={compactDh(data.invoicedYtd)}
-              trend={data.invoicedTrend}
-              href="/finance/factures"
-            />
-            <KpiCard
-              label="Encaissé (année)"
-              value={compactDh(data.collectedYtd)}
-              trend={data.collectedTrend}
-              href="/finance/encaissements"
-            />
+            {data.invoicedYtd !== null && (
+              <KpiCard
+                label="Facturé (année)"
+                value={compactDh(data.invoicedYtd)}
+                trend={data.invoicedTrend ?? undefined}
+                href="/finance/factures"
+              />
+            )}
+            {data.collectedYtd !== null && (
+              <KpiCard
+                label="Encaissé (année)"
+                value={compactDh(data.collectedYtd)}
+                trend={data.collectedTrend ?? undefined}
+                href="/finance/encaissements"
+              />
+            )}
           </KpiRow>
 
           <KpiRow>
@@ -209,13 +214,15 @@ export default async function CockpitPage() {
               tone={data.pendingExpenses > 0 ? 'warning' : undefined}
               href="/finance/notes-de-frais"
             />
-            <KpiCard
-              label="Factures échues"
-              value={data.overdueInvoices}
-              tone={data.overdueInvoices > 0 ? 'danger' : undefined}
-              hint={compactDh(data.overdueAmount)}
-              href="/finance/encaissements"
-            />
+            {data.overdueInvoices !== null && (
+              <KpiCard
+                label="Factures échues"
+                value={data.overdueInvoices}
+                tone={data.overdueInvoices > 0 ? 'danger' : undefined}
+                hint={compactDh(data.overdueAmount)}
+                href="/finance/encaissements"
+              />
+            )}
             <KpiCard
               label="Non-conformités ouvertes"
               value={data.openNonConformities}

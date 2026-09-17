@@ -11,6 +11,7 @@ import {
   type TimesheetCategory,
   type TimesheetFact,
 } from '@i2s/calc';
+import { can } from '@i2s/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../rbac/scope.service';
 import { REPORT_SCOPE, isOnTime } from '../reports/reports.service';
@@ -24,6 +25,17 @@ const TIMESHEET_SCOPE = {
   departmentPath: 'employee.departmentId',
   ownerPath: 'employeeId',
   teamPath: 'employeeId',
+} as const;
+
+/**
+ * Une facture se rattache à une affaire : c'est elle qui porte le périmètre.
+ * Même forme que dans le module facturation, où les attachements l'utilisent.
+ */
+const INVOICE_SCOPE = {
+  companyPath: 'affair.companyId',
+  departmentPath: 'affair.departmentId',
+  ownerPath: 'affair.accountManagerId',
+  teamPath: 'affair.accountManagerId',
 } as const;
 
 const AFFAIR_SCOPE = {
@@ -524,6 +536,15 @@ export class AnalyticsService {
     const { from, to, label } = resolvePeriod(period);
     const timesheetScope = this.scope.buildWhere(user, 'timesheet', 'VIEW', TIMESHEET_SCOPE);
 
+    // Les chiffres de facturation suivent le droit sur les factures, pas celui
+    // sur le tableau de bord : un inspecteur n'a aucun droit « invoice » et
+    // lisait pourtant le chiffre d'affaires et les créances de la société.
+    // Sans droit, la mesure n'est pas réduite à zéro — elle est absente, et
+    // l'écran ne montre pas la tuile.
+    const invoiceWhere = can(user.permissions, 'invoice', 'VIEW')
+      ? this.scope.buildWhere(user, 'invoice', 'VIEW', INVOICE_SCOPE)
+      : null;
+
     const [
       affairsInProgress,
       missionsInProgress,
@@ -552,11 +573,13 @@ export class AnalyticsService {
       this.prisma.expenseReport.count({
         where: { status: { in: ['SUBMITTED', 'CONFIRMED_N1', 'CHECKED_HR_CG', 'ACCOUNTED'] } },
       }),
-      this.prisma.invoice.aggregate({
-        where: { status: 'OVERDUE' },
-        _count: true,
-        _sum: { totalTTC: true },
-      }),
+      invoiceWhere
+        ? this.prisma.invoice.aggregate({
+            where: { status: 'OVERDUE', ...invoiceWhere },
+            _count: true,
+            _sum: { totalTTC: true },
+          })
+        : Promise.resolve(null),
       this.prisma.certification.count({
         where: { expiresAt: { gte: new Date(), lte: addDays(new Date(), 60) } },
       }),
@@ -567,14 +590,16 @@ export class AnalyticsService {
     ]);
 
     const yearStart = new Date(Date.UTC(to.getUTCFullYear(), 0, 1));
-    const invoices = await this.prisma.invoice.findMany({
-      where: { issueDate: { gte: yearStart }, status: { not: 'CANCELLED' } },
-      select: {
-        totalHT: true,
-        issueDate: true,
-        payments: { select: { amount: true, date: true } },
-      },
-    });
+    const invoices = invoiceWhere
+      ? await this.prisma.invoice.findMany({
+          where: { issueDate: { gte: yearStart }, status: { not: 'CANCELLED' }, ...invoiceWhere },
+          select: {
+            totalHT: true,
+            issueDate: true,
+            payments: { select: { amount: true, date: true } },
+          },
+        })
+      : [];
     const invoiced = invoices.reduce((s, i) => s + Number(i.totalHT), 0);
     const collected = invoices.reduce(
       (s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0),
@@ -614,15 +639,17 @@ export class AnalyticsService {
       idleCost: Math.round(Number(unassigned._sum.dailyCostSnapshot ?? 0)),
       pendingReports,
       pendingExpenses,
-      overdueInvoices: overdueInvoices._count,
-      overdueAmount: Math.round(Number(overdueInvoices._sum.totalTTC ?? 0)),
+      overdueInvoices: overdueInvoices ? overdueInvoices._count : null,
+      overdueAmount: overdueInvoices
+        ? Math.round(Number(overdueInvoices._sum.totalTTC ?? 0))
+        : null,
       expiringCertifications: expiringCerts,
       expiredDevices,
       openNonConformities,
-      invoicedYtd: Math.round(invoiced),
-      collectedYtd: Math.round(collected),
-      invoicedTrend: invoicedTrend.map((v) => Math.round(v)),
-      collectedTrend: collectedTrend.map((v) => Math.round(v)),
+      invoicedYtd: invoiceWhere ? Math.round(invoiced) : null,
+      collectedYtd: invoiceWhere ? Math.round(collected) : null,
+      invoicedTrend: invoiceWhere ? invoicedTrend.map((v) => Math.round(v)) : null,
+      collectedTrend: invoiceWhere ? collectedTrend.map((v) => Math.round(v)) : null,
       reportOnTimeRate: onTimeRate(onTime, issuedReports.length),
       reportsIssued: issuedReports.length,
     };
