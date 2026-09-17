@@ -8,6 +8,9 @@ const config: NextConfig = {
   distDir: process.env.NODE_ENV === "production" ? ".next-build" : ".next",
   transpilePackages: ['@i2s/contracts'],
   poweredByHeader: false,
+  // forbidden() : une lecture refusée par l'API rend un écran « Accès refusé »
+  // avec un vrai statut 403, au lieu d'une erreur serveur.
+  experimental: { authInterrupts: true },
 };
 
 export default config;

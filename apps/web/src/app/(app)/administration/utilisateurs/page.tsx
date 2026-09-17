@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { ROLE_LABELS, type RoleCode } from '@i2s/contracts';
-import { ApiError, api } from '@/lib/api';
+import { api, apiIfAllowed } from '@/lib/api';
 import {
   Card,
   DataTable,
@@ -37,14 +37,9 @@ const STATUS: Record<UserRow['status'], { label: string; tone: 'success' | 'neut
 export default async function UsersPage() {
   const { items } = await api<{ items: UserRow[] }>('/users?limit=200');
 
-  let options: { employees: EmployeeOption[]; departments: DepartmentOption[] } | null = null;
-  try {
-    options = await api<{ employees: EmployeeOption[]; departments: DepartmentOption[] }>(
-      '/users/options',
-    );
-  } catch (error) {
-    if (!(error instanceof ApiError && error.status === 403)) throw error;
-  }
+  const options = await apiIfAllowed<{ employees: EmployeeOption[]; departments: DepartmentOption[] }>(
+    '/users/options',
+  );
 
   return (
     <>

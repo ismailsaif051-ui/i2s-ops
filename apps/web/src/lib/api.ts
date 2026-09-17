@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { forbidden, notFound, redirect } from 'next/navigation';
 import { ERROR_CODES, type SessionUser } from '@i2s/contracts';
 import { fetchAwakening, servedByHost } from './awaken';
 import { ACCESS_COOKIE, API_URL } from './session';
@@ -21,6 +21,11 @@ interface ApiOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   /** Jeton explicite (routes d'auth) au lieu du cookie. */
   token?: string;
+  /**
+   * Laisse remonter un refus (403) ou une absence (404) sous forme d'ApiError,
+   * pour l'appelant qui sait quoi en faire — voir `apiIfAllowed`.
+   */
+  rawDenials?: boolean;
 }
 
 /**
@@ -64,6 +69,14 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       redirect('/changer-mot-de-passe');
     }
 
+    // Une lecture refusée ou hors périmètre n'est pas une panne : sans ceci,
+    // ouvrir une page non autorisée par son adresse affichait une erreur
+    // serveur (constaté sur 163 pages lors du balayage des 12 rôles).
+    if (isRead && !options.rawDenials) {
+      if (response.status === 403) forbidden();
+      if (response.status === 404) notFound();
+    }
+
     throw new ApiError(
       response.status,
       typeof payload.message === 'string' ? payload.message : 'Erreur inattendue.',
@@ -73,6 +86,19 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   }
 
   return payload as T;
+}
+
+/**
+ * Lecture d'une section facultative : si le rôle n'y a pas droit, la section
+ * disparaît (`null`) au lieu que la page entière soit refusée.
+ */
+export async function apiIfAllowed<T>(path: string): Promise<T | null> {
+  try {
+    return await api<T>(path, { rawDenials: true });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return null;
+    throw error;
+  }
 }
 
 /** Session courante, ou redirection vers la connexion. */

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ApiError, api } from '@/lib/api';
+import { api, apiIfAllowed } from '@/lib/api';
 import { date, moneyDh } from '@/lib/format';
 import {
   Card,
@@ -36,12 +36,7 @@ const STATUS: Record<BatchRow['status'], { label: string; tone: Tone }> = {
 export default async function PaymentBatchesPage() {
   const { items } = await api<{ items: BatchRow[] }>('/payment-batches?limit=100');
 
-  let candidates: CandidateLine[] | null = null;
-  try {
-    candidates = await api<CandidateLine[]>('/payment-batches/candidates');
-  } catch (error) {
-    if (!(error instanceof ApiError && error.status === 403)) throw error;
-  }
+  const candidates = await apiIfAllowed<CandidateLine[]>('/payment-batches/candidates');
 
   return (
     <>
