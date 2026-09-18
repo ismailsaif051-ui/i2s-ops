@@ -9,10 +9,13 @@
  *   PR01-F08  Examen visuel                         → mesures et indications
  *   PR01-F22  Interprétation de clichés radio       → mesures et indications
  *   PR01-F26  Essai de dureté                       → mesures et indications
+ *   PR02-F38  Chariot de manutention à mât          → check-list réglementaire
+ *   PR02-F39  Mise en service pont roulant          → check-list et épreuves
  *   PR02-F40  Vérification périodique pont roulant  → check-list réglementaire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
  *
- * Les six formulaires END du lot L1 sont ainsi couverts.
+ * Les six formulaires END du lot L1 sont couverts, ainsi que les trois
+ * rapports de levage qui ouvrent le lot EILM.
  *
  * Les autres formulaires du catalogue (`report-forms.ts`) restent en brouillon
  * tant que leur structure n'a pas été relevée : ils classent les rapports sans
@@ -82,6 +85,240 @@ const LIGHT_FIELDS = [
   { key: 'light', label: { fr: 'Lumière', en: 'Light' }, type: 'enum', required: true, options: ['Naturelle', 'Artificielle', 'Noire'], span: 4 },
   { key: 'lightValue', label: { fr: 'Valeur mesurée', en: 'Specified value' }, type: 'number', required: true, unit: 'Lux', span: 4 },
 ];
+
+/* ── Blocs communs aux vérifications réglementaires EILM ──────────── */
+
+/** Les rapports EILM ne font pas viser le client : inspecteur puis direction. */
+const EILM_VISAS = {
+  key: 'signatures',
+  label: { fr: 'Visas' },
+  type: 'signature-matrix',
+  repeatable: false,
+  signatories: [{ fr: 'Inspecteur' }, { fr: 'Direction' }],
+};
+
+const EILM_OBSERVATIONS = {
+  key: 'observations',
+  label: { fr: 'Observations' },
+  type: 'text',
+  repeatable: false,
+  fields: [
+    { key: 'observations', label: { fr: 'Observations' }, type: 'textarea', required: false, span: 12 },
+  ],
+};
+
+/** Les trois issues réglementaires d'une vérification, mot pour mot. */
+const EILM_CONCLUSION = {
+  key: 'conclusion',
+  label: { fr: 'Conclusion' },
+  type: 'verdict',
+  repeatable: false,
+  help: 'Un seul point de contrôle non conforme interdit la conclusion « sans réserve ».',
+  verdicts: [
+    { fr: 'Appareil apte au service sans réserve' },
+    { fr: 'Appareil apte au service avec réserves à lever' },
+    { fr: 'Appareil inapte au service nécessitant l’arrêt' },
+  ],
+};
+
+const EILM_PHOTOS = {
+  key: 'photos',
+  label: { fr: 'Photographies' },
+  type: 'photos',
+  repeatable: true,
+  minRows: 0,
+};
+
+/**
+ * Check-list pont roulant et portique : les dix groupes sont identiques dans
+ * la vérification périodique (F40) et la mise ou remise en service (F39), à la
+ * virgule près. Un seul jeu de points garantit que les deux rapports restent
+ * comparables dans le temps pour un même appareil.
+ *
+ * `expected` ne porte que la valeur attendue imprimée au modèle. Là où le
+ * modèle Word affiche un constat de terrain plutôt qu'un attendu (« Sans
+ * objet », « Voir observations »), le point reste sans attendu : l'inspecteur
+ * répond SO / NA / C / NC sans être orienté.
+ */
+const PONT_GROUPS = [
+  {
+    key: 'electrical',
+    label: { fr: 'Installations électriques' },
+    qualifier: 'Alimentation par câble',
+    points: [
+      { key: 'protection-live', label: { fr: 'Protection contre les contacts directs de l’appareil de levage et des charges avec les conducteurs nus sous tension' }, expected: 'Aspect général satisfaisant' },
+      { key: 'lockable-isolator', label: { fr: 'Séparation générale verrouillable' }, expected: 'Bon fonctionnement' },
+      { key: 'cabin-protection', label: { fr: 'Protection contre les contacts avec les pièces nues sous tension dans la cabine' }, expected: 'Aspect général satisfaisant' },
+      { key: 'earthing', label: { fr: 'Mises à la terre des masses métalliques fixes ou mobiles' }, expected: 'Réalisées correctement' },
+    ],
+  },
+  {
+    key: 'runway',
+    label: { fr: 'Châssis, support, chemin de roulement' },
+    qualifier: 'Mécano-soudé',
+    points: [
+      { key: 'rails', label: { fr: 'Rails et poutres de roulement' }, expected: 'Aspect général satisfaisant' },
+      { key: 'posts', label: { fr: 'Poteaux et corbeaux' }, expected: 'Aspect général satisfaisant' },
+      { key: 'buffers', label: { fr: 'Butoirs amortisseurs' }, expected: 'En place, correctement fixés' },
+    ],
+  },
+  {
+    key: 'frame',
+    label: { fr: 'Charpente' },
+    qualifier: 'Poutre caisson',
+    points: [
+      { key: 'framework', label: { fr: 'Ossature, plate-forme, support de charge' }, expected: 'Bon état de fonctionnement' },
+      { key: 'counterweight', label: { fr: 'Contrepoids' }, expected: 'Sans défaut apparent' },
+      { key: 'access', label: { fr: 'Accès intégrés' }, expected: 'Maintien en conformité' },
+    ],
+  },
+  {
+    key: 'cabin',
+    label: { fr: 'Cabine et poste de conduite' },
+    points: [
+      { key: 'cabin-access', label: { fr: 'Accès' } },
+      { key: 'cabin-floor', label: { fr: 'Constitution, fixation, planchers' } },
+      { key: 'fall-protection', label: { fr: 'Protection contre les chutes de hauteur du poste de conduite' } },
+      { key: 'visibility', label: { fr: 'Visibilité — vitrage, essuie-glace, rétroviseur' } },
+      { key: 'extinguisher', label: { fr: 'Extincteur en cabine' } },
+      { key: 'seat', label: { fr: 'Siège' } },
+      { key: 'lighting', label: { fr: 'Éclairage cabine' } },
+    ],
+  },
+  {
+    key: 'suspension',
+    label: { fr: 'Suspentes, poulies, dispositifs de préhension' },
+    qualifier: 'Câble IWRC',
+    points: [
+      { key: 'cables', label: { fr: 'Câbles et chaînes' }, expected: 'Sans défaut apparent' },
+      { key: 'attachments', label: { fr: 'Attaches' }, expected: 'Correctement réalisées' },
+      { key: 'pulleys', label: { fr: 'Poulies, noix, pignons, axes, tambours' }, expected: 'Bon état apparent' },
+      { key: 'hook', label: { fr: 'Moufle et crochet' }, expected: 'Aspect général satisfaisant' },
+    ],
+  },
+  {
+    key: 'controls',
+    label: { fr: 'Organes de service et de manœuvre' },
+    qualifier: 'Boîtier pendentif',
+    points: [
+      { key: 'control-identification', label: { fr: 'Identification et état des organes' } },
+      { key: 'neutral-return', label: { fr: 'Retour au point neutre' }, expected: 'Assuré' },
+      { key: 'involuntary', label: { fr: 'Protection contre les manœuvres involontaires' }, expected: 'Assurée' },
+      { key: 'start-stop', label: { fr: 'Mise en marche, arrêt normal, sélecteur' }, expected: 'Fonctionne' },
+      { key: 'emergency-stop', label: { fr: 'Autres arrêts accessibles (urgence)' }, expected: 'Fonctionne' },
+      { key: 'horn', label: { fr: 'Avertisseur sonore ou lumineux' }, expected: 'Fonctionne' },
+      { key: 'indicators', label: { fr: 'Indicateurs' }, expected: 'Bon état apparent' },
+    ],
+  },
+  {
+    key: 'hoisting',
+    label: { fr: 'Mouvements concourant au levage' },
+    qualifier: 'Moteur, frein, réducteur, tambour rainuré',
+    points: [
+      { key: 'hoist-mechanisms', label: { fr: 'Mécanismes' }, expected: 'Aspect satisfaisant des parties visibles sans démontage' },
+      { key: 'hoist-guarding', label: { fr: 'Protection des organes mobiles' }, expected: 'Assurée par capotage des organes accessibles' },
+      { key: 'service-brake', label: { fr: 'Frein de service' }, expected: 'Automatiquement serré, efficace à la charge d’essai' },
+      { key: 'backup-brake', label: { fr: 'Frein de secours' } },
+      { key: 'safety-brake', label: { fr: 'Frein de sécurité' } },
+      { key: 'speed-limit', label: { fr: 'Limitation de la vitesse' }, expected: 'Dispositions constructives en état' },
+      { key: 'upper-limit', label: { fr: 'Limiteur de course haut ou dispositif équivalent' }, expected: 'Bon fonctionnement' },
+      { key: 'lower-limit', label: { fr: 'Limiteur de course bas ou dispositif équivalent' }, expected: 'Bon réglage avec le sol' },
+      { key: 'hoist-overtravel', label: { fr: 'Dispositif hors course' } },
+      { key: 'load-limiter', label: { fr: 'Limiteur de charge, limiteur de moment' } },
+    ],
+  },
+  {
+    key: 'travel',
+    label: { fr: 'Mouvement de translation' },
+    qualifier: 'Moteurs électriques asynchrones',
+    points: [
+      { key: 'travel-mechanisms', label: { fr: 'Mécanismes' }, expected: 'Aspect satisfaisant des parties visibles sans démontage' },
+      { key: 'travel-guarding', label: { fr: 'Protection des organes mobiles de transmission' }, expected: 'Assurée par capotage des organes accessibles' },
+      { key: 'travel-brake', label: { fr: 'Frein du mouvement de translation' }, expected: 'Efficace à la charge d’essai' },
+      { key: 'travel-limit', label: { fr: 'Limiteur de course' }, expected: 'Fonctionne' },
+      { key: 'travel-overtravel', label: { fr: 'Dispositif hors course' } },
+      { key: 'immobilisation', label: { fr: 'Immobilisation hors service' } },
+      { key: 'anticollision', label: { fr: 'Anticollision' }, expected: 'En place et fonctionne' },
+    ],
+  },
+  {
+    key: 'traverse',
+    label: { fr: 'Mouvement de direction et de distribution' },
+    qualifier: 'Moteurs électriques asynchrones',
+    points: [
+      { key: 'traverse-mechanisms', label: { fr: 'Mécanismes' }, expected: 'Aspect satisfaisant des parties visibles sans démontage' },
+      { key: 'traverse-guarding', label: { fr: 'Protection des organes mobiles de transmission' }, expected: 'Assurée par capotage des organes accessibles' },
+      { key: 'traverse-brake', label: { fr: 'Frein du mouvement de direction' }, expected: 'Efficace à la charge d’essai' },
+      { key: 'traverse-limit', label: { fr: 'Limiteur de course' }, expected: 'Fonctionne' },
+      { key: 'traverse-buffers', label: { fr: 'Butoirs, amortisseurs, rails' }, expected: 'Aspect satisfaisant des parties visibles sans démontage' },
+    ],
+  },
+  {
+    key: 'misc',
+    label: { fr: 'Dispositions diverses' },
+    qualifier: 'Plaque constructeur',
+    points: [
+      { key: 'load-display', label: { fr: 'Affichage des charges sur l’appareil' }, expected: 'Lisible du poste de conduite par le conducteur' },
+      { key: 'safety-notice', label: { fr: 'Consignes de sécurité' }, expected: 'Apposées auprès de l’appareil' },
+      { key: 'manual', label: { fr: 'Notice d’instruction, déclaration de conformité' }, expected: 'Existe' },
+      { key: 'previous-tests', label: { fr: 'Épreuves et essais avant mise ou remise en service' }, expected: 'Réalisées' },
+      { key: 'device-identification', label: { fr: 'Identification et repère de l’appareil' }, expected: 'Existe et affichée' },
+      { key: 'special-equipment', label: { fr: 'Équipement particulier' } },
+      { key: 'signal-lights', label: { fr: 'Feux de signalisation' } },
+    ],
+  },
+];
+
+/** Légende des réponses, rappelée en tête de chaque check-list EILM. */
+const EILM_CHECKS_HELP = 'SO : sans objet · NA : non appliqué · C : conforme · NC : non conforme';
+
+/**
+ * En-tête de visite pont roulant. Seuls les textes réglementaires cités
+ * changent d'un modèle à l'autre : la périodique ne vise qu'un arrêté, la mise
+ * en service en vise deux.
+ */
+const pontClientSection = (textes: string) => ({
+  key: 'client',
+  label: { fr: 'Références du client et circonstances de la visite' },
+  type: 'keyvalue',
+  repeatable: false,
+  help: `Textes de référence : ${textes}`,
+  fields: [
+    { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+    { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: false, span: 6 },
+    { key: 'location', label: { fr: 'Lieu d’intervention' }, type: 'ref', required: true, autofill: 'site', span: 6 },
+    { key: 'nature', label: { fr: 'Nature de l’intervention' }, type: 'enum', required: true, options: ['Vérification réglementaire périodique', 'Mise en service', 'Remise en service'], span: 6 },
+    { key: 'date', label: { fr: 'Date de vérification' }, type: 'date', required: true, autofill: 'date', span: 6 },
+  ],
+});
+
+/** Caractéristiques de l'appareil : même fiche dans les deux rapports pont. */
+const PONT_EQUIPMENT = {
+  key: 'equipment',
+  label: { fr: 'Identification et caractéristiques de l’équipement' },
+  type: 'keyvalue',
+  repeatable: false,
+  fields: [
+    { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
+    { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+    { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: true, span: 4 },
+    { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+    { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+    { key: 'span', label: { fr: 'Portée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+    { key: 'liftHeight', label: { fr: 'Hauteur de levage sous crochet' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+    { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 't', decimals: 2, span: 4 },
+    { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+  ],
+};
+
+const PONT_CHECKS = {
+  key: 'checks',
+  label: { fr: 'Vérifications et inspections de l’appareil et de ses aménagements' },
+  type: 'checklist',
+  repeatable: false,
+  help: EILM_CHECKS_HELP,
+  groups: PONT_GROUPS,
+};
 
 export const TEMPLATES: TemplateSeed[] = [
   /* ═══════════════════════════════════════════════════════════════
@@ -209,6 +446,86 @@ export const TEMPLATES: TemplateSeed[] = [
     applicationDate: '2022-10-01',
     schema: {
       sections: [
+        pontClientSection('Arrêté viziriel du 09 septembre 1953.'),
+        PONT_EQUIPMENT,
+        PONT_CHECKS,
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F39 — MISE OU REMISE EN SERVICE PONT ROULANT
+   *
+   *  Même appareil et même check-list que la vérification périodique, mais
+   *  une mise en service exige en plus les épreuves de charge : c'est le seul
+   *  écart entre les deux modèles.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F39',
+    version: '00',
+    title: 'Rapport de vérification de mise ou remise en service — pont roulant ou portique',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        pontClientSection('Arrêté viziriel du 09 septembre 1953 et arrêté viziriel du 03 novembre 1953.'),
+        PONT_EQUIPMENT,
+        PONT_CHECKS,
+        {
+          key: 'tests',
+          label: { fr: 'Compte rendu des épreuves' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Épreuve statique avec coefficient de surcharge, puis épreuve dynamique à 110 % sur trois cycles.',
+          columns: [
+            { key: 'kind', label: { fr: 'Nature de l’épreuve' }, type: 'enum', required: true, options: ['Épreuve statique', 'Épreuve dynamique'], span: 3 },
+            { key: 'load', label: { fr: 'Charge appliquée' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 2 },
+            { key: 'span', label: { fr: 'Portée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 2 },
+            { key: 'height', label: { fr: 'Hauteur' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 1 },
+            { key: 'overload', label: { fr: 'Coefficient de surcharge' }, type: 'number', required: true, unit: '%', decimals: 0, span: 2 },
+            { key: 'position', label: { fr: 'Position de l’appareil' }, type: 'text', required: false, span: 2 },
+          ],
+        },
+        {
+          key: 'testResults',
+          label: { fr: 'Résultats des épreuves' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'configuration', label: { fr: 'Configuration lors des épreuves' }, type: 'textarea', required: false, span: 12 },
+            { key: 'results', label: { fr: 'Résultats des épreuves' }, type: 'textarea', required: true, span: 12 },
+          ],
+        },
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F38 — CHARIOT DE MANUTENTION À MÂT
+   *
+   *  Check-list propre au chariot : six groupes numérotés au modèle, dont les
+   *  mouvements de translation et de direction sont réunis, contrairement au
+   *  pont roulant qui les traite séparément.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F38',
+    version: '00',
+    title: 'Rapport de vérification périodique — chariot de manutention à mât',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
         {
           key: 'client',
           label: { fr: 'Références du client et circonstances de la visite' },
@@ -219,8 +536,10 @@ export const TEMPLATES: TemplateSeed[] = [
             { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
             { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: false, span: 6 },
             { key: 'location', label: { fr: 'Lieu d’intervention' }, type: 'ref', required: true, autofill: 'site', span: 6 },
-            { key: 'nature', label: { fr: 'Nature de l’intervention' }, type: 'enum', required: true, options: ['Vérification réglementaire périodique', 'Mise en service', 'Remise en service'], span: 6 },
-            { key: 'date', label: { fr: 'Date de vérification' }, type: 'date', required: true, autofill: 'date', span: 6 },
+            { key: 'inspector', label: { fr: 'Inspecteur chargé de mission' }, type: 'ref', required: true, autofill: 'inspector', span: 6 },
+            { key: 'date', label: { fr: 'Date de réalisation' }, type: 'date', required: true, autofill: 'date', span: 4 },
+            { key: 'nature', label: { fr: 'Nature de l’intervention' }, type: 'enum', required: true, options: ['Vérification réglementaire périodique', 'Mise en service', 'Remise en service'], span: 4 },
+            { key: 'nextInspection', label: { fr: 'Prochaine vérification' }, type: 'date', required: false, span: 4 },
           ],
         },
         {
@@ -231,118 +550,104 @@ export const TEMPLATES: TemplateSeed[] = [
           fields: [
             { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
             { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
-            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: true, span: 4 },
+            { key: 'attachment', label: { fr: 'Équipement' }, type: 'text', required: false, span: 6 },
+            { key: 'suspension', label: { fr: 'Suspentes' }, type: 'text', required: false, span: 6 },
             { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
-            { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
-            { key: 'span', label: { fr: 'Portée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
-            { key: 'liftHeight', label: { fr: 'Hauteur de levage sous crochet' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
-            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 't', decimals: 2, span: 4 },
+            { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+            { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
+            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'liftHeight', label: { fr: 'Hauteur maximale du levage' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
             { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'reach', label: { fr: 'Portée maximale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
           ],
         },
         {
           key: 'checks',
-          label: { fr: 'Vérifications et inspections de l’appareil et de ses aménagements' },
+          label: { fr: 'Examen de l’appareil et de ses équipements' },
           type: 'checklist',
           repeatable: false,
-          help: 'SO : sans objet · NA : non appliqué · C : conforme · NC : non conforme',
+          help: EILM_CHECKS_HELP,
           groups: [
             {
-              key: 'electrical',
-              label: { fr: 'Installations électriques' },
-              qualifier: 'Alimentation par câble',
+              key: 'mechanisms',
+              label: { fr: 'Équipements et mécanismes' },
               points: [
-                { key: 'protection-live', label: { fr: 'Protection contre les contacts directs avec les conducteurs nus sous tension' }, expected: 'Aspect général satisfaisant' },
-                { key: 'lockable-isolator', label: { fr: 'Séparation générale verrouillable' }, expected: 'Bon fonctionnement' },
-                { key: 'cabin-protection', label: { fr: 'Protection contre les contacts avec les pièces nues sous tension en cabine' }, expected: 'Aspect général satisfaisant' },
-                { key: 'earthing', label: { fr: 'Mises à la terre des masses métalliques fixes ou mobiles' }, expected: 'Réalisées correctement' },
-              ],
-            },
-            {
-              key: 'structure',
-              label: { fr: 'Châssis, support, chemin de roulement' },
-              qualifier: 'Mécano-soudé',
-              points: [
-                { key: 'rails', label: { fr: 'Rails et poutres de roulement' }, expected: 'Aspect général satisfaisant' },
-                { key: 'posts', label: { fr: 'Poteaux et corbeaux' }, expected: 'Aspect général satisfaisant' },
-                { key: 'buffers', label: { fr: 'Butoirs amortisseurs' }, expected: 'En place, correctement fixés' },
-              ],
-            },
-            {
-              key: 'frame',
-              label: { fr: 'Charpente' },
-              qualifier: 'Poutre caisson',
-              points: [
-                { key: 'framework', label: { fr: 'Ossature, plate-forme, support de charge' }, expected: 'Bon état de fonctionnement' },
+                { key: 'electrical-circuit', label: { fr: 'Circuit électrique' }, expected: 'Aspect général satisfaisant' },
+                { key: 'lines', label: { fr: 'Équipements, canalisations, enrouleurs' }, expected: 'Aspect général satisfaisant' },
+                { key: 'hydraulic-circuit', label: { fr: 'Circuit hydraulique' }, expected: 'Aspect général satisfaisant' },
+                { key: 'chassis', label: { fr: 'Châssis, traverses, longerons' }, expected: 'Sans défaut apparent' },
+                // « État des suspentes » chapeaute au modèle les deux points
+                // suivants : c'est un intertitre, pas un point à renseigner.
+                { key: 'suspension-chain', label: { fr: 'État des suspentes — chaîne' }, expected: 'Sans défaut apparent' },
+                { key: 'suspension-limits', label: { fr: 'État des suspentes — limiteurs de fin de course' }, expected: 'Sans défaut apparent' },
+                { key: 'speed-limit', label: { fr: 'Limitation de vitesse de déplacement' }, expected: 'Dispositions constructives en état' },
+                { key: 'batteries', label: { fr: 'Batteries' }, expected: 'Bon état apparent' },
+                { key: 'framework', label: { fr: 'Ossature, plate-forme, support de charge' }, expected: 'Sans défaut apparent' },
                 { key: 'counterweight', label: { fr: 'Contrepoids' }, expected: 'Sans défaut apparent' },
-                { key: 'access', label: { fr: 'Accès intégrés' }, expected: 'Maintien en conformité' },
+                { key: 'forks', label: { fr: 'Fourches' }, expected: 'Sans défaut apparent' },
+              ],
+            },
+            {
+              key: 'hoisting',
+              label: { fr: 'Mouvement concourant au levage' },
+              points: [
+                { key: 'hoist-mechanisms', label: { fr: 'Mécanismes' }, expected: 'Aspect satisfaisant des parties visibles sans démontage' },
+                { key: 'hoist-guarding', label: { fr: 'Protection des organes mobiles' }, expected: 'Assurée par capotage' },
+                { key: 'load-limiter', label: { fr: 'Limiteur de charge, limiteur de moment' } },
+                { key: 'service-brake', label: { fr: 'Frein de service' }, expected: 'Fonctionne à la charge d’essai' },
+                { key: 'course-limits', label: { fr: 'Limiteurs de course haut et bas' }, expected: 'Fonctionne' },
+              ],
+            },
+            {
+              key: 'travel',
+              label: { fr: 'Mouvement de translation et de direction' },
+              points: [
+                { key: 'travel-mechanisms', label: { fr: 'Mécanismes' }, expected: 'Aspect satisfaisant des parties visibles sans démontage' },
+                { key: 'travel-guarding', label: { fr: 'Protection des organes mobiles' }, expected: 'Assurée par capotage' },
+                { key: 'travel-brake', label: { fr: 'Frein du mouvement de translation' }, expected: 'Fonctionne' },
+                { key: 'steering-brake', label: { fr: 'Frein du mouvement de direction' }, expected: 'Fonctionne' },
+                { key: 'parking-brake', label: { fr: 'Frein de stationnement' }, expected: 'Fonctionne' },
               ],
             },
             {
               key: 'cabin',
-              label: { fr: 'Cabine et poste de conduite' },
+              label: { fr: 'Cabine' },
               points: [
-                { key: 'cabin-access', label: { fr: 'Accès' } },
-                { key: 'cabin-floor', label: { fr: 'Constitution, fixation, planchers' } },
-                { key: 'fall-protection', label: { fr: 'Protection contre les chutes de hauteur du poste de conduite' } },
-                { key: 'visibility', label: { fr: 'Visibilité — vitrage, essuie-glace, rétroviseur' } },
-                { key: 'extinguisher', label: { fr: 'Extincteur en cabine' } },
-                { key: 'seat', label: { fr: 'Siège' } },
-                { key: 'lighting', label: { fr: 'Éclairage cabine' } },
+                { key: 'visibility', label: { fr: 'Visibilité — vitre, rétroviseur, essuie-glace' }, expected: 'Correcte' },
+                { key: 'cabin-floor', label: { fr: 'Constitution, fixation, planchers' }, expected: 'Sans anomalie visible' },
+                { key: 'driver-restraint', label: { fr: 'Dispositif de retenue du conducteur' }, expected: 'Bon état de fonctionnement' },
+                { key: 'driver-protection', label: { fr: 'Protection du conducteur' }, expected: 'Aspect général satisfaisant' },
+                { key: 'seat', label: { fr: 'Siège du conducteur' }, expected: 'Bon état' },
               ],
             },
             {
-              key: 'suspension',
-              label: { fr: 'Suspentes, poulies, dispositifs de préhension' },
-              qualifier: 'Câble IWRC',
+              key: 'controls',
+              label: { fr: 'Organes de service et de manœuvre' },
               points: [
-                { key: 'cables', label: { fr: 'Câbles et chaînes' }, expected: 'Sans défaut apparent' },
-                { key: 'attachments', label: { fr: 'Attaches' }, expected: 'Correctement réalisées' },
-                { key: 'pulleys', label: { fr: 'Poulies, noix, pignons, axes, tambours' }, expected: 'Bon état apparent' },
-                { key: 'hook', label: { fr: 'Moufle et crochet' }, expected: 'Aspect général satisfaisant' },
+                { key: 'control-identification', label: { fr: 'Identification et état des organes' }, expected: 'Pictogrammes et étiquettes en place' },
+                { key: 'horn', label: { fr: 'Avertisseur sonore ou lumineux' }, expected: 'Fonctionne' },
+                { key: 'indicators', label: { fr: 'Indicateurs' }, expected: 'Bon état apparent' },
+                { key: 'neutral-return', label: { fr: 'Retour au point neutre' }, expected: 'Assuré' },
+                { key: 'lockout', label: { fr: 'Dispositif de condamnation' }, expected: 'Par clef, bon état de fonctionnement' },
+              ],
+            },
+            {
+              key: 'misc',
+              label: { fr: 'Dispositions diverses' },
+              points: [
+                { key: 'load-display', label: { fr: 'Affichage des charges' }, expected: 'Lisible du poste de conduite par le conducteur' },
+                { key: 'safety-notice', label: { fr: 'Consignes de sécurité' }, expected: 'Affichées' },
+                { key: 'previous-tests', label: { fr: 'Vérification avant mise ou remise en service' } },
+                { key: 'signal-lights', label: { fr: 'Feux de signalisation' }, expected: 'En état de fonctionnement' },
+                { key: 'device-identification', label: { fr: 'Identification, repère, marquage' }, expected: 'Existe' },
               ],
             },
           ],
         },
-        {
-          key: 'observations',
-          label: { fr: 'Observations' },
-          type: 'text',
-          repeatable: false,
-          fields: [
-            { key: 'observations', label: { fr: 'Observations' }, type: 'textarea', required: false, span: 12 },
-          ],
-        },
-        {
-          key: 'conclusion',
-          label: { fr: 'Conclusion' },
-          type: 'verdict',
-          repeatable: false,
-          help: 'Un seul point de contrôle non conforme interdit la conclusion « sans réserve ».',
-          verdicts: [
-            { fr: 'Appareil apte au service sans réserve' },
-            { fr: 'Appareil apte au service avec réserves à lever' },
-            { fr: 'Appareil inapte au service nécessitant l’arrêt' },
-          ],
-        },
-        {
-          key: 'photos',
-          label: { fr: 'Photographies' },
-          type: 'photos',
-          repeatable: true,
-          minRows: 0,
-        },
-        {
-          key: 'signatures',
-          label: { fr: 'Visas' },
-          type: 'signature-matrix',
-          repeatable: false,
-          signatories: [
-            { fr: 'Vérification effectuée par' },
-            { fr: 'Rapport vérifié par' },
-            { fr: 'Représentant du client' },
-          ],
-        },
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
       ],
     },
   },
