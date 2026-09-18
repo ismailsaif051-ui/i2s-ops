@@ -14,6 +14,7 @@ import {
   ExpenseCapType,
 } from '@prisma/client';
 import { REPORT_FORMS } from './report-forms';
+import { TEMPLATES as REPORT_TEMPLATES } from './report-templates';
 
 const prisma = new PrismaClient();
 
@@ -526,6 +527,41 @@ async function main() {
     addedForms += 1;
   }
   console.log(`  ${REPORT_FORMS.length} modèles de rapports au référentiel (${addedForms} ajoutés)`);
+
+  // Les formulaires construits sont du référentiel métier, pas de la
+  // démonstration : sans cela, une mise en service sans jeu de démonstration
+  // ne proposerait aucun formulaire saisissable. Le versionnement reste
+  // immuable — republier crée une version, ne modifie jamais un rapport émis.
+  for (const template of REPORT_TEMPLATES) {
+    await prisma.inspectionTemplate.upsert({
+      where: { formCode_version: { formCode: template.formCode, version: template.version } },
+      update: {
+        title: template.title,
+        titleEn: template.titleEn ?? null,
+        paradigm: template.paradigm,
+        schema: template.schema as never,
+        status: 'PUBLISHED',
+      },
+      create: {
+        formCode: template.formCode,
+        version: template.version,
+        title: template.title,
+        titleEn: template.titleEn ?? null,
+        methodId: methodIds.get(template.methodCode) ?? null,
+        paradigm: template.paradigm,
+        applicationDate: new Date(template.applicationDate),
+        status: 'PUBLISHED',
+        schema: template.schema as never,
+      },
+    });
+  }
+  const sections = REPORT_TEMPLATES.reduce(
+    (n, t) => n + ((t.schema as { sections: unknown[] }).sections?.length ?? 0),
+    0,
+  );
+  console.log(
+    `  ${REPORT_TEMPLATES.length} formulaires construits et publiés (${sections} sections)`,
+  );
 
   // ── Catégories de frais ────────────────────────────────────────
   for (const [i, c] of EXPENSE_CATEGORIES.entries()) {

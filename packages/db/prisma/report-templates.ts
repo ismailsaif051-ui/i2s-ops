@@ -1,10 +1,17 @@
 /**
- * Trois formulaires d'inspection réels, un par paradigme.
+ * Formulaires d'inspection construits, saisissables dans l'application.
  *
- * Structures relevées sur les modèles du référentiel I2S :
- *   PR01-F02  Rapport d'examen par ultrasons        → mesures et indications
+ * Structures relevées une à une sur les modèles du référentiel I2S
+ * (`05_PROCEDURES`), dont les fichiers Excel et Word font foi :
+ *   PR01-F02  Examen par ultrasons                  → mesures et indications
+ *   PR01-F04  Examen par ressuage                   → mesures et indications
+ *   PR01-F05  Examen par magnétoscopie              → mesures et indications
  *   PR02-F40  Vérification périodique pont roulant  → check-list réglementaire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
+ *
+ * Les autres formulaires du catalogue (`report-forms.ts`) restent en brouillon
+ * tant que leur structure n'a pas été relevée : ils classent les rapports sans
+ * pouvoir être saisis.
  *
  * Les libellés bilingues, l'ordre des blocs et les listes de valeurs sont
  * repris des formulaires existants : un rapport généré doit être visuellement
@@ -51,6 +58,25 @@ const END_SIGNATURES = {
     { fr: 'Client final', en: 'End customer' },
   ],
 };
+
+/** Ressuage et magnétoscopie ne font pas viser le client final : trois colonnes, pas quatre. */
+const END_SIGNATURES_3 = {
+  key: 'signatures',
+  label: { fr: 'Visas', en: 'Signatures' },
+  type: 'signature-matrix',
+  repeatable: false,
+  signatories: [
+    { fr: 'Examen effectué par', en: 'Examination carried on by' },
+    { fr: 'Rapport établi par', en: 'Report established by' },
+    { fr: 'Client / tierce partie', en: 'Customer / third party' },
+  ],
+};
+
+/** Lumière d'observation : même bloc sur tous les examens de surface. */
+const LIGHT_FIELDS = [
+  { key: 'light', label: { fr: 'Lumière', en: 'Light' }, type: 'enum', required: true, options: ['Naturelle', 'Artificielle', 'Noire'], span: 4 },
+  { key: 'lightValue', label: { fr: 'Valeur mesurée', en: 'Specified value' }, type: 'number', required: true, unit: 'Lux', span: 4 },
+];
 
 export const TEMPLATES: TemplateSeed[] = [
   /* ═══════════════════════════════════════════════════════════════
@@ -412,6 +438,199 @@ export const TEMPLATES: TemplateSeed[] = [
             { fr: 'Représentant du client' },
           ],
         },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F04 — RESSUAGE (paradigme « mesures »)
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F04',
+    version: '00',
+    title: 'Rapport d’examen par ressuage',
+    titleEn: 'Report of Liquid Penetrant Examination',
+    methodCode: 'PT',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        END_HEADER,
+        {
+          key: 'piece',
+          label: { fr: 'Caractéristiques de l’élément', en: 'Characteristics of work piece' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'pieceType', label: { fr: 'Nature', en: 'Type' }, type: 'enum', required: true, options: ['Soudure', 'Pièce mécanique'], span: 3 },
+            { key: 'jointNumber', label: { fr: 'N° de joint', en: 'Joint N°' }, type: 'text', required: false, span: 3 },
+            { key: 'material', label: { fr: 'Matériau', en: 'Base material' }, type: 'text', required: true, span: 3 },
+            { key: 'extent', label: { fr: 'Étendue de contrôle', en: 'Extend of inspection' }, type: 'text', required: true, span: 3 },
+            { key: 'surfaceTemperature', label: { fr: 'Température de surface', en: 'Surface temperature' }, type: 'number', required: true, unit: '°C', span: 3 },
+            { key: 'surfaceCondition', label: { fr: 'État de surface', en: 'Surface conditions' }, type: 'text', required: true, span: 3 },
+          ],
+        },
+        {
+          key: 'penetrant',
+          label: { fr: 'Application du pénétrant', en: 'Penetrant application' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'reference', label: { fr: 'Référence', en: 'Reference' }, type: 'text', required: true, span: 3 },
+            { key: 'appliedBy', label: { fr: 'Application par', en: 'Penetrant application by' }, type: 'enum', required: true, options: ['Pinceau', 'Aérosol', 'Immersion', 'Autre'], span: 3 },
+            { key: 'duration', label: { fr: 'Durée', en: 'Time' }, type: 'number', required: true, unit: 'mn', span: 3 },
+            { key: 'removal', label: { fr: 'Mode d’élimination', en: 'Removal method' }, type: 'enum', required: true, options: ['Eau', 'Solvant', 'Émulsifiant', 'Autre'], span: 3 },
+          ],
+        },
+        {
+          key: 'developer',
+          label: { fr: 'Application du révélateur', en: 'Developer application' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'reference', label: { fr: 'Référence', en: 'Reference' }, type: 'text', required: true, span: 3 },
+            { key: 'appliedBy', label: { fr: 'Application par', en: 'Developer application by' }, type: 'enum', required: true, options: ['Pinceau', 'Aérosol', 'Immersion', 'Autre'], span: 3 },
+            { key: 'developingTime', label: { fr: 'Temps de révélation', en: 'Developing time' }, type: 'number', required: true, unit: 'mn', span: 3 },
+            { key: 'finalCleaning', label: { fr: 'Nettoyage final', en: 'Final cleaning' }, type: 'text', required: false, span: 3 },
+          ],
+        },
+        {
+          key: 'observation',
+          label: { fr: 'Conditions d’observation', en: 'Inspection sequence' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            ...LIGHT_FIELDS,
+            { key: 'aspect', label: { fr: 'Aspect', en: 'Aspect' }, type: 'text', required: false, span: 4 },
+            { key: 'stage', label: { fr: 'Stade de contrôle', en: 'Inspection stage' }, type: 'enum', required: true, options: ['Chanfrein avant soudage', '1re passe', 'Reprise envers', 'Final', 'Autre'], span: 6 },
+          ],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Résultats de l’interprétation', en: 'Interpretation results' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          help: 'Chaque ligne devient une indication exploitable, transformable en non-conformité.',
+          columns: [
+            { key: 'mark', label: { fr: 'Repère pièce ou soudure', en: 'Mark of part or weld' }, type: 'text', required: true, span: 2 },
+            { key: 'indicationType', label: { fr: 'Type des indications', en: 'Type of indications' }, type: 'enum', required: true, options: ['Linéaire', 'Non linéaire'], span: 2 },
+            { key: 'location', label: { fr: 'Localisation', en: 'Location of indications' }, type: 'text', required: true, unit: 'mm', span: 2 },
+            { key: 'dimensions', label: { fr: 'Dimensions avant meulage', en: 'Dimensions before grinding' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 2 },
+            { key: 'comments', label: { fr: 'Observations', en: 'Comments' }, type: 'text', required: false, span: 2 },
+            { key: 'decision', label: { fr: 'Décision', en: 'Decision' }, type: 'enum', required: true, options: ['Conforme', 'Non conforme'], span: 2 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Photographies', en: 'Photographs' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+        },
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F05 — MAGNÉTOSCOPIE (paradigme « mesures »)
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F05',
+    version: '00',
+    title: 'Rapport d’examen par magnétoscopie',
+    titleEn: 'Report of magnetic particle examination',
+    methodCode: 'MT',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        END_HEADER,
+        {
+          key: 'piece',
+          label: { fr: 'Caractéristiques de l’élément', en: 'Characteristics of work piece' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'baseMaterial', label: { fr: 'Matériaux de base', en: 'Base material' }, type: 'text', required: true, span: 3 },
+            { key: 'weldMetal', label: { fr: 'Métal d’apport', en: 'Weld metal' }, type: 'text', required: false, span: 3 },
+            { key: 'weldingProcess', label: { fr: 'Procédé de soudage', en: 'Welding process' }, type: 'text', required: false, span: 3 },
+            { key: 'jointType', label: { fr: 'Type d’assemblage', en: 'Joint type' }, type: 'text', required: false, span: 3 },
+          ],
+        },
+        {
+          key: 'conditions',
+          label: { fr: 'Conditions d’examen', en: 'Operating conditions' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'surfaceCondition', label: { fr: 'État de surface', en: 'Surface conditions' }, type: 'enum', required: true, options: ['Grenaillée / sablée', 'Meulée / usinée', 'Brute'], span: 6 },
+            { key: 'stage', label: { fr: 'Stade d’examen', en: 'Examination stage' }, type: 'enum', required: true, options: ['Final', 'Après réparation', 'Autre'], span: 6 },
+          ],
+        },
+        {
+          key: 'magnetisation',
+          label: { fr: 'Magnétisation', en: 'Magnetisation' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'apparatus', label: { fr: 'Appareil de magnétisation', en: 'Apparatus' }, type: 'enum', required: true, options: ['Électro-aimant', 'Aimant permanent'], span: 4 },
+            { key: 'current', label: { fr: 'Type de courant', en: 'Type of current' }, type: 'enum', required: true, options: ['Alternatif', 'Continu', 'Pulsé', 'Redressé'], span: 4 },
+            { key: 'method', label: { fr: 'Type de magnétisation', en: 'Magnetisation method' }, type: 'enum', required: true, options: ['Par passage de flux', 'Par passage de courant'], span: 4 },
+            { key: 'indicator', label: { fr: 'Témoin de magnétisation', en: 'Magnetisation indicator' }, type: 'enum', required: true, options: ['Berthold', 'Autre'], span: 4 },
+            { key: 'duration', label: { fr: 'Durée de magnétisation', en: 'Magnetising time' }, type: 'number', required: false, unit: 's', span: 4 },
+            { key: 'pieceTemperature', label: { fr: 'Température de la pièce', en: 'Casing temperature' }, type: 'number', required: true, unit: '°C', span: 4 },
+          ],
+        },
+        {
+          key: 'product',
+          label: { fr: 'Produit indicateur', en: 'Magnetic particle material' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'brand', label: { fr: 'Marque', en: 'Trade mark' }, type: 'text', required: true, span: 3 },
+            { key: 'type', label: { fr: 'Type', en: 'Type' }, type: 'text', required: true, span: 3 },
+            { key: 'form', label: { fr: 'Forme', en: 'Form' }, type: 'enum', required: true, options: ['Sec', 'Humide', 'Fluorescent'], span: 3 },
+            { key: 'contrastingBase', label: { fr: 'Base contrastante', en: 'Contrasting base' }, type: 'text', required: false, span: 3 },
+          ],
+        },
+        {
+          key: 'observation',
+          label: { fr: 'Conditions d’observation et nettoyage final', en: 'Inspection sequence and final cleaning' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            ...LIGHT_FIELDS,
+            { key: 'demagnetisation', label: { fr: 'Démagnétisation', en: 'Demagnetisation' }, type: 'enum', required: true, options: ['Oui', 'Non'], span: 2 },
+            { key: 'cleaning', label: { fr: 'Nettoyage', en: 'Cleaning' }, type: 'text', required: false, span: 2 },
+          ],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Résultats de l’interprétation', en: 'Interpretation results' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          help: 'Chaque ligne devient une indication exploitable, transformable en non-conformité.',
+          columns: [
+            { key: 'mark', label: { fr: 'Repère pièce ou soudure', en: 'Mark of part or weld' }, type: 'text', required: true, span: 2 },
+            { key: 'defectType', label: { fr: 'Type de défaut', en: 'Type of defect' }, type: 'text', required: true, span: 2 },
+            { key: 'location', label: { fr: 'Localisation', en: 'Location of indications' }, type: 'text', required: true, unit: 'mm', span: 2 },
+            { key: 'dimensionsBefore', label: { fr: 'Dimensions avant meulage', en: 'Dimensions before grinding' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 1.5 },
+            { key: 'lengthAfter', label: { fr: 'Longueur après meulage', en: 'Length after grinding' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 1.5 },
+            { key: 'depthAfter', label: { fr: 'Profondeur après meulage', en: 'Depth after grinding' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 1.5 },
+            { key: 'decision', label: { fr: 'Décision', en: 'Decision' }, type: 'enum', required: true, options: ['Conforme', 'Non conforme'], span: 1.5 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Photographies', en: 'Photographs' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+        },
+        END_SIGNATURES_3,
       ],
     },
   },

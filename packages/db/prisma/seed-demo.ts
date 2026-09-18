@@ -37,7 +37,6 @@ import {
   makeRandom,
   type Random,
 } from './demo/fixtures';
-import { TEMPLATES } from './demo/templates';
 import { attachInspections } from './demo/attach-inspections';
 
 const prisma = new PrismaClient();
@@ -102,7 +101,6 @@ async function main() {
   await createInvoices(company.id, affairs, attachments);
   await createExpenses(company.id, employees, affairs, missions);
   await createNonConformities(affairs, employees);
-  await createTemplates();
   const attached = await attachInspections(prisma, company.id, rng);
   console.log(`  ${attached} saisies rattachées aux rapports en circuit`);
   await createNotifications(employees);
@@ -1715,49 +1713,6 @@ function buildApprovals(status: string, month: number): Prisma.ExpenseApprovalCr
     decision: 'APPROVED' as const,
     decidedAt: new Date(Date.UTC(YEAR, month + 1, 3 + step)),
   }));
-}
-
-/* ═══════════════════════════════════════════════════════════════════
- *  Formulaires d'inspection
- * ═══════════════════════════════════════════════════════════════════ */
-
-/**
- * Publie trois formulaires réels, un par paradigme. Le versionnement est
- * immuable : republier crée une version, ne modifie jamais un rapport émis.
- */
-async function createTemplates() {
-  const methods = await prisma.inspectionMethod.findMany();
-  const methodByCode = new Map(methods.map((m) => [m.code, m.id]));
-
-  for (const template of TEMPLATES) {
-    await prisma.inspectionTemplate.upsert({
-      where: { formCode_version: { formCode: template.formCode, version: template.version } },
-      update: {
-        title: template.title,
-        titleEn: template.titleEn ?? null,
-        paradigm: template.paradigm,
-        schema: template.schema as never,
-        status: 'PUBLISHED',
-      },
-      create: {
-        formCode: template.formCode,
-        version: template.version,
-        title: template.title,
-        titleEn: template.titleEn ?? null,
-        methodId: methodByCode.get(template.methodCode) ?? null,
-        paradigm: template.paradigm,
-        applicationDate: new Date(template.applicationDate),
-        status: 'PUBLISHED',
-        schema: template.schema as never,
-      },
-    });
-  }
-
-  const sections = TEMPLATES.reduce(
-    (n, t) => n + ((t.schema as { sections: unknown[] }).sections?.length ?? 0),
-    0,
-  );
-  console.log(`  ${TEMPLATES.length} formulaires d'inspection publiés (${sections} sections)`);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
