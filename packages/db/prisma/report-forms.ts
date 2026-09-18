@@ -45,7 +45,9 @@ export const REPORT_FORMS: ReportForm[] = [
   cnd('PR01-F05', 'Rapport d’examen par magnétoscopie', 'MT'),
   cnd('PR01-F06', 'Rapport d’examen d’adhérence', 'PAINT'),
   cnd('PR01-F07', 'Rapport de contrôle de rotondité', 'DIM'),
-  cnd('PR01-F08', 'Rapport d’examen visuel', 'VT', 'CHECKLIST'),
+  // Paradigme confirmé à la construction du formulaire : le modèle est bâti
+  // comme les autres examens de surface, pas comme une liste de contrôle.
+  cnd('PR01-F08', 'Rapport d’examen visuel', 'VT'),
   cnd('PR01-F09', 'PV de qualification de mode opératoire de soudage (QMOS) — ASME IX', 'WELD', 'CRITERIA'),
   cnd('PR01-F10', 'Rapport de contrôle de déformation locale', 'DIM'),
   cnd('PR01-F11', 'Attestation de vérification de composition d’atmosphère', null),

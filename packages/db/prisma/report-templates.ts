@@ -6,8 +6,13 @@
  *   PR01-F02  Examen par ultrasons                  → mesures et indications
  *   PR01-F04  Examen par ressuage                   → mesures et indications
  *   PR01-F05  Examen par magnétoscopie              → mesures et indications
+ *   PR01-F08  Examen visuel                         → mesures et indications
+ *   PR01-F22  Interprétation de clichés radio       → mesures et indications
+ *   PR01-F26  Essai de dureté                       → mesures et indications
  *   PR02-F40  Vérification périodique pont roulant  → check-list réglementaire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
+ *
+ * Les six formulaires END du lot L1 sont ainsi couverts.
  *
  * Les autres formulaires du catalogue (`report-forms.ts`) restent en brouillon
  * tant que leur structure n'a pas été relevée : ils classent les rapports sans
@@ -626,6 +631,266 @@ export const TEMPLATES: TemplateSeed[] = [
         {
           key: 'photos',
           label: { fr: 'Photographies', en: 'Photographs' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+        },
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F08 — EXAMEN VISUEL (paradigme « mesures »)
+   *  Le catalogue l'annonçait en check-list ; le modèle est en fait
+   *  construit comme les autres examens de surface.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F08',
+    version: '00',
+    title: 'Rapport d’examen visuel',
+    titleEn: 'Report of Visual Examination',
+    methodCode: 'VT',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-01-10',
+    schema: {
+      sections: [
+        END_HEADER,
+        {
+          key: 'piece',
+          label: { fr: 'Caractéristiques de l’élément contrôlé', en: 'Characteristics of work piece' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'material', label: { fr: 'Matériau', en: 'Base material' }, type: 'text', required: true, span: 3 },
+            { key: 'extent', label: { fr: 'Étendue du contrôle', en: 'Extent of inspection' }, type: 'text', required: true, span: 3 },
+            { key: 'pieceType', label: { fr: 'Nature', en: 'Type' }, type: 'enum', required: true, options: ['Soudure', 'Autre'], span: 3 },
+            { key: 'surfaceTemperature', label: { fr: 'Température de surface', en: 'Surface temperature' }, type: 'number', required: true, unit: '°C', span: 3 },
+          ],
+        },
+        {
+          key: 'conditions',
+          label: { fr: 'Conditions d’examen', en: 'Operating conditions' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'surfaceCondition', label: { fr: 'État de surface', en: 'Surface condition' }, type: 'enum', required: true, options: ['Grenaillée / sablée', 'Meulée / usinée', 'Brossée', 'Brute', 'Autre'], span: 12 },
+          ],
+        },
+        {
+          key: 'observation',
+          label: { fr: 'Conditions d’observation', en: 'Inspection sequence' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'lighting', label: { fr: 'Éclairage', en: 'Lighting' }, type: 'enum', required: true, options: ['Naturel', 'Artificiel'], span: 4 },
+            { key: 'lightValue', label: { fr: 'Valeur contrôlée', en: 'Specified value' }, type: 'number', required: true, unit: 'Lux', span: 4 },
+            { key: 'means', label: { fr: 'Moyens d’examen', en: 'Means of examination' }, type: 'enum', required: true, options: ['Œil nu', 'Loupe', 'Endoscope', 'Autre'], span: 4 },
+          ],
+        },
+        {
+          key: 'stage',
+          label: { fr: 'Stade de contrôle', en: 'Stage of inspection' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'stage', label: { fr: 'Stade', en: 'Stage' }, type: 'enum', required: true, options: ['Avant soudage', 'Pendant soudage', 'Après soudage', 'Après traitement thermique', 'Après réparation'], span: 6 },
+            { key: 'repair', label: { fr: 'Réparation', en: 'Repair' }, type: 'enum', required: false, options: ['Partiellement réparée', 'Totalement réparée'], span: 6 },
+          ],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Résultats de l’interprétation', en: 'Interpretation results' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          help: 'Groupes de défauts de la norme : chaque ligne devient une indication exploitable.',
+          columns: [
+            { key: 'mark', label: { fr: 'Repère pièce ou soudure', en: 'Mark of part or weld' }, type: 'text', required: true, span: 3 },
+            { key: 'defectGroup', label: { fr: 'Groupe de défaut', en: 'Defect group' }, type: 'enum', required: true, options: ['Aucun', 'Gr. 1 — Fissures', 'Gr. 2 — Cavité', 'Gr. 3 — Inclusions solides', 'Gr. 4 — Manque de fusion et de pénétration', 'Gr. 5 — Défauts de forme et dimensionnels', 'Gr. 6 — Défauts divers'], span: 4 },
+            { key: 'comments', label: { fr: 'Observations', en: 'Comments' }, type: 'text', required: false, span: 3 },
+            { key: 'decision', label: { fr: 'Décision', en: 'Decision' }, type: 'enum', required: true, options: ['Conforme', 'Non conforme'], span: 2 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Photographies', en: 'Photographs' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+        },
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F22 — INTERPRÉTATION DE CLICHÉS RADIOGRAPHIQUES
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F22',
+    version: '00',
+    title: 'Rapport d’interprétation de clichés radiographiques',
+    titleEn: 'Interpretation of radiographs',
+    methodCode: 'RT',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        END_HEADER,
+        {
+          key: 'source',
+          label: { fr: 'Caractéristiques de la source de rayonnement', en: 'Characteristics of radiation source' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'source', label: { fr: 'Source', en: 'Radiation source' }, type: 'enum', required: true, options: ['Ir 192', 'Co 60', 'Rayons X'], span: 3 },
+            { key: 'activity', label: { fr: 'Activité', en: 'Activity' }, type: 'number', required: false, unit: 'Ci', decimals: 2, span: 3 },
+            { key: 'voltage', label: { fr: 'Tension', en: 'Voltage' }, type: 'number', required: false, unit: 'kV', span: 3 },
+            { key: 'current', label: { fr: 'Intensité', en: 'Current' }, type: 'number', required: false, unit: 'mA', decimals: 1, span: 3 },
+            { key: 'equipment', label: { fr: 'Appareil utilisé', en: 'Equipment used' }, type: 'text', required: true, span: 4 },
+            { key: 'focusSize', label: { fr: 'Dimension du foyer', en: 'Focus size' }, type: 'text', required: false, unit: 'mm', span: 4 },
+            { key: 'sourceFilmDistance', label: { fr: 'Distance source-film', en: 'Source-film distance' }, type: 'number', required: true, unit: 'mm', span: 4 },
+            { key: 'exposureTime', label: { fr: 'Temps d’exposition', en: 'Exposure time' }, type: 'text', required: false, span: 4 },
+          ],
+        },
+        {
+          key: 'film',
+          label: { fr: 'Films, écrans, filtres et I.Q.I.', en: 'Film, screens, filters and penetrameters' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'filmBrand', label: { fr: 'Marque du film', en: 'Film manufacturer' }, type: 'enum', required: true, options: ['Agfa', 'Kodak', 'Autre'], span: 3 },
+            { key: 'filmType', label: { fr: 'Type de film', en: 'Film type' }, type: 'enum', required: true, options: ['D4', 'D5', 'D7', 'AA', 'M', 'MX', 'Autre'], span: 3 },
+            { key: 'screenFront', label: { fr: 'Écran plomb antérieur', en: 'Front lead screen' }, type: 'number', required: false, unit: 'mm', decimals: 2, span: 2 },
+            { key: 'screenIntermediate', label: { fr: 'Écran plomb intermédiaire', en: 'Intermediate lead screen' }, type: 'number', required: false, unit: 'mm', decimals: 2, span: 2 },
+            { key: 'screenBack', label: { fr: 'Écran plomb postérieur', en: 'Back lead screen' }, type: 'number', required: false, unit: 'mm', decimals: 2, span: 2 },
+            { key: 'iqiStandard', label: { fr: 'Référentiel I.Q.I.', en: 'IQI standard' }, type: 'enum', required: true, options: ['EN', 'ISO', 'AFNOR', 'ASTM', 'ASME', 'DIN'], span: 3 },
+            { key: 'iqiSize', label: { fr: 'Dimension I.Q.I.', en: 'IQI size' }, type: 'enum', required: false, options: ['10x20', '10x40', 'Autre'], span: 3 },
+            { key: 'filters', label: { fr: 'Filtres', en: 'Filters' }, type: 'text', required: false, span: 6 },
+          ],
+        },
+        {
+          key: 'workpiece',
+          label: { fr: 'Caractéristiques de l’assemblage', en: 'Characteristics of workpiece' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'material', label: { fr: 'Matériau radiographié', en: 'Radiographied base material' }, type: 'text', required: true, span: 3 },
+            { key: 'thickness', label: { fr: 'Épaisseur radiographiée', en: 'Base material thickness' }, type: 'number', required: true, unit: 'mm', decimals: 2, span: 3 },
+            { key: 'processFluid', label: { fr: 'Produit véhiculé', en: 'Process fluid' }, type: 'text', required: false, span: 3 },
+            { key: 'jointType', label: { fr: 'Type d’assemblage', en: 'Workpiece type' }, type: 'enum', required: true, options: ['Tôle', 'Tube', 'Piquage'], span: 3 },
+            { key: 'heatTreatment', label: { fr: 'Stade de contrôle', en: 'Stage of inspection' }, type: 'enum', required: true, options: ['Avant traitement thermique', 'Après traitement thermique'], span: 6 },
+          ],
+        },
+        {
+          key: 'technique',
+          label: { fr: 'Technique de prise de vue', en: 'Radiographic technique' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'wall', label: { fr: 'Paroi', en: 'Wall' }, type: 'enum', required: true, options: ['Simple paroi', 'Double paroi'], span: 6 },
+            { key: 'arrangement', label: { fr: 'Disposition', en: 'Arrangement' }, type: 'enum', required: true, options: ['Source interne', 'Source externe', 'Panoramique', 'Contact', 'Ellipse', 'Plan'], span: 6 },
+          ],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Résultats de l’interprétation', en: 'Results of interpretation' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          help: 'Une ligne par cliché : ajoutez une ligne par défaut relevé sur un même cliché.',
+          columns: [
+            { key: 'mark', label: { fr: 'Repère soudure et film', en: 'Weld and film number' }, type: 'text', required: true, span: 2.5 },
+            { key: 'thickness', label: { fr: 'Épaisseur métal de base', en: 'Base metal thickness' }, type: 'number', required: false, unit: 'mm', decimals: 2, span: 1.5 },
+            { key: 'iqi', label: { fr: 'Ø I.Q.I. trou/fil', en: 'IQI hole/wire' }, type: 'text', required: false, span: 1.5 },
+            { key: 'density', label: { fr: 'Densité moyenne', en: 'Average density' }, type: 'number', required: false, decimals: 2, span: 1.5 },
+            { key: 'defect', label: { fr: 'Défaut relevé', en: 'Defect' }, type: 'enum', required: true, options: ['Aucun', 'Fissures', 'Manque de fusion', 'Manque de pénétration', 'Soufflures', 'Nid de soufflures', 'Retassure', 'Inclusions solides', 'Caniveau', 'Excès de pénétration', 'Défaut d’alignement', 'Mauvaise reprise', 'Défauts divers'], span: 3 },
+            { key: 'decision', label: { fr: 'Décision', en: 'Decision' }, type: 'enum', required: true, options: ['Conforme', 'Acceptable', 'Non acceptable'], span: 2 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Photographies', en: 'Photographs' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+        },
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F26 — ESSAI DE DURETÉ
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F26',
+    version: '00',
+    title: 'Rapport d’essai de dureté',
+    titleEn: 'Hardness test report',
+    methodCode: 'HARD',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        END_HEADER,
+        {
+          key: 'piece',
+          label: { fr: 'Caractéristiques de l’élément contrôlé', en: 'Characteristics of work piece' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'baseMaterial', label: { fr: 'Métal de base', en: 'Base material' }, type: 'text', required: true, span: 3 },
+            { key: 'thickness', label: { fr: 'Épaisseur', en: 'Thickness' }, type: 'number', required: true, unit: 'mm', decimals: 1, span: 3 },
+            { key: 'weldType', label: { fr: 'Type de soudure', en: 'Type of weld' }, type: 'enum', required: false, options: ['BW', 'FW'], span: 2 },
+            { key: 'weldingProcess', label: { fr: 'Procédé de soudage', en: 'Welding process' }, type: 'text', required: false, span: 2 },
+            { key: 'consumable', label: { fr: 'Métal d’apport', en: 'Consumable' }, type: 'text', required: false, span: 2 },
+          ],
+        },
+        {
+          key: 'conditions',
+          label: { fr: 'Conditions d’examen', en: 'Operating conditions' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'surfaceCondition', label: { fr: 'État de surface', en: 'Surface condition' }, type: 'enum', required: true, options: ['Meulée / usinée', 'Polissage', 'Disque abrasif', 'Autre'], span: 6 },
+            { key: 'surfaceTemperature', label: { fr: 'Température de surface', en: 'Surface temperature' }, type: 'number', required: true, unit: '°C', span: 6 },
+          ],
+        },
+        {
+          key: 'tester',
+          label: { fr: 'Caractéristiques du duromètre', en: 'Characteristics of hardness tester' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'brand', label: { fr: 'Marque', en: 'Brand' }, type: 'text', required: true, span: 3 },
+            { key: 'model', label: { fr: 'Type', en: 'Model' }, type: 'text', required: true, span: 3 },
+            { key: 'probe', label: { fr: 'Palpeur', en: 'Probe type' }, type: 'text', required: false, span: 3 },
+            { key: 'scale', label: { fr: 'Échelle', en: 'Scale' }, type: 'enum', required: true, options: ['HB', 'HV', 'HRC', 'HRB'], span: 3 },
+            { key: 'referenceBlock', label: { fr: 'Bloc de référence n°', en: 'Reference block' }, type: 'text', required: false, span: 6 },
+            { key: 'referenceValue', label: { fr: 'Valeur de référence', en: 'Reference value' }, type: 'number', required: false, decimals: 1, span: 6 },
+          ],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Relevé des duretés', en: 'Hardness measurements' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          help: 'Une ligne par point de mesure : zone du dessin de repérage (A à E) et rang du point.',
+          columns: [
+            { key: 'mark', label: { fr: 'Repère pièce ou soudure', en: 'Mark of part or weld' }, type: 'text', required: true, span: 3 },
+            { key: 'zone', label: { fr: 'Zone', en: 'Area' }, type: 'enum', required: true, options: ['A', 'B', 'C', 'D', 'E'], span: 1.5 },
+            { key: 'point', label: { fr: 'Point', en: 'Point' }, type: 'number', required: true, span: 1.5 },
+            { key: 'value', label: { fr: 'Dureté relevée', en: 'Measured hardness' }, type: 'number', required: true, decimals: 1, span: 2 },
+            { key: 'comments', label: { fr: 'Observations', en: 'Comments' }, type: 'text', required: false, span: 2 },
+            { key: 'decision', label: { fr: 'Décision', en: 'Decision' }, type: 'enum', required: true, options: ['Conforme', 'Non conforme'], span: 2 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Dessin de repérage et photographies', en: 'Drawing with numbered areas and photographs' },
           type: 'photos',
           repeatable: true,
           minRows: 0,
