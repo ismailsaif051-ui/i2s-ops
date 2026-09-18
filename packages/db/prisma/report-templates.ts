@@ -9,6 +9,12 @@
  *   PR01-F08  Examen visuel                         → mesures et indications
  *   PR01-F22  Interprétation de clichés radio       → mesures et indications
  *   PR01-F26  Essai de dureté                       → mesures et indications
+ *   PR02-F01  Grue auxiliaire de chargement         → appareil de levage
+ *   PR02-F02  Plate-forme suspendue                 → appareil de levage
+ *   PR02-F03  Chariot à flèche télescopique         → appareil de levage
+ *   PR02-F04  Grue à tour                           → check-list et épreuves
+ *   PR02-F05  Grue mobile                           → appareil de levage
+ *   PR02-F06  Plateforme élévatrice de personnel    → appareil de levage
  *   PR02-F20  Pelle de chargement                   → engin de chantier
  *   PR02-F21  Porte automatique                     → check-list propre
  *   PR02-F23  Niveleuse                             → engin de chantier
@@ -22,8 +28,8 @@
  *   PR02-F40  Vérification périodique pont roulant  → check-list réglementaire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
  *
- * Les six formulaires END du lot L1 sont couverts, ainsi que les rapports de
- * levage et l'ensemble des engins de chantier du lot EILM.
+ * Les six formulaires END du lot L1 sont couverts, ainsi que les appareils de
+ * levage et les engins de chantier du lot EILM.
  *
  * Les autres formulaires du catalogue (`report-forms.ts`) restent en brouillon
  * tant que leur structure n'a pas été relevée : ils classent les rapports sans
@@ -283,16 +289,17 @@ const EILM_CHECKS_HELP = 'SO : sans objet · NA : non appliqué · C : conforme 
 /* ── Vérification générale périodique des engins de chantier ──────── */
 
 /**
- * Les engins de terrassement partagent un en-tête de visite au mot près,
- * quel que soit l'engin. Les textes cités sont ceux de 2018, postérieurs aux
- * arrêtés viziriels qui régissent le levage.
+ * En-tête de visite d'une vérification générale périodique : identique au mot
+ * près sur tous les engins et appareils mobiles. Seuls les textes cités
+ * changent — les engins de chantier relèvent des arrêtés de 2018, les
+ * appareils de levage de l'arrêté viziriel de 1953.
  */
-const ENGIN_CLIENT = {
+const vgpClientSection = (textes: string) => ({
   key: 'client',
   label: { fr: 'Références du client et circonstances de la visite' },
   type: 'keyvalue',
   repeatable: false,
-  help: 'Textes de référence : arrêtés viziriels n° 1281-18 et n° 1282-18 du 15 mars 2018.',
+  help: `Textes de référence : ${textes}`,
   fields: [
     { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
     { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: false, span: 6 },
@@ -302,7 +309,10 @@ const ENGIN_CLIENT = {
     { key: 'date', label: { fr: 'Vérification réalisée le' }, type: 'date', required: true, autofill: 'date', span: 4 },
     { key: 'nextInspection', label: { fr: 'Prochaine vérification' }, type: 'date', required: false, span: 4 },
   ],
-};
+});
+
+const ENGIN_CLIENT = vgpClientSection('arrêtés viziriels n° 1281-18 et n° 1282-18 du 15 mars 2018.');
+const LEVAGE_CLIENT = vgpClientSection('arrêté viziriel du 09 septembre 1953.');
 
 /**
  * Fiche de l'engin : un socle identique d'un modèle à l'autre, complété par
@@ -322,6 +332,68 @@ const enginEquipment = (specifiques: unknown[]) => ({
     { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
   ],
 });
+
+/**
+ * Fiche des appareils de levage mobiles : chariot télescopique, grue mobile et
+ * chariot à mât portent la même, au champ près.
+ */
+const levageMobileEquipment = (uniteCapacite: string) => ({
+  key: 'equipment',
+  label: { fr: 'Identification et caractéristiques de l’équipement' },
+  type: 'keyvalue',
+  repeatable: false,
+  fields: [
+    { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
+    { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+    { key: 'attachment', label: { fr: 'Équipement' }, type: 'text', required: false, span: 6 },
+    { key: 'suspension', label: { fr: 'Suspentes' }, type: 'text', required: false, span: 6 },
+    { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+    { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+    { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
+    // Une capacité en kilogrammes s'exprime en entiers, en tonnes au centième.
+    { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: uniteCapacite, decimals: uniteCapacite === 'kg' ? 0 : 2, span: 4 },
+    { key: 'liftHeight', label: { fr: 'Hauteur maximale du levage' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+    { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+    { key: 'reach', label: { fr: 'Portée maximale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+  ],
+});
+
+/**
+ * Groupe « équipements et mécanismes » des engins portant des fourches :
+ * repris tel quel sur la pelle, le compresseur, le chariot télescopique et la
+ * grue mobile. « État des suspentes » y chapeaute les trois points suivants.
+ */
+const MECANISMES_FOURCHES = {
+  key: 'mechanisms',
+  label: { fr: 'Équipements et mécanismes' },
+  points: [
+    { key: 'electrical-circuit', label: { fr: 'Circuit électrique' } },
+    { key: 'hydraulic-circuit', label: { fr: 'Circuit hydraulique' } },
+    { key: 'suspension-chain', label: { fr: 'État des suspentes — chaîne' } },
+    { key: 'suspension-cable', label: { fr: 'État des suspentes — câble' } },
+    { key: 'suspension-limits', label: { fr: 'État des suspentes — limiteurs de fin de course' } },
+    { key: 'travel-speed', label: { fr: 'Vitesse de déplacement' } },
+    { key: 'braking-circuit', label: { fr: 'Circuit de freinage' } },
+    { key: 'tyres', label: { fr: 'Pneumatiques' } },
+    { key: 'wheels', label: { fr: 'Roues et chenilles' } },
+    { key: 'guarding', label: { fr: 'Capotage' } },
+    { key: 'accessories', label: { fr: 'Accessoires' } },
+    { key: 'forks', label: { fr: 'Fourches' } },
+  ],
+};
+
+/** Translation et direction réunies : même groupe sur les chariots et grues mobiles. */
+const TRANSLATION_DIRECTION = {
+  key: 'travel',
+  label: { fr: 'Mouvement de translation et de direction' },
+  points: [
+    { key: 'travel-mechanisms', label: { fr: 'Mécanismes' } },
+    { key: 'travel-guarding', label: { fr: 'Protection des organes mobiles' } },
+    { key: 'travel-brake', label: { fr: 'Frein du mouvement de translation' } },
+    { key: 'steering-brake', label: { fr: 'Frein du mouvement de direction' } },
+    { key: 'parking-brake', label: { fr: 'Frein de stationnement' } },
+  ],
+};
 
 /** Poste de conduite : mêmes quatre points sur tous les engins. */
 const enginCabine = (supplements: unknown[] = []) => ({
@@ -636,25 +708,7 @@ export const TEMPLATES: TemplateSeed[] = [
             { key: 'nextInspection', label: { fr: 'Prochaine vérification' }, type: 'date', required: false, span: 4 },
           ],
         },
-        {
-          key: 'equipment',
-          label: { fr: 'Identification et caractéristiques de l’équipement' },
-          type: 'keyvalue',
-          repeatable: false,
-          fields: [
-            { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
-            { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
-            { key: 'attachment', label: { fr: 'Équipement' }, type: 'text', required: false, span: 6 },
-            { key: 'suspension', label: { fr: 'Suspentes' }, type: 'text', required: false, span: 6 },
-            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
-            { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
-            { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
-            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
-            { key: 'liftHeight', label: { fr: 'Hauteur maximale du levage' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
-            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
-            { key: 'reach', label: { fr: 'Portée maximale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
-          ],
-        },
+        levageMobileEquipment('kg'),
         {
           key: 'checks',
           label: { fr: 'Examen de l’appareil et de ses équipements' },
@@ -765,25 +819,7 @@ export const TEMPLATES: TemplateSeed[] = [
           { key: 'maxHeight', label: { fr: 'Hauteur maximale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
         ]),
         enginChecks([
-          {
-            key: 'mechanisms',
-            label: { fr: 'Équipements et mécanismes' },
-            points: [
-              { key: 'electrical-circuit', label: { fr: 'Circuit électrique' } },
-              { key: 'hydraulic-circuit', label: { fr: 'Circuit hydraulique' } },
-              // « État des suspentes » chapeaute les trois points suivants.
-              { key: 'suspension-chain', label: { fr: 'État des suspentes — chaîne' } },
-              { key: 'suspension-cable', label: { fr: 'État des suspentes — câble' } },
-              { key: 'suspension-limits', label: { fr: 'État des suspentes — limiteurs de fin de course' } },
-              { key: 'travel-speed', label: { fr: 'Vitesse de déplacement' } },
-              { key: 'braking-circuit', label: { fr: 'Circuit de freinage' } },
-              { key: 'tyres', label: { fr: 'Pneumatiques' } },
-              { key: 'wheels', label: { fr: 'Roues et chenilles' } },
-              { key: 'guarding', label: { fr: 'Capotage' } },
-              { key: 'accessories', label: { fr: 'Accessoires' } },
-              { key: 'forks', label: { fr: 'Fourches' } },
-            ],
-          },
+          MECANISMES_FOURCHES,
           {
             key: 'hoisting',
             label: { fr: 'Système de levage' },
@@ -1003,25 +1039,7 @@ export const TEMPLATES: TemplateSeed[] = [
           { key: 'hourMeter', label: { fr: 'Compteur horaire' }, type: 'number', required: false, unit: 'h', decimals: 0, span: 4 },
         ]),
         enginChecks([
-          {
-            key: 'mechanisms',
-            label: { fr: 'Équipements et mécanismes' },
-            points: [
-              { key: 'electrical-circuit', label: { fr: 'Circuit électrique' } },
-              { key: 'hydraulic-circuit', label: { fr: 'Circuit hydraulique' } },
-              // « État des suspentes » chapeaute les trois points suivants.
-              { key: 'suspension-chain', label: { fr: 'État des suspentes — chaîne' } },
-              { key: 'suspension-cable', label: { fr: 'État des suspentes — câble' } },
-              { key: 'suspension-limits', label: { fr: 'État des suspentes — limiteurs de fin de course' } },
-              { key: 'travel-speed', label: { fr: 'Vitesse de déplacement' } },
-              { key: 'braking-circuit', label: { fr: 'Circuit de freinage' } },
-              { key: 'tyres', label: { fr: 'Pneumatiques' } },
-              { key: 'wheels', label: { fr: 'Roues et chenilles' } },
-              { key: 'guarding', label: { fr: 'Capotage' } },
-              { key: 'accessories', label: { fr: 'Accessoires' } },
-              { key: 'forks', label: { fr: 'Fourches' } },
-            ],
-          },
+          MECANISMES_FOURCHES,
           {
             key: 'hoisting',
             label: { fr: 'Système de levage' },
@@ -1428,6 +1446,553 @@ export const TEMPLATES: TemplateSeed[] = [
                 { key: 'conformity', label: { fr: 'Déclaration de conformité, manuel d’instruction' } },
                 { key: 'device-identification', label: { fr: 'Identification, repère, marquage' }, expected: 'Existe' },
                 { key: 'special-equipment', label: { fr: 'Équipement particulier' } },
+              ],
+            },
+          ],
+        },
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F01 — GRUE AUXILIAIRE DE CHARGEMENT
+   *
+   *  Seul modèle du lot levage dont la colonne des attendus est renseignée de
+   *  façon cohérente et alignée : ses valeurs sont donc reprises, là où les
+   *  autres modèles ne portent que des saisies de terrain.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F01',
+    version: '00',
+    title: 'Rapport de vérification — grue auxiliaire de chargement',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        LEVAGE_CLIENT,
+        {
+          key: 'equipment',
+          label: { fr: 'Identification et caractéristiques de l’équipement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: true, span: 4 },
+            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+            { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+            { key: 'chassisNumber', label: { fr: 'N° de châssis du porteur' }, type: 'text', required: false, span: 4 },
+            { key: 'plate', label: { fr: 'N° d’immatriculation du camion' }, type: 'text', required: false, span: 4 },
+            { key: 'reach', label: { fr: 'Portée maximale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 't', decimals: 2, span: 4 },
+            { key: 'attachment', label: { fr: 'Équipement' }, type: 'text', required: false, span: 4 },
+            { key: 'testLoad', label: { fr: 'Charge d’essais' }, type: 'number', required: false, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+          ],
+        },
+        enginChecks([
+          {
+            key: 'mechanisms',
+            label: { fr: 'Équipements et mécanismes' },
+            points: [
+              { key: 'electrical-circuit', label: { fr: 'Circuit électrique' }, expected: 'Bon état apparent' },
+              { key: 'hydraulic-circuit', label: { fr: 'Circuit hydraulique' }, expected: 'Bon état apparent' },
+              { key: 'seats-fixings', label: { fr: 'Assises et fixations' }, expected: 'Bon état apparent' },
+              { key: 'rolling', label: { fr: 'Organes de roulement (pneumatiques)' }, expected: 'Bon état apparent' },
+              { key: 'stabilisers', label: { fr: 'Stabilisateurs et extensions' }, expected: 'Bon état de fonctionnement' },
+              { key: 'tilt-limiter', label: { fr: 'Limiteur de dévers, indicateur de niveau' }, expected: 'Bon état' },
+              { key: 'visibility', label: { fr: 'Visibilité — vitrage, essuie-glace, rétroviseur' }, expected: 'Correcte' },
+              { key: 'seat', label: { fr: 'Siège' }, expected: 'Correctement fixé' },
+              { key: 'control-identification', label: { fr: 'Identification et état des organes' }, expected: 'Étiquetage sur place' },
+              { key: 'involuntary', label: { fr: 'Protection contre les manœuvres involontaires' }, expected: 'Correcte' },
+              { key: 'start-stop', label: { fr: 'Mise en marche, arrêt normal, sélecteur' }, expected: 'Fonctionne' },
+              { key: 'moving-parts', label: { fr: 'Protection des organes mobiles' }, expected: 'Satisfaisant' },
+            ],
+          },
+          {
+            key: 'hoisting',
+            label: { fr: 'Système de levage et d’orientation' },
+            points: [
+              { key: 'hoist-mechanisms', label: { fr: 'Mécanismes' }, expected: 'Bon fonctionnement' },
+              { key: 'hoist-speed-limit', label: { fr: 'Limitation de vitesse du mouvement de levage' }, expected: 'Fonctionne' },
+              { key: 'slew-brake', label: { fr: 'Frein de service du mouvement d’orientation' }, expected: 'Fonctionne' },
+              { key: 'hoist-brake', label: { fr: 'Frein de service du mouvement de levage' }, expected: 'Fonctionne' },
+              { key: 'slew-limits', label: { fr: 'Limiteurs de course du mouvement d’orientation' }, expected: 'Efficace' },
+              { key: 'parking-brake', label: { fr: 'Frein de stationnement' }, expected: 'Correcte' },
+              { key: 'slew-speed-limit', label: { fr: 'Limiteur de vitesse du mouvement d’orientation' }, expected: 'Fonctionne' },
+              { key: 'lower-limit', label: { fr: 'Limiteur de course bas' }, expected: 'Fonctionne' },
+              { key: 'upper-limit', label: { fr: 'Limiteur de course haut' }, expected: 'Fonctionne' },
+              { key: 'load-limiter', label: { fr: 'Limiteur de charge et de moment' }, expected: 'Fonctionne à 110 % de la CMU' },
+            ],
+          },
+          {
+            key: 'safety',
+            label: { fr: 'Système de sécurité' },
+            points: [
+              { key: 'horn', label: { fr: 'Klaxon' }, expected: 'Fonctionne' },
+              { key: 'beacon', label: { fr: 'Gyrophare' }, expected: 'Fonctionne' },
+              { key: 'signal-lights', label: { fr: 'Feux de signalisation' }, expected: 'En état de fonctionnement' },
+              { key: 'extinguisher', label: { fr: 'Extincteur' }, expected: 'En place' },
+              { key: 'emergency-stop', label: { fr: 'Arrêts d’urgence' }, expected: 'Fonctionne' },
+            ],
+          },
+          {
+            key: 'misc',
+            label: { fr: 'Dispositions diverses' },
+            points: [
+              { key: 'safety-notice', label: { fr: 'Affichage des consignes de sécurité' }, expected: 'Apposée au poste de conduite' },
+              { key: 'load-display', label: { fr: 'Affichage des charges' }, expected: 'Lisible du poste de conduite par le conducteur' },
+              { key: 'manual', label: { fr: 'Notice d’utilisation' }, expected: 'Existe' },
+            ],
+          },
+        ]),
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F02 — PLATE-FORME SUSPENDUE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F02',
+    version: '00',
+    title: 'Rapport d’inspection — plate-forme suspendue',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        LEVAGE_CLIENT,
+        {
+          key: 'equipment',
+          label: { fr: 'Identification et caractéristiques de l’équipement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: true, span: 4 },
+            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+            { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+            { key: 'reach', label: { fr: 'Portée maximale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'travel', label: { fr: 'Course' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'suspension', label: { fr: 'Suspentes' }, type: 'text', required: false, span: 4 },
+            { key: 'testLoad', label: { fr: 'Charge d’essais' }, type: 'number', required: false, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+          ],
+        },
+        enginChecks([
+          {
+            key: 'mechanisms',
+            label: { fr: 'Équipements et mécanismes' },
+            points: [
+              { key: 'electrical-circuit', label: { fr: 'Circuit électrique' } },
+              { key: 'hydraulic-circuit', label: { fr: 'Circuit hydraulique' } },
+              // « État des suspentes » chapeaute les trois points suivants.
+              { key: 'suspension-chain', label: { fr: 'État des suspentes — chaîne' } },
+              { key: 'suspension-cable', label: { fr: 'État des suspentes — câble' } },
+              { key: 'suspension-limits', label: { fr: 'État des suspentes — limiteurs de fin de course' } },
+              { key: 'travel-speed', label: { fr: 'Vitesse de déplacement' } },
+              { key: 'braking-circuit', label: { fr: 'Circuit de freinage' } },
+              { key: 'tyres', label: { fr: 'Pneumatiques' } },
+              { key: 'wheels', label: { fr: 'Roues et chenilles' } },
+              { key: 'guarding', label: { fr: 'Capotage' } },
+              { key: 'accessories', label: { fr: 'Accessoires' } },
+              { key: 'moving-parts', label: { fr: 'Protection des organes en mouvement' } },
+            ],
+          },
+          {
+            key: 'hoisting',
+            label: { fr: 'Système de levage' },
+            points: [
+              { key: 'load-limiter', label: { fr: 'Limiteurs de charge' } },
+              { key: 'hoist-guarding', label: { fr: 'Protection des organes mobiles' } },
+              { key: 'movements', label: { fr: 'Mouvements' } },
+              { key: 'service-brake', label: { fr: 'Frein de service' } },
+              { key: 'course-limits', label: { fr: 'Limiteurs de course' } },
+              { key: 'parking-brake', label: { fr: 'Frein de stationnement' } },
+              { key: 'speed-limiter', label: { fr: 'Limiteur de vitesse' } },
+              { key: 'lower-limit', label: { fr: 'Limiteur de course bas' } },
+              { key: 'upper-limit', label: { fr: 'Limiteur de course haut' } },
+              { key: 'tilt-limit', label: { fr: 'Limitation d’inclinaison' } },
+            ],
+          },
+          ENGIN_SECURITE,
+          {
+            key: 'misc',
+            label: { fr: 'Dispositions diverses' },
+            points: [
+              { key: 'safety-notice', label: { fr: 'Affichage des consignes de sécurité' } },
+              { key: 'load-display', label: { fr: 'Affichage des charges' } },
+              { key: 'manual', label: { fr: 'Notice d’utilisation' } },
+            ],
+          },
+        ]),
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F03 — CHARIOT DE MANUTENTION À FLÈCHE TÉLESCOPIQUE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F03',
+    version: '00',
+    title: 'Rapport de vérification — chariot de manutention à flèche télescopique',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        LEVAGE_CLIENT,
+        levageMobileEquipment('kg'),
+        enginChecks([
+          MECANISMES_FOURCHES,
+          {
+            key: 'hoisting',
+            label: { fr: 'Système de levage' },
+            points: [
+              { key: 'load-limiter', label: { fr: 'Limiteurs de charge' } },
+              { key: 'hoist-guarding', label: { fr: 'Protection des organes mobiles' } },
+              { key: 'movements', label: { fr: 'Mouvements' } },
+              { key: 'service-brake', label: { fr: 'Frein de service' } },
+              { key: 'course-limits', label: { fr: 'Limiteurs de course' } },
+            ],
+          },
+          TRANSLATION_DIRECTION,
+          enginCabine(),
+          ENGIN_SECURITE,
+          {
+            key: 'misc',
+            label: { fr: 'Dispositions diverses' },
+            points: [
+              { key: 'safety-notice', label: { fr: 'Affichage des consignes de sécurité' } },
+              { key: 'load-display', label: { fr: 'Affichage des charges' } },
+            ],
+          },
+        ]),
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F05 — GRUE MOBILE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F05',
+    version: '00',
+    title: 'Rapport de vérification — grue mobile',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        LEVAGE_CLIENT,
+        levageMobileEquipment('t'),
+        enginChecks([
+          MECANISMES_FOURCHES,
+          {
+            key: 'hoisting',
+            label: { fr: 'Système de levage et de relevage' },
+            points: [
+              { key: 'load-limiter', label: { fr: 'Limiteurs de charge' } },
+              { key: 'hoist-guarding', label: { fr: 'Protection des organes mobiles' } },
+              { key: 'movements', label: { fr: 'Mouvements' } },
+              { key: 'service-brake', label: { fr: 'Frein de service' } },
+              { key: 'course-limits', label: { fr: 'Limiteurs de course' } },
+            ],
+          },
+          TRANSLATION_DIRECTION,
+          enginCabine(),
+          ENGIN_SECURITE,
+          {
+            key: 'misc',
+            label: { fr: 'Dispositions diverses' },
+            points: [
+              { key: 'safety-notice', label: { fr: 'Affichage des consignes de sécurité' } },
+              { key: 'load-display', label: { fr: 'Affichage des charges' } },
+            ],
+          },
+        ]),
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F06 — PLATEFORME ÉLÉVATRICE MOBILE DE PERSONNEL
+   *
+   *  La PEMP porte des personnes : sa cabine est examinée pour la retenue du
+   *  conducteur et l'ancrage des EPI, et elle ajoute un poste de sauvetage.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F06',
+    version: '00',
+    title: 'Rapport de vérification — plateforme élévatrice mobile de personnel',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        LEVAGE_CLIENT,
+        {
+          key: 'equipment',
+          label: { fr: 'Identification et caractéristiques de l’équipement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
+            { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+            { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+            { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+            { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
+            { key: 'suspension', label: { fr: 'Suspentes' }, type: 'text', required: false, span: 4 },
+            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'liftHeight', label: { fr: 'Hauteur maximale du levage' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'reach', label: { fr: 'Portée maximale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'testLoad', label: { fr: 'Charge d’essais' }, type: 'number', required: false, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+          ],
+        },
+        enginChecks([
+          {
+            key: 'mechanisms',
+            label: { fr: 'Équipements et mécanismes' },
+            points: [
+              { key: 'electrical-circuit', label: { fr: 'Circuit électrique' } },
+              { key: 'hydraulic-circuit', label: { fr: 'Circuit hydraulique' } },
+              // « État des suspentes » chapeaute les deux points suivants.
+              { key: 'suspension-chain', label: { fr: 'État des suspentes — chaîne' } },
+              { key: 'suspension-cable', label: { fr: 'État des suspentes — câble' } },
+              { key: 'stabilisers', label: { fr: 'État des stabilisateurs' } },
+              { key: 'tilt-limiter', label: { fr: 'Limiteur de dévers' } },
+              { key: 'tyres', label: { fr: 'Pneumatiques' } },
+              { key: 'wheels', label: { fr: 'Roues et chenilles' } },
+              { key: 'chassis-lines', label: { fr: 'Châssis, équipements, canalisations' } },
+            ],
+          },
+          {
+            key: 'hoisting',
+            label: { fr: 'Mouvement de levage' },
+            points: [
+              { key: 'load-limiter', label: { fr: 'Limiteurs de charge' } },
+              { key: 'hoist-guarding', label: { fr: 'Protection des organes mobiles' } },
+              { key: 'movements', label: { fr: 'Mouvements' } },
+              { key: 'service-brake', label: { fr: 'Frein de service' } },
+              { key: 'course-limits', label: { fr: 'Limiteurs de course haut et bas' } },
+            ],
+          },
+          {
+            key: 'travel',
+            label: { fr: 'Mouvement de translation' },
+            points: [
+              { key: 'travel-mechanisms', label: { fr: 'Mécanismes' } },
+              { key: 'travel-guarding', label: { fr: 'Protection des organes mobiles' } },
+              { key: 'travel-brake', label: { fr: 'Frein du mouvement de translation' } },
+              { key: 'speed-limit', label: { fr: 'Limitation de vitesse' } },
+              { key: 'parking-brake', label: { fr: 'Frein de stationnement' } },
+            ],
+          },
+          {
+            key: 'slewing',
+            label: { fr: 'Mouvement d’orientation' },
+            points: [
+              { key: 'slew-mechanisms', label: { fr: 'Mécanismes' } },
+              { key: 'slew-guarding', label: { fr: 'Protection des organes mobiles' } },
+              { key: 'slew-brake', label: { fr: 'Frein du mouvement d’orientation' } },
+              { key: 'slew-limits', label: { fr: 'Limiteurs de course' } },
+            ],
+          },
+          {
+            key: 'cabin',
+            label: { fr: 'Cabine' },
+            points: [
+              { key: 'cabin-access', label: { fr: 'Accès, constitution, planchers' } },
+              { key: 'extinguisher', label: { fr: 'Extincteur' } },
+              { key: 'fall-protection', label: { fr: 'Protection contre la chute de hauteur' } },
+              { key: 'seat', label: { fr: 'Siège du conducteur' } },
+              { key: 'driver-restraint', label: { fr: 'Dispositif de retenue du conducteur' }, expected: 'Point d’ancrage permettant l’accrochage des EPI' },
+            ],
+          },
+          {
+            key: 'safety',
+            label: { fr: 'Système de sécurité' },
+            points: [
+              { key: 'control-identification', label: { fr: 'Identification et état des organes' } },
+              { key: 'start-stop', label: { fr: 'Mise en marche, arrêt normal, sélecteur' } },
+              { key: 'horn', label: { fr: 'Avertisseur sonore ou lumineux' } },
+              { key: 'recovery-station', label: { fr: 'Poste de dépannage' } },
+              { key: 'rescue-station', label: { fr: 'Poste de sauvetage' } },
+              { key: 'emergency-stop', label: { fr: 'Arrêts d’urgence' } },
+            ],
+          },
+          {
+            key: 'misc',
+            label: { fr: 'Dispositions diverses' },
+            points: [
+              { key: 'safety-notice', label: { fr: 'Affichage des consignes de sécurité' } },
+              { key: 'load-display', label: { fr: 'Affichage des charges' } },
+              { key: 'device-identification', label: { fr: 'Identification, repère, marquage' } },
+            ],
+          },
+        ]),
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F04 — GRUE À TOUR
+   *
+   *  Bâtie comme les rapports de pont roulant — une ligne par point, pas de
+   *  groupes numérotés — et exige les épreuves statique et dynamique.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F04',
+    version: '00',
+    title: 'Rapport de vérification — grue à tour',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        LEVAGE_CLIENT,
+        {
+          key: 'equipment',
+          label: { fr: 'Identification et caractéristiques de l’équipement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
+            { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+            { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+            { key: 'ballastMass', label: { fr: 'Masse du lest principal' }, type: 'number', required: false, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'suspension', label: { fr: 'Suspente' }, type: 'text', required: false, span: 4 },
+            { key: 'jibLength', label: { fr: 'Longueur de flèche' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'counterJibLength', label: { fr: 'Longueur de contre-flèche' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation' }, type: 'number', required: true, unit: 't', decimals: 2, span: 4 },
+            { key: 'liftHeight', label: { fr: 'Hauteur de levage sous crochet' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+          ],
+        },
+        {
+          key: 'tests',
+          label: { fr: 'Compte rendu des épreuves' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Épreuve statique majorée de 133 %, épreuve dynamique à 110 % sur tous les mouvements.',
+          columns: [
+            { key: 'kind', label: { fr: 'Nature de l’épreuve' }, type: 'enum', required: true, options: ['Épreuve statique', 'Épreuve dynamique'], span: 3 },
+            { key: 'load', label: { fr: 'Charge appliquée' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 2 },
+            { key: 'reach', label: { fr: 'Portée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 2 },
+            { key: 'height', label: { fr: 'Hauteur' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 1 },
+            { key: 'increase', label: { fr: 'Majoration' }, type: 'number', required: true, unit: '%', decimals: 0, span: 2 },
+            { key: 'testLoad', label: { fr: 'Charge d’essai' }, type: 'number', required: false, unit: 'kg', decimals: 0, span: 2 },
+          ],
+        },
+        {
+          key: 'checks',
+          label: { fr: 'Vérifications et inspections de l’appareil et de ses aménagements' },
+          type: 'checklist',
+          repeatable: false,
+          help: EILM_CHECKS_HELP,
+          groups: [
+            {
+              key: 'installation',
+              label: { fr: 'Installation de l’appareil' },
+              points: [
+                { key: 'strength', label: { fr: 'Résistance aux contraintes — supports, charpente, éléments constitutifs, fixations' } },
+                { key: 'immobilisation', label: { fr: 'Immobilisation de l’appareil à l’arrêt — freinage' } },
+              ],
+            },
+            {
+              key: 'electrical',
+              label: { fr: 'Installations électriques' },
+              points: [
+                { key: 'protection-live', label: { fr: 'Protection contre les contacts directs de l’appareil de levage et des charges avec les conducteurs nus sous tension' } },
+                { key: 'cutoff', label: { fr: 'Dispositifs de coupure — arrêt d’urgence sur l’appareil' } },
+                { key: 'cabin-protection', label: { fr: 'Protection contre les contacts avec les pièces nues sous tension dans la cabine' } },
+                { key: 'earthing', label: { fr: 'Mises à la terre des masses métalliques fixes ou mobiles' } },
+              ],
+            },
+            {
+              key: 'cabin',
+              label: { fr: 'Cabine et moyens d’accès' },
+              points: [
+                { key: 'visibility', label: { fr: 'Visibilité dans la cabine et protection contre les dangers et émanations nuisibles' } },
+                { key: 'floors', label: { fr: 'Constitution des planchers et passerelles — tôles perforées, caillebotis (interstice < 2 cm)' } },
+                { key: 'accessibility', label: { fr: 'Accessibilité de la cabine' } },
+                { key: 'evacuation', label: { fr: 'Moyens d’évacuation en cas de déplacement de la cabine' } },
+                { key: 'heating', label: { fr: 'Chauffage de la cabine pendant les saisons froides' } },
+                { key: 'combustibles', label: { fr: 'Emmagasinage de chiffons, déchets, huiles ou autres matières combustibles dans la cabine' } },
+                { key: 'extinguisher', label: { fr: 'Extincteur d’incendie dans la cabine' } },
+              ],
+            },
+            {
+              key: 'mechanisms',
+              label: { fr: 'Mécanismes, moteurs, chaînes et câbles, limiteurs de course' },
+              points: [
+                { key: 'overhang-parts', label: { fr: 'Fixation et protection des pièces mobiles montées en porte-à-faux (carter, enveloppe métallique)' } },
+                { key: 'falling-objects', label: { fr: 'Protection contre les chutes d’objets et fixation des parties amovibles' } },
+                { key: 'hook-state', label: { fr: 'État du crochet, du moufle d’accrochage, des câbles métalliques, des élingues' } },
+                { key: 'drum-winding', label: { fr: 'Enroulement du câble de levage sur le tambour et rapport d’enroulement' } },
+                { key: 'hoist-brakes', label: { fr: 'Freins des mouvements de levage' } },
+                { key: 'speed-limiter', label: { fr: 'Limiteur de vitesse et contrôle de la descente de la charge' } },
+                { key: 'course-limits', label: { fr: 'Limiteurs de course des mouvements de levage (haut et bas)' } },
+                { key: 'pulleys', label: { fr: 'Protection et dispositif de manœuvre des poulies de mouflage' } },
+                { key: 'oil-leak', label: { fr: 'Fuite d’huile' } },
+              ],
+            },
+            {
+              key: 'slewing',
+              label: { fr: 'Mouvement d’orientation' },
+              points: [
+                { key: 'slew-mechanisms', label: { fr: 'Mécanismes' } },
+                { key: 'slew-guarding', label: { fr: 'Protection des organes mobiles de transmission' } },
+                { key: 'slew-brake', label: { fr: 'Frein de service' } },
+                { key: 'turn-limit', label: { fr: 'Limitation du nombre de tours d’orientation' } },
+                { key: 'weathervane', label: { fr: 'Dispositif de mise en girouette' } },
+                { key: 'drift-plates', label: { fr: 'Plaques de dérive' } },
+              ],
+            },
+            {
+              key: 'misc',
+              label: { fr: 'Dispositions diverses' },
+              points: [
+                { key: 'load-display', label: { fr: 'Affichage des charges sur l’appareil' } },
+                { key: 'safety-notice', label: { fr: 'Consignes de sécurité' } },
+                { key: 'manual', label: { fr: 'Notice d’instruction, déclaration de conformité' } },
+                { key: 'previous-tests', label: { fr: 'Épreuves et essais avant mise ou remise en service' } },
+                { key: 'device-identification', label: { fr: 'Identification et repère de l’appareil' } },
+                { key: 'interference', label: { fr: 'Dispositif d’interférence' } },
+                { key: 'anemometer', label: { fr: 'Anémomètre, conditions météorologiques' } },
+                { key: 'special-equipment', label: { fr: 'Équipement particulier' } },
+                { key: 'signal-lights', label: { fr: 'Feux de signalisation' } },
               ],
             },
           ],
