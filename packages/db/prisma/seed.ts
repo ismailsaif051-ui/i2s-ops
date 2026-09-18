@@ -343,6 +343,10 @@ const METHODS = [
   { code: 'PAINT', name: 'Contrôle peinture et adhérence', dept: 'CND', standards: [] },
   { code: 'WELD', name: 'Qualification soudage (QMOS / QS)', dept: 'CND', standards: ['ASME IX'] },
   { code: 'LIFT', name: 'Vérification des appareils et accessoires de levage', dept: 'EILM', standards: ['Arrêté viziriel du 09/09/1953'] },
+  // Les engins de chantier ne relèvent pas de l'arrêté viziriel de 1953 sur le
+  // levage, mais des arrêtés de 2018 : les ranger sous LIFT ferait citer le
+  // mauvais texte réglementaire au bas de chaque rapport.
+  { code: 'MACHINE', name: 'Vérification générale périodique des engins et machines de chantier', dept: 'EILM', standards: ['Arrêté viziriel n° 1281-18 du 15/03/2018', 'Arrêté viziriel n° 1282-18 du 15/03/2018'] },
   { code: 'ELEC', name: 'Vérification des installations électriques', dept: 'EILM', standards: [] },
   { code: 'THERMO', name: 'Thermographie infrarouge', dept: 'EILM', standards: [] },
   { code: 'FIRE', name: 'Prévention incendie', dept: 'EILM', standards: [] },
@@ -533,11 +537,23 @@ async function main() {
   // ne proposerait aucun formulaire saisissable. Le versionnement reste
   // immuable — republier crée une version, ne modifie jamais un rapport émis.
   for (const template of REPORT_TEMPLATES) {
+    // Une méthode absente du référentiel rattacherait le modèle à rien : le
+    // rapport citerait alors le mauvais texte réglementaire, ou aucun.
+    const methodId = methodIds.get(template.methodCode);
+    if (!methodId) {
+      throw new Error(
+        `${template.formCode} référence la méthode « ${template.methodCode} », absente du référentiel.`,
+      );
+    }
+
     await prisma.inspectionTemplate.upsert({
       where: { formCode_version: { formCode: template.formCode, version: template.version } },
       update: {
         title: template.title,
         titleEn: template.titleEn ?? null,
+        // La méthode se met à jour comme le reste : sans cela, un modèle
+        // reclassé garderait à jamais la méthode de sa première publication.
+        methodId,
         paradigm: template.paradigm,
         schema: template.schema as never,
         status: 'PUBLISHED',
@@ -547,7 +563,7 @@ async function main() {
         version: template.version,
         title: template.title,
         titleEn: template.titleEn ?? null,
-        methodId: methodIds.get(template.methodCode) ?? null,
+        methodId,
         paradigm: template.paradigm,
         applicationDate: new Date(template.applicationDate),
         status: 'PUBLISHED',
