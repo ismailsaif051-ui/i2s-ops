@@ -94,14 +94,14 @@ export const REPORT_FORMS: ReportForm[] = [
   eilm('PR02-F32', 'Rapport EIL', null),
   eilm('PR02-F33', 'Contrôle du système de protection cathodique', null),
   eilm('PR02-F34', 'Vérification avant mise en service d’ascenseur ou de monte-charge', 'LIFT'),
-  eilm('PR02-F35', 'Vérification de stop-chute', null),
+  eilm('PR02-F35', 'Vérification de stop-chute', 'HEIGHT'),
   eilm('PR02-F36', 'Certificat annuel de vérification d’installation électrique', 'ELEC'),
   eilm('PR02-F37', 'Mise en service de palonnier', 'LIFT'),
   eilm('PR02-F38', 'Vérification périodique de chariot de manutention à mât', 'LIFT'),
   eilm('PR02-F39', 'Vérification de mise ou remise en service de pont ou portique', 'LIFT'),
   eilm('PR02-F40', 'Rapport de vérification périodique — pont roulant ou portique', 'LIFT'),
-  eilm('PR02-F41', 'Vérification de vérin hydraulique', null),
-  eilm('PR02-F42', 'Vérification de centrale hydraulique', null),
+  eilm('PR02-F41', 'Vérification de vérin hydraulique', 'LIFT'),
+  eilm('PR02-F42', 'Vérification de centrale hydraulique', 'LIFT'),
 
   /* ── PR03 — Contrôle technique de construction ──────────────────── */
   { formCode: 'PR03-F01', title: 'Rapport de contrôle technique de construction', dept: 'CTC', methodCode: 'CTC', paradigm: 'CRITERIA' },

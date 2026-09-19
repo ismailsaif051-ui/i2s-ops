@@ -347,6 +347,9 @@ const METHODS = [
   // levage, mais des arrêtés de 2018 : les ranger sous LIFT ferait citer le
   // mauvais texte réglementaire au bas de chaque rapport.
   { code: 'MACHINE', name: 'Vérification générale périodique des engins et machines de chantier', dept: 'EILM', standards: ['Arrêté viziriel n° 1281-18 du 15/03/2018', 'Arrêté viziriel n° 1282-18 du 15/03/2018'] },
+  // Lignes de vie, échafaudages et antichutes relèvent de normes produit
+  // (EN 795, EN 360, EN 1004, EN 12811) et non de l'arrêté sur le levage.
+  { code: 'HEIGHT', name: 'Vérification des équipements de travail en hauteur', dept: 'EILM', standards: ['Arrêté viziriel du 02/04/1952', 'NF EN 795', 'EN 360', 'NF EN 1004', 'NF EN 12811-1', 'NF P 93-353'] },
   { code: 'ELEC', name: 'Vérification des installations électriques', dept: 'EILM', standards: [] },
   { code: 'THERMO', name: 'Thermographie infrarouge', dept: 'EILM', standards: [] },
   { code: 'FIRE', name: 'Prévention incendie', dept: 'EILM', standards: [] },

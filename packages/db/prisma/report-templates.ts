@@ -15,6 +15,11 @@
  *   PR02-F04  Grue à tour                           → check-list et épreuves
  *   PR02-F05  Grue mobile                           → appareil de levage
  *   PR02-F06  Plateforme élévatrice de personnel    → appareil de levage
+ *   PR02-F07  Harnais de sécurité                   → accessoire à check-list
+ *   PR02-F08  Palan à levier                        → accessoire
+ *   PR02-F09  Élingue                               → accessoire
+ *   PR02-F10  Manille                               → accessoire
+ *   PR02-F11  Treuil manuel de levage               → accessoire
  *   PR02-F20  Pelle de chargement                   → engin de chantier
  *   PR02-F21  Porte automatique                     → check-list propre
  *   PR02-F23  Niveleuse                             → engin de chantier
@@ -23,9 +28,12 @@
  *   PR02-F26  Compacteur mobile                     → engin de chantier
  *   PR02-F27  Groupe électrogène                    → liste continue
  *   PR02-F28  Bétonnière                            → engin de chantier
+ *   PR02-F35  Stop-chute                            → accessoire
  *   PR02-F38  Chariot de manutention à mât          → check-list réglementaire
  *   PR02-F39  Mise en service pont roulant          → check-list et épreuves
  *   PR02-F40  Vérification périodique pont roulant  → check-list réglementaire
+ *   PR02-F41  Vérin hydraulique                     → accessoire
+ *   PR02-F42  Centrale hydraulique                  → accessoire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
  *
  * Les six formulaires END du lot L1 sont couverts, ainsi que les appareils de
@@ -437,6 +445,58 @@ const enginChecks = (groups: unknown[]) => ({
   help: EILM_CHECKS_HELP,
   groups,
 });
+
+/* ── Accessoires de levage et équipements simples ─────────────────── */
+
+/**
+ * « Références client » des accessoires : plus court que l'en-tête des
+ * appareils, il ajoute la ville et l'interlocuteur rencontré sur place. Le
+ * harnais seul ne demande pas d'interlocuteur.
+ */
+const accessoireClient = (textes: string, interlocuteur = true) => ({
+  key: 'client',
+  label: { fr: 'Références client' },
+  type: 'keyvalue',
+  repeatable: false,
+  help: `Référence réglementaire : ${textes}`,
+  fields: [
+    { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+    { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: false, span: 6 },
+    { key: 'city', label: { fr: 'Ville' }, type: 'text', required: false, span: 4 },
+    { key: 'nature', label: { fr: 'Nature de la vérification' }, type: 'enum', required: true, options: ['Vérification générale périodique', 'Mise en service', 'Remise en service'], span: 4 },
+    { key: 'location', label: { fr: 'Lieu d’intervention' }, type: 'ref', required: true, autofill: 'site', span: 4 },
+    ...(interlocuteur
+      ? [{ key: 'contact', label: { fr: 'Interlocuteur sur place' }, type: 'text', required: false, span: 4 }]
+      : []),
+    { key: 'date', label: { fr: 'Date de la vérification' }, type: 'date', required: true, autofill: 'date', span: 4 },
+    { key: 'nextInspection', label: { fr: 'Prochaine vérification' }, type: 'date', required: false, span: 4 },
+  ],
+});
+
+const ARRETE_1953_CODE_TRAVAIL =
+  'Arrêté viziriel du 09/09/1953, Code du travail marocain, art. 281 et 282 (maintien en état des équipements).';
+const CODE_TRAVAIL = 'Code du travail marocain, art. 281 et 282 (maintien en état des équipements).';
+
+/** Fiche d'un accessoire : désignation imprimée au modèle, puis ses caractéristiques. */
+const accessoireEquipment = (champs: unknown[]) => ({
+  key: 'equipment',
+  label: { fr: 'Identification de l’équipement' },
+  type: 'keyvalue',
+  repeatable: false,
+  fields: [
+    { key: 'designation', label: { fr: 'Désignation' }, type: 'textarea', required: true, span: 12 },
+    ...champs,
+    { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+  ],
+});
+
+/**
+ * Les modèles d'accessoires n'ont qu'un cadre libre « Observations et
+ * conclusion ». La conclusion y est structurée avec les trois issues
+ * réglementaires, comme sur les appareils : sans cela, un accessoire inapte
+ * ne serait repérable qu'en relisant le texte de chaque rapport.
+ */
+const ACCESSOIRE_FIN = [EILM_OBSERVATIONS, EILM_CONCLUSION, EILM_PHOTOS, EILM_VISAS];
 
 /**
  * En-tête de visite pont roulant. Seuls les textes réglementaires cités
@@ -2001,6 +2061,284 @@ export const TEMPLATES: TemplateSeed[] = [
         EILM_CONCLUSION,
         EILM_PHOTOS,
         EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F07 — HARNAIS DE SÉCURITÉ
+   *
+   *  Seul accessoire à check-list : un point par boucle, anneau ou sangle.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F07',
+    version: '00',
+    title: 'Rapport de vérification — harnais de sécurité',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(ARRETE_1953_CODE_TRAVAIL, false),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
+          { key: 'serialNumber', label: { fr: 'Numéro de série' }, type: 'text', required: true, span: 4 },
+          { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+          { key: 'strap', label: { fr: 'Sangle' }, type: 'text', required: false, span: 4 },
+          { key: 'colour', label: { fr: 'Couleur' }, type: 'text', required: false, span: 4 },
+          { key: 'size', label: { fr: 'Taille' }, type: 'text', required: false, span: 4 },
+        ]),
+        {
+          key: 'checks',
+          label: { fr: 'Vérification et inspection' },
+          type: 'checklist',
+          repeatable: false,
+          help: EILM_CHECKS_HELP,
+          groups: [
+            {
+              key: 'harness',
+              label: { fr: 'Éléments du harnais' },
+              points: [
+                { key: 'label', label: { fr: 'Étiquette' } },
+                { key: 'dorsal-ring', label: { fr: 'Anneau dorsal' } },
+                { key: 'dissipator', label: { fr: 'Plaque dissipatrice' } },
+                { key: 'chest-buckle', label: { fr: 'Boucle de poitrine' } },
+                { key: 'right-shoulder', label: { fr: 'Boucle de bretelle droite' } },
+                { key: 'left-shoulder', label: { fr: 'Boucle de bretelle gauche' } },
+                { key: 'belt', label: { fr: 'Ceinture et ardillons' } },
+                { key: 'right-thigh', label: { fr: 'Boucle de cuisse droite' } },
+                { key: 'left-thigh', label: { fr: 'Boucle de cuisse gauche' } },
+                { key: 'holding-buckle', label: { fr: 'Boucle de maintien' } },
+                { key: 'positioning-ring', label: { fr: 'Anneau de positionnement' } },
+              ],
+            },
+          ],
+        },
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F08 — PALAN À LEVIER
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F08',
+    version: '00',
+    title: 'Rapport de vérification — palan à levier',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(ARRETE_1953_CODE_TRAVAIL),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+          { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
+          { key: 'suspensionType', label: { fr: 'Type de suspente du levage' }, type: 'text', required: false, span: 4 },
+          { key: 'capacity', label: { fr: 'Charge maximale d’utilisation (CMU)' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+          { key: 'suspensionDiameter', label: { fr: 'Diamètre de suspente' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 4 },
+        ]),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F09 — ÉLINGUE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F09',
+    version: '00',
+    title: 'Rapport de vérification — élingue',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(ARRETE_1953_CODE_TRAVAIL),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'serialNumber', label: { fr: 'Numéro de série' }, type: 'text', required: false, span: 4 },
+          { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+          { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+          { key: 'capacity', label: { fr: 'CMU' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+          { key: 'chains', label: { fr: 'Chaînes' }, type: 'text', required: false, span: 4 },
+        ]),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F10 — MANILLE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F10',
+    version: '00',
+    title: 'Rapport de vérification — manille',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(ARRETE_1953_CODE_TRAVAIL),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
+          { key: 'serialNumber', label: { fr: 'Numéro de série' }, type: 'text', required: false, span: 4 },
+          { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+          { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+          { key: 'capacity', label: { fr: 'CMU' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+        ]),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F11 — TREUIL MANUEL DE LEVAGE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F11',
+    version: '00',
+    title: 'Rapport d’inspection — treuil manuel de levage',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(ARRETE_1953_CODE_TRAVAIL),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'serialNumber', label: { fr: 'Numéro de série' }, type: 'text', required: true, span: 4 },
+          { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
+          { key: 'pullForce', label: { fr: 'Force de traction' }, type: 'number', required: false, unit: 'daN', decimals: 0, span: 4 },
+          { key: 'capacity', label: { fr: 'Charge maximale d’utilisation (CMU)' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+          { key: 'cableDiameter', label: { fr: 'Diamètre du câble' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 4 },
+          { key: 'mass', label: { fr: 'Masse du treuil' }, type: 'number', required: false, unit: 'kg', decimals: 0, span: 4 },
+          { key: 'cableLength', label: { fr: 'Longueur du câble de levage' }, type: 'number', required: false, unit: 'm', decimals: 1, span: 4 },
+        ]),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F41 — VÉRIN HYDRAULIQUE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F41',
+    version: '00',
+    title: 'Rapport de vérification — vérin hydraulique',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(ARRETE_1953_CODE_TRAVAIL),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+          { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+          { key: 'capacity', label: { fr: 'CMU' }, type: 'number', required: true, unit: 't', decimals: 2, span: 4 },
+          { key: 'rodDiameter', label: { fr: 'Diamètre de tige' }, type: 'number', required: false, unit: 'mm', decimals: 0, span: 4 },
+        ]),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F42 — CENTRALE HYDRAULIQUE
+   *
+   *  Rangée avec le levage parce qu'elle alimente les vérins du F41, bâti
+   *  sur le même modèle ; son rapport ne cite pourtant que le Code du travail.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F42',
+    version: '00',
+    title: 'Rapport de vérification — centrale hydraulique',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(CODE_TRAVAIL),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+          { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+          { key: 'maxPressure', label: { fr: 'Pression maximale' }, type: 'number', required: false, unit: 'bar', decimals: 0, span: 4 },
+          { key: 'tankCapacity', label: { fr: 'Capacité du réservoir' }, type: 'number', required: false, unit: 'L', decimals: 0, span: 4 },
+          { key: 'motorPower', label: { fr: 'Puissance du moteur' }, type: 'number', required: false, unit: 'kW', decimals: 1, span: 4 },
+        ]),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F35 — STOP-CHUTE
+   *
+   *  Visé par le seul chef du service EILM, « fait à Mohammedia », et non
+   *  par le binôme inspecteur / direction des autres rapports.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F35',
+    version: '00',
+    title: 'Rapport de vérification — stop-chute',
+    methodCode: 'HEIGHT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'client',
+          label: { fr: 'Références client' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'Référence réglementaire : Code du travail marocain, art. 281 et 282 (maintien en état des équipements) ; EN 360.',
+          fields: [
+            { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: false, span: 6 },
+            { key: 'location', label: { fr: 'Lieu d’intervention' }, type: 'ref', required: true, autofill: 'site', span: 6 },
+            { key: 'inspector', label: { fr: 'Inspecteur chargé de mission' }, type: 'ref', required: true, autofill: 'inspector', span: 6 },
+            { key: 'nature', label: { fr: 'Nature de la vérification' }, type: 'enum', required: true, options: ['Vérification générale périodique', 'Mise en service', 'Remise en service'], span: 6 },
+            { key: 'contact', label: { fr: 'Interlocuteur sur place' }, type: 'text', required: false, span: 6 },
+            { key: 'date', label: { fr: 'Date de la vérification' }, type: 'date', required: true, autofill: 'date', span: 6 },
+            { key: 'nextInspection', label: { fr: 'Prochaine vérification' }, type: 'date', required: false, span: 6 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Identification de l’équipement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'placement', label: { fr: 'Implantation' }, type: 'text', required: false, span: 6 },
+            { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+            { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+            { key: 'serialNumber', label: { fr: 'Numéro de série' }, type: 'text', required: true, span: 4 },
+            { key: 'capacity', label: { fr: 'Capacité maximale d’utilisation (CMU)' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'cableDiameter', label: { fr: 'Diamètre du câble' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 4 },
+            { key: 'cableLength', label: { fr: 'Longueur du câble' }, type: 'number', required: false, unit: 'm', decimals: 1, span: 4 },
+          ],
+        },
+        EILM_OBSERVATIONS,
+        EILM_CONCLUSION,
+        EILM_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visa' },
+          type: 'signature-matrix',
+          repeatable: false,
+          help: 'Fait à Mohammedia.',
+          signatories: [{ fr: 'Chef du service EILM' }],
+        },
       ],
     },
   },
