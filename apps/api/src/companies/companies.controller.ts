@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { createDepartmentSchema } from '@i2s/contracts';
+import { createDepartmentSchema, departmentOfForm } from '@i2s/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser, RequirePermission } from '../common/decorators';
@@ -146,7 +146,9 @@ export class CompaniesController {
           status: t.status,
           applicationDate: t.applicationDate,
           method: t.method,
-          department: t.method?.department?.code ?? null,
+          // Le code QMS fait foi : un formulaire sans méthode reste rangé
+          // dans son service au lieu de tomber dans « sans service ».
+          department: t.method?.department?.code ?? departmentOfForm(t.formCode),
           sectionCount: sections.length,
           usageCount: t._count.inspections,
         };

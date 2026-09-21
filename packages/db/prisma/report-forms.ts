@@ -91,7 +91,7 @@ export const REPORT_FORMS: ReportForm[] = [
   eilm('PR02-F26', 'Vérification de compacteur mobile', 'MACHINE'),
   eilm('PR02-F27', 'Vérification de groupe électrogène', 'ELEC'),
   eilm('PR02-F28', 'Vérification de bétonnière', 'MACHINE'),
-  eilm('PR02-F32', 'Rapport EIL', null),
+  eilm('PR02-F32', 'Rapport EIL', null, 'CRITERIA'),
   eilm('PR02-F33', 'Contrôle du système de protection cathodique', 'ELEC', 'MEASUREMENT'),
   eilm('PR02-F34', 'Vérification avant mise en service d’ascenseur ou de monte-charge', 'LIFT'),
   eilm('PR02-F35', 'Vérification de stop-chute', 'HEIGHT'),
@@ -107,11 +107,3 @@ export const REPORT_FORMS: ReportForm[] = [
   { formCode: 'PR03-F01', title: 'Rapport de contrôle technique de construction', dept: 'CTC', methodCode: 'CTC', paradigm: 'CRITERIA' },
   { formCode: 'PR03-F02', title: 'Rapport sur notice de sécurité incendie', dept: 'CTC', methodCode: 'CTC', paradigm: 'CRITERIA' },
 ];
-
-/** Le service d'un modèle se lit dans son code QMS : PR01 CND, PR02 EILM, PR03 CTC. */
-export function deptOfForm(formCode: string): 'CND' | 'EILM' | 'CTC' | null {
-  if (formCode.startsWith('PR01')) return 'CND';
-  if (formCode.startsWith('PR02')) return 'EILM';
-  if (formCode.startsWith('PR03')) return 'CTC';
-  return null;
-}

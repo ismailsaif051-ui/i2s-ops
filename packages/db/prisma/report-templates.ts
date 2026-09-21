@@ -37,6 +37,7 @@
  *   PR02-F26  Compacteur mobile                     → engin de chantier
  *   PR02-F27  Groupe électrogène                    → liste continue
  *   PR02-F28  Bétonnière                            → engin de chantier
+ *   PR02-F32  Compte rendu d’examen EIL             → avis codifiés
  *   PR02-F33  Protection cathodique                 → mesures de potentiels
  *   PR02-F34  Mise en service d’ascenseur           → constatations et essais
  *   PR02-F35  Stop-chute                            → accessoire
@@ -49,8 +50,8 @@
  *   PR02-F42  Centrale hydraulique                  → accessoire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
  *
- * Les six formulaires END du lot L1 sont couverts, ainsi que les appareils de
- * levage et les engins de chantier du lot EILM.
+ * Les six formulaires END du lot L1 sont couverts, ainsi que l’ensemble des
+ * formulaires EILM.
  *
  * Les autres formulaires du catalogue (`report-forms.ts`) restent en brouillon
  * tant que leur structure n'a pas été relevée : ils classent les rapports sans
@@ -66,7 +67,8 @@ export interface TemplateSeed {
   version: string;
   title: string;
   titleEn?: string;
-  methodCode: string;
+  /** Absente pour un compte rendu général qui ne relève d'aucune méthode d'inspection. */
+  methodCode: string | null;
   paradigm: 'MEASUREMENT' | 'CHECKLIST' | 'CRITERIA';
   applicationDate: string;
   schema: unknown;
@@ -3898,6 +3900,67 @@ export const TEMPLATES: TemplateSeed[] = [
           help: 'Fait à Mohammedia.',
           signatories: [{ fr: 'Chef du service EILM' }],
         },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F32 — COMPTE RENDU D'EXAMEN EIL
+   *
+   *  Formulaire général du service, sans méthode propre : compte rendu de
+   *  visite, rapport d'examen ou de réception d'ouvrages, avec un avis
+   *  codifié par ouvrage ou document examiné — même logique d'avis que le
+   *  contrôle technique de construction.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F32',
+    version: '00',
+    title: 'Compte rendu d’examen EIL',
+    methodCode: null,
+    paradigm: 'CRITERIA',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Compte rendu d’examen' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'kind', label: { fr: 'Nature du document' }, type: 'enum', required: true, options: ['Compte rendu de visite', 'Rapport d’examen', 'Rapport de réception des ouvrages'], span: 6 },
+            { key: 'reference', label: { fr: 'Référence' }, type: 'text', required: false, span: 6 },
+            { key: 'affairNumber', label: { fr: 'N° d’affaire' }, type: 'ref', required: true, autofill: 'affairNumber', span: 3 },
+            { key: 'date', label: { fr: 'Date' }, type: 'date', required: true, autofill: 'date', span: 3 },
+            { key: 'number', label: { fr: 'N°' }, type: 'text', required: false, span: 3 },
+            { key: 'phase', label: { fr: 'Phase' }, type: 'text', required: false, span: 3 },
+            { key: 'affair', label: { fr: 'Affaire' }, type: 'text', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'documents',
+          label: { fr: 'Documents, ouvrages ou parties d’ouvrage examinés' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'documents', label: { fr: 'Documents examinés' }, type: 'textarea', required: true, span: 12 },
+          ],
+        },
+        {
+          key: 'opinions',
+          label: { fr: 'Avis du bureau de contrôle' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'F : favorable · D : défavorable · S : suspendu · SO : sans objet · C : conforme · NC : non conforme · PM : pour mémoire. Les observations peuvent aussi être rédigées librement.',
+          columns: [
+            { key: 'subject', label: { fr: 'Ouvrage, partie d’ouvrage ou document' }, type: 'text', required: true, span: 4 },
+            { key: 'opinion', label: { fr: 'Avis' }, type: 'enum', required: true, options: ['F', 'D', 'S', 'SO', 'C', 'NC', 'PM'], span: 2 },
+            { key: 'comment', label: { fr: 'Observation' }, type: 'text', required: false, span: 6 },
+          ],
+        },
+        EILM_OBSERVATIONS,
+        EILM_PHOTOS,
+        EILM_VISAS,
       ],
     },
   },

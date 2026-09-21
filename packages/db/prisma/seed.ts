@@ -555,8 +555,10 @@ async function main() {
 
     // Une méthode absente du référentiel rattacherait le modèle à rien : le
     // rapport citerait alors le mauvais texte réglementaire, ou aucun.
-    const methodId = methodIds.get(template.methodCode);
-    if (!methodId) {
+    // Sans méthode déclarée, le formulaire n'en a pas ; une méthode déclarée
+    // mais inconnue est en revanche une erreur.
+    const methodId = template.methodCode ? (methodIds.get(template.methodCode) ?? null) : null;
+    if (template.methodCode && !methodId) {
       throw new Error(
         `${template.formCode} référence la méthode « ${template.methodCode} », absente du référentiel.`,
       );

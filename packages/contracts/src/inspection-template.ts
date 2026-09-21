@@ -160,6 +160,18 @@ export const templateSchemaSchema = z.object({
 });
 export type TemplateSchema = z.infer<typeof templateSchemaSchema>;
 
+/**
+ * Le service d'un formulaire se lit dans son code QMS : PR01 CND, PR02 EILM,
+ * PR03 CTC. Il ne dépend donc pas de la méthode, qu'un compte rendu général
+ * peut ne pas avoir.
+ */
+export function departmentOfForm(formCode: string): 'CND' | 'EILM' | 'CTC' | null {
+  if (formCode.startsWith('PR01')) return 'CND';
+  if (formCode.startsWith('PR02')) return 'EILM';
+  if (formCode.startsWith('PR03')) return 'CTC';
+  return null;
+}
+
 export const TEMPLATE_STATUSES = ['DRAFT', 'PUBLISHED', 'SUPERSEDED'] as const;
 export type TemplateStatus = (typeof TEMPLATE_STATUSES)[number];
 

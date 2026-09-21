@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import {
   CHECK_DECISIONS,
+  departmentOfForm,
   DISTRIBUTION_CHANNELS,
   REPORT_CHECK_CRITERIA,
   REPORT_STATUSES,
@@ -41,14 +42,6 @@ const listSchema = z.object({
   late: z.preprocess(blank, z.enum(['1']).optional()),
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
-
-/** Le service d'un modèle se lit dans son code QMS : PR01 CND, PR02 EILM, PR03 CTC. */
-function deptOfForm(formCode: string): string | null {
-  if (formCode.startsWith('PR01')) return 'CND';
-  if (formCode.startsWith('PR02')) return 'EILM';
-  if (formCode.startsWith('PR03')) return 'CTC';
-  return null;
-}
 
 function startOfDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -209,7 +202,7 @@ class ReportsController {
               id: r.template.id,
               formCode: r.template.formCode,
               title: r.template.title,
-              department: deptOfForm(r.template.formCode),
+              department: departmentOfForm(r.template.formCode),
             }
           : null,
         affair: { number: r.affair.number, title: r.affair.title },
@@ -264,7 +257,7 @@ class ReportsController {
       if (r.template) {
         const t = templates.get(r.template.id) ?? {
           ...r.template,
-          department: deptOfForm(r.template.formCode),
+          department: departmentOfForm(r.template.formCode),
           count: 0,
         };
         t.count += 1;
