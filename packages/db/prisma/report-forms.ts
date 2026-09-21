@@ -92,7 +92,7 @@ export const REPORT_FORMS: ReportForm[] = [
   eilm('PR02-F27', 'Vérification de groupe électrogène', 'ELEC'),
   eilm('PR02-F28', 'Vérification de bétonnière', 'MACHINE'),
   eilm('PR02-F32', 'Rapport EIL', null),
-  eilm('PR02-F33', 'Contrôle du système de protection cathodique', null),
+  eilm('PR02-F33', 'Contrôle du système de protection cathodique', 'ELEC', 'MEASUREMENT'),
   eilm('PR02-F34', 'Vérification avant mise en service d’ascenseur ou de monte-charge', 'LIFT'),
   eilm('PR02-F35', 'Vérification de stop-chute', 'HEIGHT'),
   eilm('PR02-F36', 'Certificat annuel de vérification d’installation électrique', 'ELEC'),

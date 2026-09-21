@@ -20,6 +20,7 @@
  *   PR02-F09  Élingue                               → accessoire
  *   PR02-F10  Manille                               → accessoire
  *   PR02-F11  Treuil manuel de levage               → accessoire
+ *   PR02-F13  Thermographie infrarouge              → mesures et fiches d’anomalie
  *   PR02-F15  Mise en service de ligne de vie       → compte rendu et essai
  *   PR02-F16  Échafaudage roulant                   → échafaudage
  *   PR02-F17  Ligne de vie                          → travail en hauteur
@@ -27,13 +28,17 @@
  *   PR02-F19  Échafaudage fixe                      → échafaudage
  *   PR02-F20  Pelle de chargement                   → engin de chantier
  *   PR02-F21  Porte automatique                     → check-list propre
+ *   PR02-F22  Poste de soudure                      → accessoire
  *   PR02-F23  Niveleuse                             → engin de chantier
  *   PR02-F24  Machine mobile de forage              → engin de chantier
  *   PR02-F25  Compresseur mobile                    → engin de chantier
  *   PR02-F26  Compacteur mobile                     → engin de chantier
  *   PR02-F27  Groupe électrogène                    → liste continue
  *   PR02-F28  Bétonnière                            → engin de chantier
+ *   PR02-F33  Protection cathodique                 → mesures de potentiels
  *   PR02-F35  Stop-chute                            → accessoire
+ *   PR02-F36  Certificat d’installation électrique  → attestation
+ *   PR02-F37  Mise en service de palonnier          → essai statique
  *   PR02-F38  Chariot de manutention à mât          → check-list réglementaire
  *   PR02-F39  Mise en service pont roulant          → check-list et épreuves
  *   PR02-F40  Vérification périodique pont roulant  → check-list réglementaire
@@ -2737,6 +2742,382 @@ export const TEMPLATES: TemplateSeed[] = [
         EILM_OBSERVATIONS,
         EILM_PHOTOS,
         EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F13 — THERMOGRAPHIE INFRAROUGE DES ARMOIRES ÉLECTRIQUES
+   *
+   *  Seul rapport EILM à mesures : l'inventaire des armoires contrôlées
+   *  (annexe I), puis une fiche par anomalie (annexe II) avec les
+   *  températures relevées et la classe de défaut qui en découle. Le
+   *  rapport est consultatif et distinct de la vérification réglementaire
+   *  des installations électriques (F14).
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F13',
+    version: '00',
+    title: 'Rapport de thermographie infrarouge des armoires électriques',
+    methodCode: 'THERMO',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Références de la visite' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'client', label: { fr: 'Client' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'clientAddress', label: { fr: 'Adresse du client' }, type: 'text', required: false, span: 6 },
+            { key: 'object', label: { fr: 'Objet' }, type: 'text', required: false, span: 6 },
+            { key: 'orderNumber', label: { fr: 'Commande n°' }, type: 'text', required: false, span: 6 },
+            { key: 'date', label: { fr: 'Date de visite' }, type: 'date', required: true, autofill: 'date', span: 4 },
+            { key: 'location', label: { fr: 'Lieu d’intervention' }, type: 'ref', required: true, autofill: 'site', span: 4 },
+            { key: 'inspector', label: { fr: 'Visite effectuée par' }, type: 'ref', required: true, autofill: 'inspector', span: 4 },
+            { key: 'accompaniedBy', label: { fr: 'Accompagné par' }, type: 'text', required: false, span: 6 },
+            { key: 'periodicity', label: { fr: 'Périodicité retenue' }, type: 'enum', required: true, options: ['Annuelle', 'Ponctuelle', 'Autre'], span: 6 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Équipement d’inspection' },
+          type: 'devices',
+          repeatable: false,
+          minRows: 1,
+          help: 'Caméra infrarouge et pince ampèremétrique. Un appareil hors étalonnage à la date de la visite empêche la soumission du rapport.',
+          fields: [
+            { key: 'device', label: { fr: 'Appareil' }, type: 'device', required: true, span: 12 },
+          ],
+        },
+        {
+          key: 'inventory',
+          label: { fr: 'Annexe I — Liste des équipements contrôlés' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Sur la base de la liste fournie par le client ; à défaut, les armoires et coffrets accessibles et présentés lors de la visite.',
+          columns: [
+            { key: 'equipment', label: { fr: 'Localisation, nature et désignation du matériel' }, type: 'text', required: true, span: 6 },
+            { key: 'anomaly', label: { fr: 'Présence d’anomalies' }, type: 'enum', required: true, options: ['Oui', 'Non'], span: 2 },
+            { key: 'remarks', label: { fr: 'Remarques' }, type: 'text', required: false, span: 4 },
+          ],
+        },
+        {
+          key: 'thermograms',
+          label: { fr: 'Annexe II — Fiches de contrôle thermographique' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          help: 'Une fiche par anomalie. ΔT = Tc − Tr. Classe 1 : ΔT > 35 °C · classe 2 : 10 °C < ΔT ≤ 35 °C · classe 3 : 0 °C < ΔT ≤ 10 °C. Urgence 1 : réparation immédiate · 2 : réparation à prévoir · 3 : à surveiller régulièrement.',
+          columns: [
+            { key: 'locality', label: { fr: 'Localité' }, type: 'text', required: true, span: 1 },
+            { key: 'equipment', label: { fr: 'Équipement' }, type: 'text', required: true, span: 1 },
+            { key: 'mark', label: { fr: 'Repère' }, type: 'text', required: false, span: 1 },
+            { key: 'distance', label: { fr: 'Distance de focalisation' }, type: 'number', required: false, unit: 'm', decimals: 1, span: 1 },
+            { key: 'emissivity', label: { fr: 'Émissivité ε' }, type: 'number', required: true, decimals: 2, min: 0, max: 1, span: 1 },
+            { key: 'tr', label: { fr: 'Température normale Tr' }, type: 'number', required: true, unit: '°C', decimals: 1, span: 1 },
+            { key: 'tc', label: { fr: 'Température composant chaud Tc' }, type: 'number', required: true, unit: '°C', decimals: 1, span: 1 },
+            { key: 'deltaT', label: { fr: 'ΔT = Tc − Tr' }, type: 'number', required: true, unit: '°C', decimals: 1, span: 1 },
+            { key: 'defectClass', label: { fr: 'Classe de défaut' }, type: 'enum', required: true, options: ['1', '2', '3'], span: 1 },
+            { key: 'urgency', label: { fr: 'Degré d’urgence' }, type: 'enum', required: true, options: ['1 — Réparation immédiate', '2 — Réparation à prévoir', '3 — À surveiller régulièrement'], span: 2 },
+            { key: 'finding', label: { fr: 'Constat' }, type: 'text', required: false, span: 1 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Images thermiques et visibles' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+          help: 'Pour chaque fiche, le thermogramme et la photographie de la zone, pour localiser le défaut.',
+        },
+        EILM_OBSERVATIONS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F22 — POSTE DE SOUDURE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F22',
+    version: '00',
+    title: 'Rapport de vérification — poste de soudure',
+    methodCode: 'ELEC',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(CODE_TRAVAIL, { ville: false }),
+        {
+          key: 'equipment',
+          label: { fr: 'Identification de l’équipement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
+            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: true, span: 6 },
+            { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+            { key: 'maxPower', label: { fr: 'Puissance maximale' }, type: 'number', required: false, unit: 'kW', decimals: 1, span: 4 },
+            { key: 'ratedVoltage', label: { fr: 'Tension nominale' }, type: 'number', required: false, unit: 'V', decimals: 0, span: 4 },
+            { key: 'openCircuitVoltage', label: { fr: 'Tension à vide' }, type: 'number', required: false, unit: 'V', decimals: 0, span: 4 },
+            { key: 'maxWeldingCurrent', label: { fr: 'Courant maximal de soudage' }, type: 'number', required: false, unit: 'A', decimals: 0, span: 4 },
+            { key: 'ratedSupplyCurrent', label: { fr: 'Courant nominal d’alimentation' }, type: 'number', required: false, unit: 'A', decimals: 1, span: 4 },
+            { key: 'frequency', label: { fr: 'Fréquence' }, type: 'number', required: false, unit: 'Hz', decimals: 0, span: 4 },
+            { key: 'insulationClass', label: { fr: 'Classe d’isolation' }, type: 'text', required: false, span: 4 },
+            { key: 'ipRating', label: { fr: 'Indice de protection (IP)' }, type: 'text', required: false, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+          ],
+        },
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F37 — MISE EN SERVICE DE PALONNIER
+   *
+   *  Pas de check-list : la mise en service se prononce sur l'essai statique
+   *  à 150 % de la CMU pendant 15 minutes.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F37',
+    version: '00',
+    title: 'Rapport de mise en service — palonnier',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'client',
+          label: { fr: 'Références client' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'Référence réglementaire : arrêté viziriel du 09/09/1953 et arrêté du 03/11/1953.',
+          fields: [
+            { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: false, span: 6 },
+            { key: 'nature', label: { fr: 'Nature de la vérification' }, type: 'enum', required: true, options: ['Mise en service', 'Remise en service'], span: 4 },
+            { key: 'location', label: { fr: 'Lieu d’intervention' }, type: 'ref', required: true, autofill: 'site', span: 4 },
+            { key: 'inspector', label: { fr: 'Intervenant' }, type: 'ref', required: true, autofill: 'inspector', span: 4 },
+            { key: 'date', label: { fr: 'Date de la vérification' }, type: 'date', required: true, autofill: 'date', span: 4 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Caractéristiques de l’appareil' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: true, span: 6 },
+            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: true, span: 6 },
+            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+            { key: 'length', label: { fr: 'Longueur' }, type: 'number', required: false, unit: 'mm', decimals: 0, span: 4 },
+            { key: 'width', label: { fr: 'Largeur' }, type: 'number', required: false, unit: 'mm', decimals: 0, span: 4 },
+            { key: 'height', label: { fr: 'Hauteur' }, type: 'number', required: false, unit: 'mm', decimals: 0, span: 4 },
+            { key: 'calculationBy', label: { fr: 'Note de calcul établie par' }, type: 'text', required: false, span: 4 },
+            { key: 'emptyWeight', label: { fr: 'Poids à vide' }, type: 'number', required: false, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'lugs', label: { fr: 'Nombre d’oreilles de levage' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'capacity', label: { fr: 'Charge maximale d’utilisation (CMU)' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+          ],
+        },
+        {
+          key: 'tests',
+          label: { fr: 'Compte rendu des épreuves' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Essai statique : charge d’essai à 150 % de la CMU, maintenue 15 minutes.',
+          columns: [
+            { key: 'kind', label: { fr: 'Nature de l’essai' }, type: 'enum', required: true, options: ['Essai statique', 'Essai dynamique'], span: 3 },
+            { key: 'capacity', label: { fr: 'CMU du palonnier' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 2 },
+            { key: 'height', label: { fr: 'Hauteur' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 2 },
+            { key: 'duration', label: { fr: 'Durée' }, type: 'number', required: true, unit: 'min', decimals: 0, span: 1 },
+            { key: 'coefficient', label: { fr: 'Coefficient d’essai' }, type: 'number', required: true, unit: '%', decimals: 0, span: 2 },
+            { key: 'testLoad', label: { fr: 'Charge d’essai' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 2 },
+          ],
+        },
+        EILM_CONCLUSION,
+        EILM_OBSERVATIONS,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F36 — CERTIFICAT ANNUEL D'INSTALLATION ÉLECTRIQUE
+   *
+   *  Attestation destinée à l'assureur, émise sur la foi d'un rapport de
+   *  vérification détaillé (F14) : elle ne reprend pas les points de
+   *  contrôle, seulement les textes visés et les observations par rubrique.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F36',
+    version: '00',
+    title: 'Certificat annuel de vérification d’installation électrique',
+    methodCode: 'ELEC',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'establishment',
+          label: { fr: 'Identification de l’établissement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: true, span: 6 },
+            { key: 'situation', label: { fr: 'Situation de l’établissement' }, type: 'text', required: false, span: 6 },
+            { key: 'riskNature', label: { fr: 'Nature du risque' }, type: 'text', required: true, span: 6 },
+          ],
+        },
+        {
+          key: 'references',
+          label: { fr: 'Textes réglementaires de référence' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            // Deux cases, comme au modèle : le type « multi-enum » du contrat
+            // n'a pas encore de rendu et s'afficherait en texte libre.
+            { key: 'decree1938', label: { fr: 'Arrêté viziriel du 28/06/1938' }, type: 'boolean', required: false, span: 12 },
+            { key: 'decrees1967_1971', label: { fr: 'Arrêtés viziriels du 15/07/1967 et du 02/10/1971 relatifs aux installations de 1re et 2e catégories' }, type: 'boolean', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'attestation',
+          label: { fr: 'Attestation de conformité' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'I2S TESTING, organisme vérificateur agréé, déclare avoir vérifié l’installation électrique du risque déclaré par l’assuré, que cette vérification a donné lieu à un rapport détaillé remis à l’assuré, qu’elle n’a révélé aucune non-conformité majeure à la réglementation marocaine, et atteste que l’installation est conforme aux textes visés. Attestation établie pour servir et valoir ce que de droit.',
+          fields: [
+            { key: 'detailedReport', label: { fr: 'Rapport de vérification détaillé' }, type: 'text', required: false, span: 6 },
+            { key: 'periodicity', label: { fr: 'Périodicité de contrôle' }, type: 'enum', required: true, options: ['1 an'], span: 3 },
+            { key: 'date', label: { fr: 'Fait à Mohammedia, le' }, type: 'date', required: true, autofill: 'date', span: 3 },
+          ],
+        },
+        {
+          key: 'observations',
+          label: { fr: 'Observations' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'hvDesign', label: { fr: 'A — Conception et réalisation : installations HTA' }, type: 'textarea', required: false, span: 12 },
+            { key: 'lvDesign', label: { fr: 'A — Conception et réalisation : installations BT' }, type: 'textarea', required: false, span: 12 },
+            { key: 'fireProtection', label: { fr: 'B — Protection et adaptation contre les risques d’incendie d’origine électrique' }, type: 'textarea', required: false, span: 12 },
+            { key: 'insulation', label: { fr: 'C — Isolement' }, type: 'textarea', required: false, span: 12 },
+            { key: 'earthing', label: { fr: 'D — Prise de terre' }, type: 'textarea', required: false, span: 12 },
+            { key: 'maintenance', label: { fr: 'E — Entretien' }, type: 'textarea', required: false, span: 12 },
+            { key: 'safetyEquipment', label: { fr: 'F — Matériel de sécurité' }, type: 'textarea', required: false, span: 12 },
+            { key: 'other', label: { fr: 'G — Autres observations' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F33 — CONTRÔLE DE PROTECTION CATHODIQUE
+   *
+   *  Rapport de mesures : relevés au redresseur puis potentiels pipe/sol
+   *  par prise et par joint isolant. Le modèle Word est la copie d'un
+   *  rapport réel — ses lignes nommaient les joints d'un site client ; les
+   *  prises sont ici saisies librement, une ligne chacune.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F33',
+    version: '00',
+    title: 'Rapport de contrôle du système de protection cathodique',
+    methodCode: 'ELEC',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Prestation' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'Contrôle du système de protection cathodique des canalisations enterrées.',
+          fields: [
+            { key: 'client', label: { fr: 'Client' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'location', label: { fr: 'Lieu de contrôle' }, type: 'ref', required: true, autofill: 'site', span: 6 },
+            { key: 'date', label: { fr: 'Date d’intervention' }, type: 'date', required: true, autofill: 'date', span: 4 },
+            { key: 'pipeline', label: { fr: 'Conduite contrôlée' }, type: 'text', required: true, span: 8 },
+            { key: 'installationReport', label: { fr: 'Rapport décrivant l’installation' }, type: 'text', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'context',
+          label: { fr: 'Introduction et description de l’installation' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'purpose', label: { fr: 'Buts du contrôle' }, type: 'textarea', required: false, span: 12 },
+            { key: 'description', label: { fr: 'Description de l’installation' }, type: 'textarea', required: false, span: 12 },
+            { key: 'measures', label: { fr: 'Mesures et vérifications réalisées' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'rectifier',
+          label: { fr: 'Mesures au redresseur de protection cathodique' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'anodeBed', label: { fr: 'Dispositif anodique' }, type: 'text', required: false, span: 6 },
+            { key: 'rectifier', label: { fr: 'Redresseur' }, type: 'text', required: true, span: 6 },
+            { key: 'voltageDisplayed', label: { fr: 'Tension affichée' }, type: 'number', required: false, unit: 'V', decimals: 1, span: 4 },
+            { key: 'currentDisplayed', label: { fr: 'Courant affiché' }, type: 'number', required: false, unit: 'A', decimals: 2, span: 4 },
+            { key: 'potentialDisplayed', label: { fr: 'Potentiel affiché' }, type: 'number', required: false, unit: 'mV', decimals: 0, span: 4 },
+            { key: 'voltageMeasured', label: { fr: 'Tension mesurée' }, type: 'number', required: true, unit: 'V', decimals: 1, span: 4 },
+            { key: 'currentMeasured', label: { fr: 'Courant mesuré' }, type: 'number', required: true, unit: 'A', decimals: 2, span: 4 },
+            { key: 'potentialMeasured', label: { fr: 'Potentiel mesuré' }, type: 'number', required: true, unit: 'mV', decimals: 0, span: 4 },
+          ],
+        },
+        {
+          key: 'potentials',
+          label: { fr: 'Annexe 1 — Mesures des potentiels' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Potentiels pipeline/sol référés à l’électrode Cu/CuSO₄, en millivolts.',
+          columns: [
+            { key: 'point', label: { fr: 'Prise n° ou joint isolant' }, type: 'text', required: true, span: 3 },
+            { key: 'on', label: { fr: 'Potentiel pipe ON' }, type: 'number', required: false, unit: 'mV', decimals: 0, span: 1 },
+            { key: 'off', label: { fr: 'Potentiel pipe OFF' }, type: 'number', required: false, unit: 'mV', decimals: 0, span: 1 },
+            { key: 'aboveGround', label: { fr: 'Joint isolant — côté aérien' }, type: 'number', required: false, unit: 'mV', decimals: 0, span: 2 },
+            { key: 'buried', label: { fr: 'Joint isolant — côté enterré' }, type: 'number', required: false, unit: 'mV', decimals: 0, span: 2 },
+            { key: 'observations', label: { fr: 'Observations' }, type: 'text', required: false, span: 3 },
+          ],
+        },
+        {
+          key: 'conclusions',
+          label: { fr: 'Interprétation, recommandations et conclusions' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'interpretation', label: { fr: 'Interprétation des mesures et recommandations' }, type: 'textarea', required: true, span: 12 },
+            { key: 'conclusions', label: { fr: 'Conclusions' }, type: 'textarea', required: true, span: 12 },
+          ],
+        },
+        EILM_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visa' },
+          type: 'signature-matrix',
+          repeatable: false,
+          help: 'Fait à Mohammedia.',
+          signatories: [{ fr: 'Chef du service EILM' }],
+        },
       ],
     },
   },
