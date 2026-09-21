@@ -4,9 +4,14 @@
  * Structures relevées une à une sur les modèles du référentiel I2S
  * (`05_PROCEDURES`), dont les fichiers Excel et Word font foi :
  *   PR01-F02  Examen par ultrasons                  → mesures et indications
+ *   PR01-F03  Contrôle de verticalité               → mesures dimensionnelles
  *   PR01-F04  Examen par ressuage                   → mesures et indications
  *   PR01-F05  Examen par magnétoscopie              → mesures et indications
+ *   PR01-F06  Examen d’adhérence                    → épaisseurs de peinture
+ *   PR01-F07  Contrôle de rotondité                 → mesures dimensionnelles
  *   PR01-F08  Examen visuel                         → mesures et indications
+ *   PR01-F10  Contrôle de déformation locale        → mesures dimensionnelles
+ *   PR01-F21  Contrôle peinture                     → préparation et épaisseurs
  *   PR01-F22  Interprétation de clichés radio       → mesures et indications
  *   PR01-F26  Essai de dureté                       → mesures et indications
  *   PR02-F01  Grue auxiliaire de chargement         → appareil de levage
@@ -122,6 +127,126 @@ const LIGHT_FIELDS = [
   { key: 'light', label: { fr: 'Lumière', en: 'Light' }, type: 'enum', required: true, options: ['Naturelle', 'Artificielle', 'Noire'], span: 4 },
   { key: 'lightValue', label: { fr: 'Valeur mesurée', en: 'Specified value' }, type: 'number', required: true, unit: 'Lux', span: 4 },
 ];
+
+/* ── Contrôles dimensionnels de réservoirs (verticalité, rotondité…) ─ */
+
+/** En-tête commun aux contrôles dimensionnels, bilingue comme les autres rapports END. */
+const DIM_HEADER = {
+  key: 'header',
+  label: { fr: 'Identification', en: 'Identification' },
+  type: 'keyvalue',
+  repeatable: false,
+  fields: [
+    { key: 'client', label: { fr: 'Client', en: 'Customer' }, type: 'ref', required: true, autofill: 'client', span: 4 },
+    { key: 'affairNumber', label: { fr: 'Affaire', en: 'Transaction' }, type: 'ref', required: true, autofill: 'affairNumber', span: 4 },
+    { key: 'manufacturer', label: { fr: 'Fabricant / lieu de fabrication', en: 'Manufacturer / place of manufacture' }, type: 'text', required: false, autofill: 'manufacturer', span: 4 },
+    { key: 'drawing', label: { fr: 'Plan de référence', en: 'Reference drawing' }, type: 'text', required: false, span: 4 },
+    { key: 'standard', label: { fr: 'Spécification applicable', en: 'Examination according to' }, type: 'standard-ref', required: true, autofill: 'standards', span: 4 },
+    { key: 'material', label: { fr: 'Matériel (ou construction) examiné', en: 'Material (or construction) examined' }, type: 'ref', required: true, autofill: 'asset', span: 4 },
+    { key: 'description', label: { fr: 'Description de l’inspection', en: 'Description of inspection' }, type: 'textarea', required: false, span: 12 },
+  ],
+};
+
+/** Résultat d'un contrôle dimensionnel : deux issues, comme au modèle. */
+const ACCEPTABLE_RESULT = {
+  key: 'result',
+  label: { fr: 'Résultat de l’inspection', en: 'Inspection result' },
+  type: 'verdict',
+  repeatable: false,
+  verdicts: [
+    { fr: 'Acceptable', en: 'Acceptable' },
+    { fr: 'Non acceptable', en: 'Not acceptable' },
+  ],
+};
+
+const END_NOTE = {
+  key: 'note',
+  label: { fr: 'Note', en: 'Note' },
+  type: 'text',
+  repeatable: false,
+  fields: [{ key: 'note', label: { fr: 'Note', en: 'Note' }, type: 'textarea', required: false, span: 12 }],
+};
+
+/* ── Contrôles de peinture ────────────────────────────────────────── */
+
+/**
+ * Conditions ambiantes relevées avant application, côté intérieur et côté
+ * extérieur. Les seuils sont ceux imprimés au modèle.
+ */
+const PAINT_CONDITIONS = {
+  key: 'ambient',
+  label: { fr: 'Conditions d’application', en: 'Operating conditions' },
+  type: 'conditions',
+  repeatable: false,
+  help: 'Spécification du modèle : hygrométrie < 85 % · température ambiante > 5 °C · température du support > 5 °C · point de rosée > 3 °C.',
+  fields: [
+    { key: 'humidityIn', label: { fr: 'Hygrométrie — intérieur', en: 'Humidity — in' }, type: 'number', required: false, unit: '%', decimals: 0, span: 3 },
+    { key: 'humidityOut', label: { fr: 'Hygrométrie — extérieur', en: 'Humidity — out' }, type: 'number', required: false, unit: '%', decimals: 0, span: 3 },
+    { key: 'ambientIn', label: { fr: 'Température ambiante — intérieur', en: 'Ambient temperature — in' }, type: 'number', required: false, unit: '°C', decimals: 1, span: 3 },
+    { key: 'ambientOut', label: { fr: 'Température ambiante — extérieur', en: 'Ambient temperature — out' }, type: 'number', required: false, unit: '°C', decimals: 1, span: 3 },
+    { key: 'surfaceIn', label: { fr: 'Température du support — intérieur', en: 'Surface temperature — in' }, type: 'number', required: false, unit: '°C', decimals: 1, span: 3 },
+    { key: 'surfaceOut', label: { fr: 'Température du support — extérieur', en: 'Surface temperature — out' }, type: 'number', required: false, unit: '°C', decimals: 1, span: 3 },
+    { key: 'dewPointIn', label: { fr: 'Point de rosée — intérieur', en: 'Dew point — in' }, type: 'number', required: false, unit: '°C', decimals: 1, span: 3 },
+    { key: 'dewPointOut', label: { fr: 'Point de rosée — extérieur', en: 'Dew point — out' }, type: 'number', required: false, unit: '°C', decimals: 1, span: 3 },
+    { key: 'recoatDelay', label: { fr: 'Délai de recouvrement', en: 'Time between coats' }, type: 'text', required: false, span: 6 },
+  ],
+};
+
+/**
+ * Synthèse de l'épaisseur de feuil sec. Le modèle Excel la calcule ; le
+ * moteur de formulaires ne sait pas encore calculer, elle est donc saisie
+ * et la règle rappelée : aucun point sous 80 % de l'épaisseur contractuelle,
+ * au plus 20 % des points entre 80 % et 100 %, moyenne au moins égale.
+ */
+const paintSummary = (avecSeuil60: boolean) => ({
+  key: 'summary',
+  label: { fr: 'Synthèse des épaisseurs', en: 'Thickness summary' },
+  type: 'conditions',
+  repeatable: false,
+  help: 'Règle du modèle : aucun point < 80 % de l’épaisseur contractuelle (Ep) · au plus 20 % des points entre 80 % d’Ep et Ep · moyenne ≥ Ep.',
+  fields: [
+    { key: 'contractualThickness', label: { fr: 'Épaisseur contractuelle (Ep)', en: 'Contractual thickness' }, type: 'number', required: true, unit: 'µm', decimals: 0, span: 4 },
+    { key: 'measureCount', label: { fr: 'Nombre de mesures', en: 'Number of measurements' }, type: 'number', required: true, decimals: 0, span: 4 },
+    { key: 'below80', label: { fr: 'Points < 80 % d’Ep', en: 'Points < 80 %' }, type: 'number', required: true, decimals: 0, span: 4 },
+    ...(avecSeuil60
+      ? [{ key: 'below60', label: { fr: 'Points < 60 % d’Ep', en: 'Points < 60 %' }, type: 'number', required: false, decimals: 0, span: 4 }]
+      : []),
+    { key: 'between80and100', label: { fr: 'Taux de points entre 80 % d’Ep et Ep', en: 'Rate 80 % ≤ X ≤ Ep' }, type: 'number', required: true, unit: '%', decimals: 0, span: 4 },
+    { key: 'average', label: { fr: 'Moyenne', en: 'Average' }, type: 'number', required: true, unit: 'µm', decimals: 0, span: 4 },
+  ],
+});
+
+const PAINT_MEASURES = {
+  key: 'measures',
+  label: { fr: 'Résultats de l’interprétation', en: 'Interpretation results' },
+  type: 'table',
+  repeatable: true,
+  minRows: 1,
+  help: 'Une ligne par point de mesure d’épaisseur de feuil sec.',
+  columns: [
+    { key: 'zone', label: { fr: 'Zone ou repère', en: 'Area or mark' }, type: 'text', required: true, span: 6 },
+    { key: 'thickness', label: { fr: 'Épaisseur mesurée', en: 'Measured thickness' }, type: 'number', required: true, unit: 'µm', decimals: 0, span: 6 },
+  ],
+};
+
+const COMPLIANT_RESULT = {
+  key: 'result',
+  label: { fr: 'Conclusion', en: 'Conclusion' },
+  type: 'verdict',
+  repeatable: false,
+  verdicts: [
+    { fr: 'Conforme', en: 'Compliant' },
+    { fr: 'Non conforme', en: 'Not compliant' },
+  ],
+};
+
+const END_COMMENTS = {
+  key: 'comments',
+  label: { fr: 'Commentaires', en: 'Comments' },
+  type: 'text',
+  repeatable: false,
+  fields: [{ key: 'comments', label: { fr: 'Commentaires', en: 'Comments' }, type: 'textarea', required: false, span: 12 }],
+};
 
 /* ── Blocs communs aux vérifications réglementaires EILM ──────────── */
 
@@ -3961,6 +4086,297 @@ export const TEMPLATES: TemplateSeed[] = [
         EILM_OBSERVATIONS,
         EILM_PHOTOS,
         EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F03 — VERTICALITÉ DE RÉSERVOIR
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F03',
+    version: '00',
+    title: 'Rapport de contrôle de verticalité',
+    titleEn: 'Plumbness check report',
+    methodCode: 'DIM',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        DIM_HEADER,
+        {
+          key: 'tank',
+          label: { fr: 'Réservoir', en: 'Tank' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'tankNumber', label: { fr: 'Repère du réservoir', en: 'Tank N°' }, type: 'text', required: true, span: 6 },
+            { key: 'tankHeight', label: { fr: 'Hauteur du réservoir (H)', en: 'Tank height' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 6 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Matériel de contrôle', en: 'Material of control' },
+          type: 'devices',
+          repeatable: false,
+          minRows: 1,
+          help: 'Un appareil hors étalonnage à la date du contrôle empêche la soumission du rapport.',
+          fields: [{ key: 'device', label: { fr: 'Appareil', en: 'Device' }, type: 'device', required: true, span: 12 }],
+        },
+        {
+          key: 'measures',
+          label: { fr: 'Mesures', en: 'Measures' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          maxRows: 40,
+          help: 'Critère d’acceptation, réservoir neuf : écart ≤ H/200.',
+          columns: [
+            { key: 'axis', label: { fr: 'Axe', en: 'Axis' }, type: 'number', required: true, decimals: 0, span: 2 },
+            { key: 'valueA', label: { fr: 'Valeur A', en: 'Value A' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 2 },
+            { key: 'valueB', label: { fr: 'Valeur B', en: 'Value B' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 2 },
+            { key: 'difference', label: { fr: 'Différence', en: 'Difference' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 3 },
+            { key: 'criterion', label: { fr: 'Critère', en: 'Criterion' }, type: 'enum', required: true, options: ['Acceptable', 'Non acceptable'], span: 3 },
+          ],
+        },
+        ACCEPTABLE_RESULT,
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F07 — ROTONDITÉ DE RÉSERVOIR
+   *
+   *  Le tableau d'acceptation du modèle (API 650, tableau 5.5.3) donne les
+   *  classes de diamètre mais laisse les tolérances vides : elles sont
+   *  rappelées d'après la norme, à confirmer.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F07',
+    version: '00',
+    title: 'Rapport de contrôle de rotondité',
+    titleEn: 'Roundness check report',
+    methodCode: 'DIM',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        DIM_HEADER,
+        {
+          key: 'measures',
+          label: { fr: 'Mesures', en: 'Measures' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Habituellement : rotondité de la première virole, diamètre mesuré à 300 mm de la liaison robe/fond. Tolérance sur le rayon (API 650, tableau 5.5.3) : diamètre < 12 m ±13 mm · 12 à < 45 m ±19 mm · 45 à < 75 m ±25 mm · ≥ 75 m ±32 mm.',
+          columns: [
+            { key: 'axis', label: { fr: 'Axe', en: 'Axis' }, type: 'text', required: true, span: 3 },
+            { key: 'designRadius', label: { fr: 'Rayon intérieur de conception', en: 'Design inner radius' }, type: 'number', required: true, unit: 'm', decimals: 3, span: 3 },
+            { key: 'measuredRadius', label: { fr: 'Rayon intérieur mesuré', en: 'Measured inner radius' }, type: 'number', required: true, unit: 'm', decimals: 3, span: 3 },
+            { key: 'deviation', label: { fr: 'Écart', en: 'Deviation' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 3 },
+          ],
+        },
+        END_NOTE,
+        ACCEPTABLE_RESULT,
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F10 — DÉFORMATION LOCALE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F10',
+    version: '00',
+    title: 'Rapport de contrôle de déformation locale',
+    titleEn: 'Local deformation check report',
+    methodCode: 'DIM',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        DIM_HEADER,
+        {
+          key: 'measures',
+          label: { fr: 'Mesures', en: 'Measures' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Critère d’acceptation du modèle : déformation maximale de 13 mm, sur soudure horizontale comme verticale.',
+          columns: [
+            { key: 'location', label: { fr: 'Emplacement', en: 'Location' }, type: 'enum', required: true, options: ['Soudure horizontale', 'Soudure verticale', 'Tôle'], span: 4 },
+            { key: 'mark', label: { fr: 'Repère', en: 'Mark' }, type: 'text', required: true, span: 4 },
+            { key: 'maxDeformation', label: { fr: 'Déformation maximale', en: 'Maximal deformation' }, type: 'number', required: true, unit: 'mm', decimals: 1, span: 4 },
+          ],
+        },
+        END_NOTE,
+        ACCEPTABLE_RESULT,
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F06 — « EXAMEN D'ADHÉRENCE »
+   *
+   *  Malgré son titre, le modèle ne porte aucun essai d'adhérence : c'est
+   *  un relevé d'épaisseur de feuil sec, avec tableau d'échantillonnage et
+   *  seuils à 80 % et 60 % de l'épaisseur contractuelle. Il est reproduit
+   *  tel quel ; l'écart est à trancher par le QHSE.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F06',
+    version: '00',
+    title: 'Rapport d’examen d’adhérence',
+    titleEn: 'Report of adhesion examination',
+    methodCode: 'PAINT',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Identification', en: 'Identification' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'client', label: { fr: 'Client', en: 'Customer' }, type: 'ref', required: true, autofill: 'client', span: 4 },
+            { key: 'applicator', label: { fr: 'Applicateur', en: 'Applicator' }, type: 'text', required: false, span: 4 },
+            { key: 'place', label: { fr: 'Lieu de contrôle', en: 'Place of inspection' }, type: 'ref', required: true, autofill: 'site', span: 4 },
+            { key: 'drawing', label: { fr: 'Plan de référence', en: 'Drawing N°' }, type: 'text', required: false, span: 4 },
+            { key: 'standard', label: { fr: 'Spécification applicable', en: 'Examination according to' }, type: 'standard-ref', required: true, autofill: 'standards', span: 4 },
+            { key: 'procedure', label: { fr: 'Instruction de référence', en: 'Procedure N°' }, type: 'text', required: true, autofill: 'procedure', span: 4 },
+            { key: 'material', label: { fr: 'Matériel (ou construction) examiné', en: 'Material (or construction) examined' }, type: 'ref', required: true, autofill: 'asset', span: 12 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Matériel utilisé', en: 'Equipment used' },
+          type: 'devices',
+          repeatable: false,
+          minRows: 1,
+          help: 'Un appareil hors étalonnage à la date de l’essai empêche la soumission du rapport.',
+          fields: [{ key: 'device', label: { fr: 'Appareil', en: 'Device' }, type: 'device', required: true, span: 12 }],
+        },
+        {
+          key: 'coating',
+          label: { fr: 'Conditions d’examen', en: 'Operating conditions' },
+          type: 'conditions',
+          repeatable: false,
+          help: 'Nombre de mesures selon la surface : ≤ 90 m² : 20 · 91 à 150 : 30 · 151 à 300 : 50 · 301 à 500 : 80 · 501 à 1200 : 120 · 1201 à 3200 : 200 · > 3200 : 300.',
+          fields: [
+            { key: 'side', label: { fr: 'Peinture', en: 'Coating' }, type: 'enum', required: true, options: ['Intérieure', 'Extérieure'], span: 4 },
+            { key: 'reference', label: { fr: 'Référence de peinture', en: 'Coating reference' }, type: 'text', required: true, span: 4 },
+            { key: 'ral', label: { fr: 'Teinte (RAL)', en: 'Colour (RAL)' }, type: 'text', required: false, span: 4 },
+            { key: 'area', label: { fr: 'Dimensions', en: 'Dimensions' }, type: 'number', required: true, unit: 'm² ou ml', decimals: 1, span: 4 },
+            { key: 'specification', label: { fr: 'Spécification applicable', en: 'Applicable specification' }, type: 'text', required: false, span: 8 },
+          ],
+        },
+        PAINT_CONDITIONS,
+        PAINT_MEASURES,
+        paintSummary(true),
+        END_COMMENTS,
+        COMPLIANT_RESULT,
+        END_SIGNATURES_3,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F21 — CONTRÔLE PEINTURE
+   *
+   *  Préparation de surface, système appliqué couche par couche, conditions
+   *  d'application, puis épaisseurs. Le modèle Excel est la copie d'un
+   *  rapport réel (produits, lots et zone d'un bac client) ; seule sa
+   *  structure est reprise.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F21',
+    version: '00',
+    title: 'Rapport de contrôle peinture',
+    titleEn: 'Coating report',
+    methodCode: 'PAINT',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Identification', en: 'Identification' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'client', label: { fr: 'Client', en: 'Customer' }, type: 'ref', required: true, autofill: 'client', span: 3 },
+            { key: 'affairNumber', label: { fr: 'N° d’affaire', en: 'Transaction N°' }, type: 'ref', required: true, autofill: 'affairNumber', span: 3 },
+            { key: 'norm', label: { fr: 'Norme', en: 'Standard' }, type: 'text', required: false, span: 3 },
+            { key: 'applicator', label: { fr: 'Applicateur', en: 'Applicator' }, type: 'text', required: false, span: 3 },
+            { key: 'equipmentType', label: { fr: 'Type d’équipement', en: 'Equipment' }, type: 'ref', required: true, autofill: 'asset', span: 3 },
+            { key: 'materials', label: { fr: 'Matériau', en: 'Materials' }, type: 'text', required: false, span: 3 },
+            { key: 'system', label: { fr: 'Système de peinture n°', en: 'System N°' }, type: 'text', required: false, span: 3 },
+            { key: 'standard', label: { fr: 'Spécification applicable', en: 'Examination according to' }, type: 'standard-ref', required: true, autofill: 'standards', span: 3 },
+          ],
+        },
+        {
+          key: 'preparation',
+          label: { fr: 'Préparation de surface', en: 'Surface preparation' },
+          type: 'conditions',
+          repeatable: false,
+          help: 'Rugosité attendue au rugosimètre : entre 60 et 100 µm.',
+          fields: [
+            { key: 'blasting', label: { fr: 'Méthode de décapage', en: 'Blasting method' }, type: 'enum', required: true, options: ['Sablage', 'Grenaillage', 'Autre'], span: 4 },
+            { key: 'rustGrade', label: { fr: 'Degré d’enrouillement initial', en: 'Initial rust grade' }, type: 'enum', required: true, options: ['A', 'B', 'C', 'D'], span: 4 },
+            { key: 'preparationGrade', label: { fr: 'Degré de préparation', en: 'Preparation grade' }, type: 'enum', required: true, options: ['Sa 1', 'Sa 2', 'Sa 2½', 'Sa 3'], span: 4 },
+            { key: 'comparator', label: { fr: 'Comparateur viso-tactile', en: 'Surface comparator' }, type: 'enum', required: false, options: ['S', 'G'], span: 4 },
+            { key: 'profile', label: { fr: 'Profil', en: 'Profile' }, type: 'enum', required: false, options: ['Fin', 'Moyen', 'Gros'], span: 4 },
+            { key: 'roughness', label: { fr: 'Rugosité (rugosimètre)', en: 'Roughness' }, type: 'number', required: false, unit: 'µm', decimals: 0, span: 4 },
+          ],
+        },
+        {
+          key: 'coats',
+          label: { fr: 'Système appliqué', en: 'Coating system' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          columns: [
+            { key: 'side', label: { fr: 'Peinture', en: 'Coating' }, type: 'enum', required: true, options: ['Intérieure', 'Extérieure'], span: 2 },
+            { key: 'coat', label: { fr: 'Couche', en: 'Coat' }, type: 'enum', required: true, options: ['Primaire', 'Intermédiaire', 'Finition'], span: 2 },
+            { key: 'reference', label: { fr: 'Référence de peinture', en: 'Coating reference' }, type: 'text', required: true, span: 3 },
+            { key: 'ral', label: { fr: 'Teinte (RAL)', en: 'Colour (RAL)' }, type: 'text', required: false, span: 2 },
+            { key: 'batch', label: { fr: 'N° de lot', en: 'Batch N°' }, type: 'text', required: false, span: 3 },
+          ],
+        },
+        PAINT_CONDITIONS,
+        {
+          key: 'equipment',
+          label: { fr: 'Matériel utilisé', en: 'Equipment used' },
+          type: 'devices',
+          repeatable: false,
+          minRows: 1,
+          help: 'Appareil à flux magnétique. Un appareil hors étalonnage empêche la soumission du rapport.',
+          fields: [{ key: 'device', label: { fr: 'Appareil', en: 'Device' }, type: 'device', required: true, span: 12 }],
+        },
+        PAINT_MEASURES,
+        paintSummary(false),
+        END_COMMENTS,
+        COMPLIANT_RESULT,
+        {
+          key: 'photos',
+          label: { fr: 'Planche photographique', en: 'Photo illustration' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+          help: 'Zone contrôlée, degré de préparation, réception de sablage, contrôle de surface.',
+        },
+        {
+          ...END_SIGNATURES_3,
+          signatories: [
+            { fr: 'Contrôle effectué par', en: 'Examination carried on by' },
+            { fr: 'Rapport établi par', en: 'Report established by' },
+            { fr: 'Client / tierce partie', en: 'Customer / third party' },
+          ],
+        },
       ],
     },
   },
