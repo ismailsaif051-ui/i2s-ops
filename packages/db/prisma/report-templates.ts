@@ -10,8 +10,10 @@
  *   PR01-F06  Examen d’adhérence                    → épaisseurs de peinture
  *   PR01-F07  Contrôle de rotondité                 → mesures dimensionnelles
  *   PR01-F08  Examen visuel                         → mesures et indications
+ *   PR01-F09  QMOS selon l’ASME IX                  → variables QW et essais
  *   PR01-F10  Contrôle de déformation locale        → mesures dimensionnelles
  *   PR01-F11  Composition d’atmosphère              → attestation sur mesures
+ *   PR01-F12  QMOS, référentiel européen            → paramètres par passe et essais
  *   PR01-F13  Qualification de soudeur (ASME IX)    → variables et essais
  *   PR01-F14  Réception et suivi des travaux        → constats et décisions
  *   PR01-F17  Rapport d’inspection de réservoir     → rapport rédigé structuré
@@ -254,6 +256,42 @@ const END_COMMENTS = {
   repeatable: false,
   fields: [{ key: 'comments', label: { fr: 'Commentaires', en: 'Comments' }, type: 'textarea', required: false, span: 12 }],
 };
+
+/* ── Qualification de modes opératoires de soudage ────────────────── */
+
+/**
+ * Champ bilingue facultatif, demi-largeur par défaut : les PV de soudage en
+ * alignent des dizaines, et chaque libellé y est donné en français et en
+ * anglais comme au modèle.
+ */
+const champ = (
+  key: string,
+  fr: string,
+  en: string,
+  type = 'text',
+  extra: Record<string, unknown> = {},
+) => ({ key, label: { fr, en }, type, required: false, span: 6, ...extra });
+
+const section = (key: string, fr: string, en: string, fields: unknown[], type = 'keyvalue', help?: string) => ({
+  key,
+  label: { fr, en },
+  type,
+  repeatable: false,
+  ...(help ? { help } : {}),
+  fields,
+});
+
+const tableau = (key: string, fr: string, en: string, columns: unknown[], help?: string) => ({
+  key,
+  label: { fr, en },
+  type: 'table',
+  repeatable: true,
+  minRows: 0,
+  ...(help ? { help } : {}),
+  columns,
+});
+
+const OUI_NON = ['Oui', 'Non'];
 
 /* ── Blocs communs aux vérifications réglementaires EILM ──────────── */
 
@@ -5030,6 +5068,306 @@ export const TEMPLATES: TemplateSeed[] = [
           minRows: 0,
         },
         EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F09 — PV DE QUALIFICATION DE MODE OPÉRATOIRE (ASME IX)
+   *
+   *  Procedure Qualification Record : variables essentielles rangées par
+   *  article QW, puis essais de traction, pliage, ténacité et soudure
+   *  d'angle, et la certification sous le contrôle d'I2S TESTING.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F09',
+    version: '00',
+    title: 'PV de qualification de mode opératoire de soudage (QMOS) — ASME IX',
+    titleEn: 'Procedure qualification record (PQR) — ASME IX',
+    methodCode: 'WELD',
+    paradigm: 'CRITERIA',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        section('header', 'Identification', 'Identification', [
+          champ('pqr', 'QMOS n°', 'PQR N°', 'text', { required: true }),
+          champ('company', 'Nom de la société', 'Company name', 'ref', { required: true, autofill: 'client' }),
+          champ('testDate', 'Date de l’épreuve', 'Test date', 'date', { required: true, autofill: 'date' }),
+          champ('wps', 'DMOS n°', 'WPS N°', 'text', { required: true }),
+          champ('processes', 'Procédé(s) de soudage', 'Welding process(es)', 'text', { required: true }),
+          champ('mode', 'Type', 'Type', 'enum', { required: true, options: ['Manuel', 'Automatique', 'Semi-automatique'] }),
+        ]),
+        section('joints', 'Joints (QW-402)', 'Joints (QW-402)', [
+          champ('grooveDesign', 'Détail du chanfrein', 'Groove design', 'textarea', { span: 6 }),
+          champ('weldSequence', 'Séquence de soudage', 'Weld sequence', 'textarea', { span: 6 }),
+        ], 'text'),
+        tableau('passes', 'Conditions de soudage', 'Welding conditions', [
+          champ('pass', 'N° de passe', 'Pass N°', 'number', { required: true, decimals: 0, span: 2 }),
+          champ('process', 'Procédé', 'Process', 'text', { required: true, span: 2 }),
+          champ('fillerDiameter', 'Ø métal d’apport', 'Filler dia.', 'number', { unit: 'mm', decimals: 1, span: 2 }),
+          champ('amps', 'Intensité', 'Amps', 'number', { unit: 'A', decimals: 0, span: 2 }),
+          champ('volts', 'Tension', 'Volts', 'number', { unit: 'V', decimals: 1, span: 2 }),
+          champ('travelSpeed', 'Vitesse de soudage', 'Travel speed', 'number', { unit: 'cm/min', decimals: 1, span: 2 }),
+        ]),
+        section('baseMetals', 'Matériaux de base (QW-403)', 'Base metals (QW-403)', [
+          champ('spec', 'Spécification matériau', 'Material spec.', 'text', { required: true }),
+          champ('grade', 'Type ou nuance', 'Type or grade'),
+          champ('pNumber', 'P-No', 'P-No', 'text', { span: 3 }),
+          champ('toPNumber', 'sur P-No', 'to P-No', 'text', { span: 3 }),
+          champ('thickness', 'Épaisseur de l’assemblage d’essai', 'Thickness of test coupon', 'number', { required: true, unit: 'mm', decimals: 1, span: 3 }),
+          champ('diameter', 'Diamètre de l’assemblage d’essai', 'Diameter of test coupon', 'number', { unit: 'mm', decimals: 1, span: 3 }),
+          champ('other', 'Autre', 'Other', 'text', { span: 12 }),
+        ]),
+        section('pwht', 'Traitement thermique après soudage (QW-407)', 'PWHT (QW-407)', [
+          champ('temperature', 'Température', 'Temperature', 'number', { unit: '°C', decimals: 0, span: 4 }),
+          champ('time', 'Durée', 'Time', 'text', { span: 4 }),
+          champ('other', 'Autre', 'Other', 'text', { span: 4 }),
+        ]),
+        tableau('gas', 'Gaz (QW-408)', 'Gas (QW-408)', [
+          champ('role', 'Emploi', 'Use', 'enum', { required: true, options: ['Endroit', 'Envers', 'Traînard'], span: 3 }),
+          champ('gas', 'Gaz', 'Gas(es)', 'text', { required: true, span: 3 }),
+          champ('mixture', 'Mélange', 'Mixture', 'text', { span: 3 }),
+          champ('flow', 'Débit', 'Flow rate', 'number', { unit: 'l/min', decimals: 1, span: 3 }),
+        ]),
+        section('filler', 'Métaux d’apport (QW-404)', 'Filler metals (QW-404)', [
+          champ('sfa', 'Spécification SFA', 'SFA specification'),
+          champ('aws', 'Classification AWS', 'AWS classification'),
+          champ('fNumber', 'Métal d’apport F-No', 'Filler metal F-No', 'text', { span: 4 }),
+          champ('aNumber', 'Analyse du métal déposé A-No', 'Weld metal analysis A-No', 'text', { span: 4 }),
+          champ('size', 'Diamètre du métal d’apport', 'Size of filler metal', 'number', { unit: 'mm', decimals: 1, span: 4 }),
+          champ('depositThickness', 'Épaisseur du métal déposé', 'Weld metal thickness', 'number', { unit: 'mm', decimals: 1 }),
+          champ('other', 'Autre', 'Other'),
+        ]),
+        section('electrical', 'Caractéristiques électriques (QW-409)', 'Electrical characteristics (QW-409)', [
+          champ('current', 'Courant', 'Current', 'text', { span: 4 }),
+          champ('polarity', 'Polarité', 'Polarity', 'text', { span: 4 }),
+          champ('tungsten', 'Diamètre de l’électrode réfractaire', 'Tungsten electrode size', 'number', { unit: 'mm', decimals: 1, span: 4 }),
+          champ('amps', 'Intensité', 'Amps', 'number', { unit: 'A', decimals: 0, span: 4 }),
+          champ('volts', 'Tension', 'Volts', 'number', { unit: 'V', decimals: 1, span: 4 }),
+          champ('other', 'Autre', 'Other', 'text', { span: 4 }),
+        ]),
+        section('position', 'Position (QW-405) et préchauffage (QW-406)', 'Position (QW-405) and preheat (QW-406)', [
+          champ('groovePosition', 'Position de soudage', 'Position of groove', 'text', { span: 4 }),
+          champ('progression', 'Sens de soudage (montant, descendant)', 'Weld progression (uphill, downhill)', 'text', { span: 4 }),
+          champ('positionOther', 'Autre (position)', 'Other (position)', 'text', { span: 4 }),
+          champ('preheat', 'Température minimale de préchauffage', 'Preheat temperature', 'number', { unit: '°C', decimals: 0, span: 4 }),
+          champ('interpass', 'Température maximale entre passes', 'Interpass temperature', 'number', { unit: '°C', decimals: 0, span: 4 }),
+          champ('preheatOther', 'Autre (préchauffage)', 'Other (preheat)', 'text', { span: 4 }),
+        ]),
+        section('technique', 'Technique (QW-410)', 'Technique (QW-410)', [
+          champ('travelSpeed', 'Vitesse de soudage', 'Travel speed', 'number', { unit: 'cm/min', decimals: 1, span: 4 }),
+          champ('bead', 'Passe tirée ou balayée', 'String or weave bead', 'text', { span: 4 }),
+          champ('oscillation', 'Oscillation', 'Oscillation', 'text', { span: 4 }),
+          champ('passes', 'Monopasse ou multipasses (par côté)', 'Multipass or single pass (per side)', 'text', { span: 4 }),
+          champ('electrodes', 'Mono ou multi-électrodes', 'Single or multiple electrodes', 'text', { span: 4 }),
+          champ('other', 'Autre', 'Other', 'text', { span: 4 }),
+        ]),
+        tableau('tensile', 'Essai de traction (QW-150)', 'Tensile test (QW-150)', [
+          champ('specimen', 'Éprouvette n°', 'Specimen N°', 'text', { required: true, span: 1 }),
+          champ('width', 'Largeur', 'Width', 'number', { unit: 'mm', decimals: 2, span: 1 }),
+          champ('thickness', 'Épaisseur', 'Thickness', 'number', { unit: 'mm', decimals: 2, span: 1 }),
+          champ('area', 'Section', 'Area', 'number', { unit: 'mm²', decimals: 1, span: 2 }),
+          champ('load', 'Charge de rupture', 'Ultimate total load', 'number', { unit: 'N', decimals: 0, span: 2 }),
+          champ('stress', 'Contrainte de rupture', 'Ultimate unit stress', 'number', { unit: 'MPa', decimals: 0, span: 2 }),
+          champ('failure', 'Type et position de la rupture', 'Type of failure and location', 'text', { span: 3 }),
+        ]),
+        tableau('bend', 'Essai de pliage guidé (QW-160)', 'Guided bend test (QW-160)', [
+          champ('type', 'Type et figure n°', 'Type and figure N°', 'text', { required: true, span: 6 }),
+          champ('result', 'Résultat', 'Result', 'text', { required: true, span: 6 }),
+        ]),
+        tableau('toughness', 'Essais de ténacité (QW-170)', 'Toughness test (QW-170)', [
+          champ('specimen', 'Éprouvette n°', 'Specimen N°', 'text', { required: true, span: 1 }),
+          champ('notch', 'Position de l’entaille', 'Notch location', 'text', { span: 2 }),
+          champ('size', 'Dimension de l’éprouvette', 'Specimen size', 'text', { span: 2 }),
+          champ('temperature', 'Température d’essai', 'Test temperature', 'number', { unit: '°C', decimals: 0, span: 1 }),
+          champ('energy', 'Énergie', 'Energy', 'number', { unit: 'J', decimals: 0, span: 1 }),
+          champ('shear', 'Part ductile', 'Shear', 'number', { unit: '%', decimals: 0, span: 1 }),
+          champ('expansion', 'Expansion', 'Lateral expansion', 'number', { unit: 'mm', decimals: 2, span: 2 }),
+          champ('dropWeight', 'Drop weight (Pellini)', 'Drop weight', 'enum', { options: ['Rompu', 'Non rompu'], span: 2 }),
+        ]),
+        section('fillet', 'Essai de soudure d’angle (QW-180) et autres essais', 'Fillet weld test (QW-180) and other tests', [
+          champ('satisfactory', 'Résultat satisfaisant', 'Result satisfactory', 'enum', { options: OUI_NON, span: 3 }),
+          champ('penetration', 'Pénétration à la racine', 'Penetration into parent metal', 'enum', { options: OUI_NON, span: 3 }),
+          champ('macro', 'Macroscopie — résultats', 'Macro — results'),
+          champ('otherTest', 'Type d’autre essai', 'Type of other test'),
+          champ('depositAnalysis', 'Analyse sur dépôt', 'Deposit analysis'),
+          champ('comments', 'Observations', 'Comments', 'textarea', { span: 12 }),
+        ]),
+        section('welder', 'Soudeur et essais', 'Welder and tests', [
+          champ('name', 'Nom du soudeur', 'Welder’s name', 'text', { required: true, span: 4 }),
+          champ('clock', 'Matricule', 'Clock N°', 'text', { span: 4 }),
+          champ('stamp', 'Poinçon n°', 'Stamp N°', 'text', { span: 4 }),
+          champ('conductedBy', 'Essais dirigés par', 'Test conducted by'),
+          champ('labReport', 'Rapport d’essai laboratoire n°', 'Laboratory test N°'),
+          champ('manufacturer', 'Constructeur', 'Manufacturer', 'text', { span: 12 }),
+        ]),
+        {
+          key: 'signatures',
+          label: { fr: 'Certification', en: 'Certification' },
+          type: 'signature-matrix',
+          repeatable: false,
+          help: 'Le constructeur certifie l’exactitude du procès-verbal et que les assemblages d’essai ont été préparés, soudés et essayés selon la section IX du code ASME. La qualification a été réalisée en présence d’I2S TESTING, qui en certifie les résultats.',
+          signatories: [
+            { fr: 'Constructeur', en: 'Manufacturer' },
+            { fr: 'Inspecteur I2S TESTING', en: 'I2S TESTING inspector' },
+            { fr: 'Représentant autorisé I2S TESTING', en: 'I2S TESTING authorized representative' },
+          ],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F12 — PV DE QUALIFICATION DE MODE OPÉRATOIRE (référentiel européen)
+   *
+   *  Procès-verbal d'approbation : assemblage et matériaux de base, une
+   *  ligne de paramètres par passe, traitements thermiques, puis sept
+   *  familles d'essais. Il vise encore la directive 97/23/CE, remplacée
+   *  depuis par la 2014/68/UE — reproduit tel quel, à mettre à jour par le
+   *  QHSE.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F12',
+    version: '00',
+    title: 'PV de qualification de mode opératoire de soudage',
+    titleEn: 'Welding procedure qualification / approval record',
+    methodCode: 'WELD',
+    paradigm: 'CRITERIA',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        section('header', 'Identification', 'Identification', [
+          champ('number', 'PV n°', 'Record N°', 'text', { required: true, span: 4 }),
+          champ('manufacturer', 'Fabricant', 'Manufacturer', 'ref', { required: true, autofill: 'client', span: 4 }),
+          champ('place', 'Lieu du soudage', 'Place of welding', 'ref', { required: true, autofill: 'site', span: 4 }),
+          champ('weldingDate', 'Date de soudage', 'Date of welding', 'date', { required: true, span: 4 }),
+          champ('pwps', 'DMOS-P n°', 'pWPS N°', 'text', { required: true, span: 4 }),
+          champ('standard', 'Norme de référence', 'Reference standard', 'standard-ref', { required: true, autofill: 'standards', span: 4 }),
+          champ('supplementedBy', 'Complétée par', 'Supplemented by', 'text', { span: 4 }),
+          champ('witness', 'Essai réalisé en présence de', 'Test performed in the presence of', 'ref', { required: true, autofill: 'inspector', span: 4 }),
+          champ('stamp', 'N° de poinçon', 'Stamp N°', 'text', { span: 4 }),
+          champ('issuedOn', 'Procès-verbal établi le', 'Record issued on', 'date', { required: true, autofill: 'date', span: 6 }),
+          champ('otherId', 'Autre identification', 'Other identification', 'text', { span: 6 }),
+        ]),
+        section('testPiece', 'Assemblage', 'Test piece', [
+          champ('mark', 'Assemblage repère', 'Test piece N°', 'text', { required: true, span: 4 }),
+          champ('jointType', 'Type d’assemblage', 'Joint type', 'enum', { required: true, options: ['Bout à bout', 'Angle'], span: 4 }),
+          champ('form', 'Tubes ou tôles', 'Tubes or plates', 'enum', { required: true, options: ['Tubes', 'Tôles'], span: 4 }),
+          champ('fullPenetration', 'Pleine pénétration', 'Full penetration', 'boolean', { span: 4 }),
+          champ('backing', 'Support envers permanent', 'Permanent backing strip', 'enum', { options: OUI_NON, span: 4 }),
+          champ('backGouging', 'Gougeage ou meulage envers', 'Back gouging or chipping', 'boolean', { span: 4 }),
+          champ('grade1', 'Matériau 1 — nuance', 'Base material 1 — grade', 'text', { span: 6 }),
+          champ('grade2', 'Matériau 2 — nuance', 'Base material 2 — grade', 'text', { span: 6 }),
+          champ('standard1', 'Matériau 1 — norme ou spécification', 'Base material 1 — standard', 'text', { span: 6 }),
+          champ('standard2', 'Matériau 2 — norme ou spécification', 'Base material 2 — standard', 'text', { span: 6 }),
+          champ('heat1', 'Matériau 1 — n° de coulée', 'Base material 1 — heat N°', 'text', { span: 6 }),
+          champ('heat2', 'Matériau 2 — n° de coulée', 'Base material 2 — heat N°', 'text', { span: 6 }),
+          champ('thickness1', 'Matériau 1 — épaisseur', 'Base material 1 — thickness', 'number', { unit: 'mm', decimals: 1, span: 6 }),
+          champ('thickness2', 'Matériau 2 — épaisseur', 'Base material 2 — thickness', 'number', { unit: 'mm', decimals: 1, span: 6 }),
+          champ('diameter1', 'Matériau 1 — diamètre extérieur', 'Base material 1 — outside diameter', 'number', { unit: 'mm', decimals: 1, span: 6 }),
+          champ('diameter2', 'Matériau 2 — diamètre extérieur', 'Base material 2 — outside diameter', 'number', { unit: 'mm', decimals: 1, span: 6 }),
+          champ('jointDesign', 'Schéma de préparation', 'Joint design', 'textarea', { span: 6 }),
+          champ('sequence', 'Disposition des passes et épaisseur déposée par procédé', 'Welding sequences and deposited thickness per process', 'textarea', { span: 6 }),
+        ]),
+        tableau('passes', 'Paramètres par passe', 'Parameters per pass', [
+          champ('pass', 'N° de passe', 'Pass number', 'number', { required: true, decimals: 0, span: 1 }),
+          champ('position', 'Position', 'Position', 'text', { span: 1 }),
+          champ('process', 'Procédé et mécanisation', 'Process, degree of mechanization', 'text', { required: true, span: 1 }),
+          champ('welder', 'Soudeur', 'Welder’s name', 'text', { span: 1 }),
+          champ('fillerMaker', 'Métal d’apport — fabricant', 'Filler — manufacturer', 'text', { span: 1 }),
+          champ('fillerTrade', 'Métal d’apport — appellation', 'Filler — trade mark', 'text', { span: 1 }),
+          champ('fillerDesignation', 'Métal d’apport — désignation normalisée', 'Filler — std. designation', 'text', { span: 1 }),
+          champ('fillerDiameter', 'Métal d’apport — diamètre', 'Filler — diameter', 'number', { unit: 'mm', decimals: 1, span: 1 }),
+          champ('flux', 'Flux — fabricant, appellation, désignation', 'Flux', 'text', { span: 1 }),
+          champ('faceGas', 'Gaz endroit — type, désignation', 'Shielding gas (face)', 'text', { span: 1 }),
+          champ('faceFlow', 'Gaz endroit — débit', 'Shielding gas flow (face)', 'number', { unit: 'l/min', decimals: 1, span: 1 }),
+          champ('rootGas', 'Gaz envers — type, désignation', 'Root gas', 'text', { span: 1 }),
+          champ('rootFlow', 'Gaz envers — débit', 'Root gas flow', 'number', { unit: 'l/min', decimals: 1, span: 1 }),
+          champ('plasmaGas', 'Gaz plasma — type, désignation, débit', 'Plasma gas', 'text', { span: 1 }),
+          champ('current', 'Nature du courant', 'Type of current', 'text', { span: 1 }),
+          champ('tungsten', 'Électrode tungstène (type et Ø)', 'Tungsten electrode', 'text', { span: 1 }),
+          champ('polarity', 'Polarité', 'Electrode polarity', 'text', { span: 1 }),
+          champ('amps', 'Intensité', 'Current', 'number', { unit: 'A', decimals: 0, span: 1 }),
+          champ('volts', 'Tension à l’arc', 'Voltage', 'number', { unit: 'V', decimals: 1, span: 1 }),
+          champ('speed', 'Vitesse d’exécution', 'Welding speed', 'number', { unit: 'mm/s', decimals: 2, span: 1 }),
+          champ('heatInput', 'Apport de chaleur', 'Heat input', 'number', { unit: 'kJ/mm', decimals: 2, span: 1 }),
+          champ('interpass', 'Température maximale entre passes', 'Interpass temperature', 'number', { unit: '°C', decimals: 0, span: 1 }),
+          champ('equipment', 'Matériel de soudage', 'Welding equipment', 'text', { span: 1 }),
+        ], 'Degré de mécanisation : M manuel, A automatique, TM totalement mécanisé, PM partiellement mécanisé. Apport de chaleur = k·U·I·10⁻³ / v.'),
+        section('heat', 'Traitements thermiques', 'Heat treatments', [
+          champ('preheat', 'Préchauffage', 'Preheat', 'enum', { options: OUI_NON, span: 3 }),
+          champ('preheatTemp', 'Préchauffage — température', 'Preheat temperature', 'number', { unit: '°C', decimals: 0, span: 3 }),
+          champ('postheat', 'Postchauffage', 'Postheat', 'enum', { options: OUI_NON, span: 2 }),
+          champ('postheatTemp', 'Postchauffage — température', 'Postheat temperature', 'number', { unit: '°C', decimals: 0, span: 2 }),
+          champ('postheatTime', 'Postchauffage — durée du maintien', 'Holding time', 'text', { span: 2 }),
+          champ('pwht', 'Traitement thermique après soudage', 'PWHT', 'enum', { options: OUI_NON, span: 4 }),
+          champ('pwhtTemp', 'TTAS — température de maintien', 'PWHT holding temperature', 'number', { unit: '°C', decimals: 0, span: 4 }),
+          champ('heatingRate', 'TTAS — vitesse de montée', 'Heating rate', 'text', { span: 4 }),
+        ]),
+        tableau('ndt', '1 — Essais non destructifs', 'Non destructive tests', [
+          champ('method', 'Méthode', 'Method', 'enum', { required: true, options: ['VT', 'PT', 'MT', 'RT', 'UT'], span: 2 }),
+          champ('by', 'Exécuté par', 'Carried out by', 'text', { span: 4 }),
+          champ('result', 'Résultat', 'Result', 'text', { required: true, span: 3 }),
+          champ('report', 'N° de rapport', 'Report N°', 'text', { span: 3 }),
+        ]),
+        tableau('tensile', '2 — Essais de traction', 'Tensile tests', [
+          champ('mark', 'Repère', 'Mark', 'text', { required: true, span: 1 }),
+          champ('type', 'Nature', 'Type', 'enum', { options: ['Transversale', 'Cylindrique métal fondu'], span: 2 }),
+          champ('sizes', 'Dimensions', 'Sizes', 'text', { span: 1 }),
+          champ('temperature', 'Température d’essai', 'Test temperature', 'number', { unit: '°C', decimals: 0, span: 1 }),
+          champ('rm', 'Rm', 'Rm', 'number', { unit: 'N/mm²', decimals: 0, span: 1 }),
+          champ('re', 'Re', 'Re', 'number', { unit: 'N/mm²', decimals: 0, span: 1 }),
+          champ('a', 'A', 'A', 'number', { unit: '%', decimals: 1, span: 1 }),
+          champ('z', 'Z', 'Z', 'number', { unit: '%', decimals: 1, span: 1 }),
+          champ('fracture', 'Localisation de la cassure', 'Fracture location', 'text', { span: 1 }),
+          champ('remarks', 'Résultats et remarques', 'Results and remarks', 'text', { span: 2 }),
+        ], 'Re, A et Z pour éprouvette cylindrique seulement.'),
+        tableau('bend', '3 — Essais de pliage', 'Bend tests', [
+          champ('mark', 'Repère', 'Mark', 'text', { required: true, span: 2 }),
+          champ('orientation', 'Sens', 'Direction', 'enum', { options: ['Transversale', 'Longitudinale'], span: 2 }),
+          champ('former', 'Diamètre du poinçon', 'Former diameter', 'number', { unit: 'mm', decimals: 0, span: 2 }),
+          champ('side', 'Face tendue', 'Bent side', 'enum', { options: ['Endroit', 'Envers', 'Côté'], span: 2 }),
+          champ('remarks', 'Résultats et remarques', 'Results and remarks', 'text', { span: 4 }),
+        ]),
+        tableau('impact', '4 — Essais de flexion par choc', 'Impact tests', [
+          champ('mark', 'Repère de l’éprouvette', 'Specimen mark', 'text', { required: true, span: 2 }),
+          champ('temperature', 'Température d’essai', 'Test temperature', 'number', { unit: '°C', decimals: 0, span: 2 }),
+          champ('position', 'Position (P, M, R)', 'Specimen location', 'enum', { options: ['P — peau', 'M — mi-épaisseur', 'R — racine'], span: 2 }),
+          champ('notch', 'Entaille', 'Notch location', 'enum', { options: ['Métal fondu (VWT)', 'ZAT (VHT)'], span: 2 }),
+          champ('kcv', 'KCV individuelle', 'KCV individual', 'number', { unit: 'J/cm²', decimals: 0, span: 2 }),
+          champ('remarks', 'Résultats et remarques', 'Results and remarks', 'text', { span: 2 }),
+        ]),
+        section('hardness', '5 — Duretés (HV 10)', 'Hardness (HV 10)', [
+          champ('report', 'N° de rapport', 'Report N°', 'text', { span: 6 }),
+          champ('maxAllowed', 'Valeur maximale admissible', 'Max. allowable value', 'number', { unit: 'HV', decimals: 0, span: 6 }),
+        ]),
+        tableau('hardnessSurveys', 'Filiations de dureté', 'Hardness surveys', [
+          champ('survey', 'N° de filiation', 'Survey N°', 'text', { required: true, span: 3 }),
+          champ('values', 'Valeurs obtenues', 'Results', 'text', { required: true, span: 5 }),
+          champ('remarks', 'Résultats et remarques', 'Results and remarks', 'text', { span: 4 }),
+        ]),
+        tableau('macro', '6 — Examen macroscopique', 'Macroscopic examination', [
+          champ('mark', 'Repère', 'Mark', 'text', { required: true, span: 3 }),
+          champ('remarks', 'Remarques', 'Remarks', 'text', { span: 6 }),
+          champ('result', 'Résultat', 'Result', 'text', { required: true, span: 3 }),
+        ]),
+        section('reports', 'Rapports d’essais et autres examens', 'Test reports and other examinations', [
+          champ('tensileReport', 'Traction — n° de rapport', 'Tensile — report N°', 'text', { span: 4 }),
+          champ('impactReport', 'Flexion par choc — n° de rapport', 'Impact — report N°', 'text', { span: 4 }),
+          champ('macroReport', 'Macrographie — n° de rapport', 'Macro — report N°', 'text', { span: 4 }),
+          champ('other', '7 — Autres examens et essais', 'Other examinations and tests', 'textarea', { span: 12 }),
+        ], 'text'),
+        {
+          key: 'signatures',
+          label: { fr: 'Certification', en: 'Certification' },
+          type: 'signature-matrix',
+          repeatable: false,
+          help: 'I2S TESTING, organisme agréé par l’État, certifie que les assemblages de qualification ont été préparés, soudés et contrôlés de façon satisfaisante selon les documents référencés. Le mode opératoire satisfait aux exigences essentielles de sécurité du paragraphe 3.1.2 de l’annexe I du décret 99-1046 du 13 décembre 1999 (directive 97/23/CE). Ce procès-verbal fait office d’attestation d’approbation.',
+          signatories: [
+            { fr: 'Organisme d’examen — représentant autorisé', en: 'Examining body — authorized representative' },
+            { fr: 'Fabricant — représenté par', en: 'Manufacturer — represented by' },
+          ],
+        },
       ],
     },
   },
