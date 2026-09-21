@@ -15,7 +15,7 @@ import { Button, Card, StatusBadge } from '@/components/ui';
 /**
  * Rendu générique d'un formulaire d'inspection.
  *
- * Un seul composant sert les 61 formulaires du référentiel : il lit le schéma
+ * Un seul composant sert tous les formulaires du référentiel : il lit le schéma
  * du template et produit la saisie correspondante. Ajouter un formulaire ne
  * demande aucune ligne de code ici.
  */
@@ -285,6 +285,10 @@ function SectionRenderer({
       }
     >
       <div className="px-5 py-4">
+        {/* La mention est imprimée au rapport ; l'aide ne sert qu'à la saisie. */}
+        {section.reference && (
+          <p className="mb-2 text-[13.5px] font-medium text-text">{section.reference}</p>
+        )}
         {section.help && <p className="mb-4 text-[13.5px] text-muted">{section.help}</p>}
 
         {section.type === 'devices' ? (

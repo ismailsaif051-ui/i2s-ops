@@ -1,11 +1,11 @@
 import PDFDocument from 'pdfkit';
-import type { TemplateSchema, TemplateSection } from '@i2s/contracts';
+import type { TemplateField, TemplateSchema, TemplateSection } from '@i2s/contracts';
 
 /**
  * Rendu PDF d'un rapport d'inspection.
  *
  * Le document est produit à partir du schéma du formulaire, comme l'écran de
- * saisie : les 61 formulaires du référentiel passent par ce seul rendu, et un
+ * saisie : tous les formulaires du référentiel passent par ce seul rendu, et un
  * formulaire ajouté demain sortira sans qu'on touche à ce fichier.
  *
  * Ce PDF est la pièce remise au client. Il porte donc ce qui l'engage — numéro,
@@ -58,6 +58,39 @@ function text(value: unknown): string {
   return String(value);
 }
 
+/**
+ * Valeur d'un champ telle qu'elle doit se lire sur un rapport : nombre au
+ * format français avec son unité, date en jj/mm/aaaa. Sans l'unité, « CMU :
+ * 12,35 » ne dit pas s'il s'agit de tonnes ou de kilogrammes.
+ */
+function fieldText(field: Pick<TemplateField, 'type' | 'unit' | 'decimals'>, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+
+  if (field.type === 'number' && typeof value === 'number' && Number.isFinite(value)) {
+    const formatted = value.toLocaleString('fr-FR', {
+      minimumFractionDigits: field.decimals ?? 0,
+      maximumFractionDigits: field.decimals ?? 3,
+      // Pas d'espace des milliers sous 10 000 : une année de fabrication
+      // s'imprimerait « 2 019 ».
+      useGrouping: Math.abs(value) >= 10000,
+    });
+    return field.unit ? `${formatted} ${field.unit}` : formatted;
+  }
+
+  if (field.type === 'date' && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [y, m, d] = value.slice(0, 10).split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  const plain = text(value);
+  return field.unit && plain !== '—' ? `${plain} ${field.unit}` : plain;
+}
+
+/** Libellé de colonne ou de champ, suivi de son unité comme à l'écran. */
+function labelWithUnit(field: Pick<TemplateField, 'label' | 'unit'>): string {
+  return field.unit ? `${field.label.fr} (${field.unit})` : field.label.fr;
+}
+
 const VERDICTS: Record<string, string> = {
   C: 'Conforme',
   NC: 'Non conforme',
@@ -87,6 +120,16 @@ function sectionTitle(doc: Doc, index: number, section: TemplateSection): void {
     .restore();
 
   doc.y = y + 24;
+  mention(doc, section.reference);
+}
+
+/** Mention imprimée au modèle : textes réglementaires visés, attestation, lieu de signature. */
+function mention(doc: Doc, reference: string | undefined): void {
+  if (!reference) return;
+  doc.font('Helvetica-Oblique').fontSize(8);
+  ensure(doc, doc.heightOfString(reference, { width: WIDTH }) + 6);
+  doc.fillColor(INK).text(reference, PAGE.margin, doc.y, { width: WIDTH });
+  doc.moveDown(0.5);
 }
 
 /** Deux colonnes d'étiquettes et valeurs, comme sur les formulaires papier. */
@@ -102,8 +145,16 @@ function keyValues(doc: Doc, entries: Array<[string, string]>): void {
     const used = Math.max(
       ...pair.map(([, value]) => doc.heightOfString(value, { width: columnWidth })),
     );
+    // Les libellés aussi : un libellé long sur deux lignes chevauchait sa valeur.
+    doc.font('Helvetica').fontSize(6.5);
+    const labelHeight = Math.max(
+      9,
+      ...pair.map(([label]) =>
+        doc.heightOfString(label.toUpperCase(), { width: columnWidth, characterSpacing: 0.3 }) + 1.5,
+      ),
+    );
 
-    ensure(doc, 9 + used + 6);
+    ensure(doc, labelHeight + used + 6);
     const y = doc.y;
 
     pair.forEach(([label, value], column) => {
@@ -111,53 +162,74 @@ function keyValues(doc: Doc, entries: Array<[string, string]>): void {
       doc.font('Helvetica').fontSize(6.5).fillColor(MUTED)
         .text(label.toUpperCase(), x, y, { width: columnWidth, characterSpacing: 0.3 });
       doc.font('Helvetica').fontSize(9).fillColor(INK)
-        .text(value, x, y + 9, { width: columnWidth });
+        .text(value, x, y + labelHeight, { width: columnWidth });
     });
 
-    doc.y = y + 9 + used + 6;
+    doc.y = y + labelHeight + used + 6;
   }
 }
 
-function table(doc: Doc, headers: string[], rows: string[][]): void {
-  if (rows.length === 0) {
-    ensure(doc, 20);
-    doc.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED)
-      .text('Aucune ligne saisie.', PAGE.margin, doc.y, { width: WIDTH });
-    doc.moveDown(0.4);
-    return;
-  }
+interface Column {
+  label: string;
+  /** Poids relatif dans la largeur : la largeur prévue par le formulaire. */
+  weight: number;
+}
 
-  const columnWidth = WIDTH / headers.length;
-  ensure(doc, 40);
+/** Au-delà, une grille ne laisse que quelques millimètres par case : chaque ligne devient une fiche. */
+const MAX_TABLE_COLUMNS = 9;
 
-  let y = doc.y;
-  doc.save().rect(PAGE.margin, y, WIDTH, 16).fill(WASH).restore();
-  headers.forEach((header, i) => {
+function emptyRows(doc: Doc): void {
+  ensure(doc, 20);
+  doc.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED)
+    .text('Aucune ligne saisie.', PAGE.margin, doc.y, { width: WIDTH });
+  doc.moveDown(0.4);
+}
+
+function drawHeader(doc: Doc, columns: Column[], widths: number[], y: number): number {
+  doc.font('Helvetica-Bold').fontSize(7);
+  // Mesurer l'en-tête : une hauteur fixe laissait les libellés longs
+  // déborder sur la première ligne du tableau.
+  const height = Math.max(
+    16,
+    ...columns.map((c, i) => doc.heightOfString(c.label, { width: widths[i] - 8 }) + 8),
+  );
+  doc.save().rect(PAGE.margin, y, WIDTH, height).fill(WASH).restore();
+  let x = PAGE.margin;
+  columns.forEach((c, i) => {
     doc.font('Helvetica-Bold').fontSize(7).fillColor(MUTED)
-      .text(header, PAGE.margin + i * columnWidth + 4, y + 5, {
-        width: columnWidth - 8,
-        lineBreak: false,
-        ellipsis: true,
-      });
+      .text(c.label, x + 4, y + 4, { width: widths[i] - 8 });
+    x += widths[i];
   });
-  y += 16;
+  return y + height;
+}
 
-  doc.font('Helvetica').fontSize(8);
+function table(doc: Doc, columns: Column[], rows: string[][]): void {
+  if (rows.length === 0) return emptyRows(doc);
+
+  const total = columns.reduce((sum, c) => sum + c.weight, 0);
+  const widths = columns.map((c) => (WIDTH * c.weight) / total);
+  ensure(doc, 48);
+
+  let y = drawHeader(doc, columns, widths, doc.y);
 
   for (const row of rows) {
+    doc.font('Helvetica').fontSize(8);
     const height = Math.max(
       16,
-      ...row.map((cell) => doc.heightOfString(cell, { width: columnWidth - 8 }) + 8),
+      ...row.map((cell, i) => doc.heightOfString(cell, { width: widths[i] - 8 }) + 8),
     );
 
-    if (y + height > doc.page.height - PAGE.margin) {
+    if (y + height > doc.page.height - PAGE.margin - 24) {
       doc.addPage();
-      y = doc.y;
+      // L'en-tête est répété : une page de chiffres sans colonnes nommées est illisible.
+      y = drawHeader(doc, columns, widths, doc.y);
     }
 
+    let x = PAGE.margin;
     row.forEach((cell, i) => {
       doc.font('Helvetica').fontSize(8).fillColor(INK)
-        .text(cell, PAGE.margin + i * columnWidth + 4, y + 4, { width: columnWidth - 8 });
+        .text(cell, x + 4, y + 4, { width: widths[i] - 8 });
+      x += widths[i];
     });
 
     y += height;
@@ -166,6 +238,50 @@ function table(doc: Doc, headers: string[], rows: string[][]): void {
   }
 
   doc.y = y + 6;
+}
+
+/**
+ * Tableau trop large pour la page (PMI à vingt colonnes, paramètres de
+ * soudage par passe) : chaque ligne s'imprime comme une fiche numérotée,
+ * libellé et valeur côte à côte, trois par rangée.
+ */
+function recordCards(doc: Doc, labels: string[], rows: string[][]): void {
+  if (rows.length === 0) return emptyRows(doc);
+
+  const perRow = 3;
+  const gap = 12;
+  const cell = (WIDTH - gap * (perRow - 1)) / perRow;
+
+  rows.forEach((row, index) => {
+    ensure(doc, 40);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(ACCENT)
+      .text(`Ligne ${index + 1}`, PAGE.margin, doc.y, { width: WIDTH });
+    doc.moveDown(0.2);
+
+    for (let i = 0; i < labels.length; i += perRow) {
+      const slice = labels.slice(i, i + perRow);
+      // Un libellé tronqué n'a pas sa place dans un rapport : il passe à la ligne.
+      // Pas de capitales : elles feraient lire « CO » pour le cobalt.
+      doc.font('Helvetica').fontSize(6);
+      const labelHeight = Math.max(
+        ...slice.map((label) => doc.heightOfString(label, { width: cell })),
+      );
+      doc.font('Helvetica').fontSize(8.5);
+      const used = Math.max(...slice.map((_, k) => doc.heightOfString(row[i + k], { width: cell })));
+      ensure(doc, labelHeight + 2 + used + 4);
+      const y = doc.y;
+      slice.forEach((label, k) => {
+        const x = PAGE.margin + k * (cell + gap);
+        doc.font('Helvetica').fontSize(6).fillColor(MUTED)
+          .text(label, x, y, { width: cell });
+        doc.font('Helvetica').fontSize(8.5).fillColor(INK).text(row[i + k], x, y + labelHeight + 2, { width: cell });
+      });
+      doc.y = y + labelHeight + 2 + used + 4;
+    }
+
+    rule(doc);
+    doc.moveDown(0.4);
+  });
 }
 
 /** Ajoute une page si la hauteur demandée ne tient pas sur celle en cours. */
@@ -180,10 +296,25 @@ function renderSection(doc: Doc, section: TemplateSection, value: unknown, input
     case 'table': {
       const columns = section.columns ?? [];
       const rows = Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
+
+      if (columns.length > MAX_TABLE_COLUMNS) {
+        // L'unité est portée par chaque valeur : le libellé reste court.
+        recordCards(
+          doc,
+          columns.map((c) => c.label.fr),
+          rows.map((row) => columns.map((c) => fieldText(c, row[c.key]))),
+        );
+        break;
+      }
+
+      // Dans une grille, l'unité va dans l'en-tête et la valeur reste nue.
       table(
         doc,
-        ['#', ...columns.map((c) => c.label.fr)],
-        rows.map((row, i) => [String(i + 1), ...columns.map((c) => text(row[c.key]))]),
+        [{ label: '#', weight: 0.6 }, ...columns.map((c) => ({ label: labelWithUnit(c), weight: c.span ?? 6 }))],
+        rows.map((row, i) => [
+          String(i + 1),
+          ...columns.map((c) => fieldText({ ...c, unit: undefined }, row[c.key])),
+        ]),
       );
       break;
     }
@@ -266,7 +397,11 @@ function renderSection(doc: Doc, section: TemplateSection, value: unknown, input
     case 'devices': {
       table(
         doc,
-        ['Repère', 'Désignation', 'Étalonné jusqu’au'],
+        [
+          { label: 'Repère', weight: 1 },
+          { label: 'Désignation', weight: 2 },
+          { label: 'Étalonné jusqu’au', weight: 1 },
+        ],
         input.devices.map((d) => [d.code, d.designation, fr(d.validUntil)]),
       );
       break;
@@ -290,7 +425,7 @@ function renderSection(doc: Doc, section: TemplateSection, value: unknown, input
       const record = (value ?? {}) as Record<string, unknown>;
       keyValues(
         doc,
-        (section.fields ?? []).map((field) => [field.label.fr, text(record[field.key])]),
+        (section.fields ?? []).map((field) => [field.label.fr, fieldText(field, record[field.key])]),
       );
     }
   }
@@ -465,7 +600,15 @@ export function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
       if (input.inspection) {
         const sections = input.inspection.schema.sections ?? [];
         sections.forEach((section, index) => {
-          if (section.type === 'signature-matrix') return;
+          if (section.type === 'signature-matrix') {
+            // Les visas sont imprimés une seule fois en pied de rapport, mais la
+            // mention qui les accompagne au modèle (certification, « Fait à ») reste.
+            if (section.reference) {
+              doc.moveDown(0.8);
+              mention(doc, section.reference);
+            }
+            return;
+          }
           sectionTitle(doc, index + 1, section);
           renderSection(doc, section, input.inspection!.data[section.key], input);
         });

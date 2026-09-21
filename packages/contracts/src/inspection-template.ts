@@ -149,7 +149,14 @@ export const sectionSchema = z.object({
   repeatable: z.boolean().default(false),
   minRows: z.number().int().min(0).optional(),
   maxRows: z.number().int().min(1).optional(),
+  /** Aide à la saisie, pour l'inspecteur seulement : jamais imprimée. */
   help: z.string().optional(),
+  /**
+   * Mention imprimée sur le rapport sous le titre de la section — les textes
+   * réglementaires visés, par exemple. Distincte de l'aide, qui peut porter
+   * des consignes internes sans place dans un document remis au client.
+   */
+  reference: z.string().optional(),
 });
 export type TemplateSection = z.infer<typeof sectionSchema>;
 

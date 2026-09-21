@@ -130,6 +130,10 @@ function SectionPreview({ section, index }: { section: TemplateSection; index: n
       }
     >
       <div className="px-5 py-4">
+        {/* La mention est imprimée au rapport ; l'aide ne sert qu'à la saisie. */}
+        {section.reference && (
+          <p className="mb-2 text-[13.5px] font-medium text-text">{section.reference}</p>
+        )}
         {section.help && <p className="mb-4 text-[13.5px] text-muted">{section.help}</p>}
 
         {/* Champs simples et colonnes de tableau */}
