@@ -5,14 +5,11 @@
  * PR02 EILM, PR03 CTC) : un modèle par formulaire, avec son code QMS exact.
  * Ce sont des données réelles de l'entreprise, pas un jeu de démonstration.
  *
- * Seuls quelques modèles ont déjà leur formulaire de saisie construit. Les
- * autres entrent au référentiel en brouillon : ils servent dès maintenant à
- * classer et filtrer les rapports par type, mais ne peuvent pas encore être
- * saisis — l'écran de saisie ne propose que les modèles publiés, et l'API
- * refuse les autres.
- *
- * Le paradigme (mesures, liste de contrôle, critères) est provisoire pour les
- * modèles non construits : il sera confirmé à la construction du formulaire.
+ * Chaque modèle a son formulaire de saisie construit (`report-templates.ts`),
+ * qui doit dire la même chose que ce catalogue — méthode et paradigme. Un
+ * modèle ajouté ici sans formulaire entre au référentiel en brouillon : il
+ * classe les rapports par type mais ne peut pas être saisi, l'écran de saisie
+ * ne proposant que les formulaires publiés.
  */
 export interface ReportForm {
   formCode: string;

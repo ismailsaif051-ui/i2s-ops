@@ -63,13 +63,12 @@
  *   PR02-F41  Vérin hydraulique                     → accessoire
  *   PR02-F42  Centrale hydraulique                  → accessoire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
+ *   PR03-F02  Notice de sécurité incendie           → avis par disposition
  *
- * Les six formulaires END du lot L1 sont couverts, ainsi que l’ensemble des
- * formulaires EILM.
- *
- * Les autres formulaires du catalogue (`report-forms.ts`) restent en brouillon
- * tant que leur structure n'a pas été relevée : ils classent les rapports sans
- * pouvoir être saisis.
+ * Tous les formulaires du catalogue (`report-forms.ts`) sont construits. Là
+ * où le modèle d'origine s'écarte de son titre, cite un texte abrogé ou
+ * copie un rapport réel, le formulaire le dit en commentaire : ces écarts
+ * sont à arbitrer par le QHSE, pas à corriger en silence ici.
  *
  * Les libellés bilingues, l'ordre des blocs et les listes de valeurs sont
  * repris des formulaires existants : un rapport généré doit être visuellement
@@ -5366,6 +5365,120 @@ export const TEMPLATES: TemplateSeed[] = [
           signatories: [
             { fr: 'Organisme d’examen — représentant autorisé', en: 'Examining body — authorized representative' },
             { fr: 'Fabricant — représenté par', en: 'Manufacturer — represented by' },
+          ],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR03-F02 — RAPPORT SUR NOTICE DE SÉCURITÉ INCENDIE
+   *
+   *  Le modèle n'est qu'un sommaire : présentation du projet, puis examen
+   *  des notices de sécurité selon le RGC 2020. Ses rubriques deviennent
+   *  les sections ; chaque disposition examinée reçoit un avis, et la
+   *  conclusion reprend les trois avis du contrôle technique (PR03-F01).
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR03-F02',
+    version: '00',
+    title: 'Rapport sur notice de sécurité incendie',
+    methodCode: 'CTC',
+    paradigm: 'CRITERIA',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Rapport de sécurité incendie' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'project', label: { fr: 'Projet' }, type: 'text', required: true, span: 6 },
+            { key: 'owner', label: { fr: 'Maître d’ouvrage' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'affairNumber', label: { fr: 'N° d’affaire' }, type: 'ref', required: true, autofill: 'affairNumber', span: 3 },
+            { key: 'reference', label: { fr: 'Référence' }, type: 'text', required: false, span: 3 },
+            { key: 'index', label: { fr: 'Indice' }, type: 'text', required: true, span: 3 },
+            { key: 'date', label: { fr: 'Date' }, type: 'date', required: true, autofill: 'date', span: 3 },
+            { key: 'purpose', label: { fr: 'Objet du rapport' }, type: 'textarea', required: true, span: 12 },
+          ],
+        },
+        {
+          key: 'presentation',
+          label: { fr: 'Section 1 — Présentation' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'situation', label: { fr: 'Situation du projet' }, type: 'textarea', required: true, span: 12 },
+            { key: 'regulations', label: { fr: 'Références réglementaires' }, type: 'textarea', required: true, span: 12 },
+          ],
+        },
+        {
+          key: 'documents',
+          label: { fr: 'Documents examinés' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          columns: [
+            { key: 'document', label: { fr: 'Document' }, type: 'text', required: true, span: 6 },
+            { key: 'index', label: { fr: 'Indice' }, type: 'text', required: false, span: 3 },
+            { key: 'author', label: { fr: 'Émetteur' }, type: 'text', required: false, span: 3 },
+          ],
+        },
+        {
+          key: 'establishments',
+          label: { fr: 'Identification des établissements' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          columns: [
+            { key: 'establishment', label: { fr: 'Établissement' }, type: 'text', required: true, span: 5 },
+            { key: 'activity', label: { fr: 'Type ou activité' }, type: 'text', required: false, span: 4 },
+            { key: 'category', label: { fr: 'Catégorie' }, type: 'text', required: false, span: 3 },
+          ],
+        },
+        {
+          key: 'notices',
+          label: { fr: 'Section 2 — Notices de sécurité selon le RGC 2020' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'F : favorable · D : défavorable · S : suspendu · SO : sans objet · C : conforme · NC : non conforme · PM : pour mémoire.',
+          columns: [
+            { key: 'provision', label: { fr: 'Disposition examinée' }, type: 'text', required: true, span: 5 },
+            { key: 'opinion', label: { fr: 'Avis' }, type: 'enum', required: true, options: ['F', 'D', 'S', 'SO', 'C', 'NC', 'PM'], span: 2 },
+            { key: 'comment', label: { fr: 'Observation' }, type: 'text', required: false, span: 5 },
+          ],
+        },
+        {
+          key: 'observations',
+          label: { fr: 'Observations et réserves' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'observations', label: { fr: 'Observations' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'conclusion',
+          label: { fr: 'Conclusion' },
+          type: 'verdict',
+          repeatable: false,
+          verdicts: [
+            { fr: 'Avis favorable' },
+            { fr: 'Avis favorable avec réserves' },
+            { fr: 'Avis défavorable' },
+          ],
+        },
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [
+            { fr: 'Rédacteur du rapport' },
+            { fr: 'Vérificateur de conformité' },
+            { fr: 'Représentant du client' },
           ],
         },
       ],
