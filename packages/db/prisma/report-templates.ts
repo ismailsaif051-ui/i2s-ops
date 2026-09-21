@@ -38,6 +38,7 @@
  *   PR02-F27  Groupe électrogène                    → liste continue
  *   PR02-F28  Bétonnière                            → engin de chantier
  *   PR02-F33  Protection cathodique                 → mesures de potentiels
+ *   PR02-F34  Mise en service d’ascenseur           → constatations et essais
  *   PR02-F35  Stop-chute                            → accessoire
  *   PR02-F36  Certificat d’installation électrique  → attestation
  *   PR02-F37  Mise en service de palonnier          → essai statique
@@ -579,6 +580,140 @@ const echafaudageChecks = (documentMontage: string) => ({
     },
   ],
 });
+
+/* ── Ascenseurs et monte-charges ──────────────────────────────────── */
+
+/**
+ * Constatations d'ascenseur : dix groupes de la gaine à la machine, repris à
+ * l'identique par la vérification périodique (F12) et la mise en service
+ * (F34). « Sans objet » et « non testé » restent des réponses, pas des
+ * attendus ; les descriptifs de tête de groupe sont dans les caractéristiques.
+ */
+const ASCENSEUR_CHECKS = {
+  key: 'checks',
+  label: { fr: 'Constatations' },
+  type: 'checklist',
+  repeatable: false,
+  help: EILM_CHECKS_HELP,
+  groups: [
+    {
+      key: 'shaft',
+      label: { fr: 'Gaine' },
+      points: [
+        { key: 'shaft-walls', label: { fr: 'Parois de protection' }, expected: 'Sans défaut apparent' },
+        { key: 'shaft-doors', label: { fr: 'Panneau, porte, portillon, visite de secours' }, expected: 'Réalisation, état, fonctionnement corrects' },
+        { key: 'shaft-toe-guards', label: { fr: 'Garde-pieds, seuils' }, expected: 'État satisfaisant' },
+        { key: 'pit-access', label: { fr: 'Moyens d’accès à la cuvette' }, expected: 'Sans défaut apparent' },
+        { key: 'pit', label: { fr: 'Cuvette' }, expected: 'État satisfaisant' },
+        { key: 'pit-stop', label: { fr: 'Dispositif d’arrêt en cuvette' }, expected: 'Bon état et fonctionne correctement' },
+        { key: 'buffers', label: { fr: 'Amortisseurs, socles, butées' }, expected: 'Bon état et fonctionne correctement' },
+        { key: 'guides', label: { fr: 'Éléments de guidage' }, expected: 'Fixation sans défaut apparent' },
+      ],
+    },
+    {
+      key: 'landings',
+      label: { fr: 'Équipement des paliers' },
+      points: [
+        { key: 'landing-lighting', label: { fr: 'Éclairage' }, expected: 'Fonctionne' },
+        { key: 'landing-signals', label: { fr: 'Signalisation' }, expected: 'Fonctionne' },
+        { key: 'landing-display', label: { fr: 'Affichage' }, expected: 'En bon état' },
+        { key: 'firefighter', label: { fr: 'Manœuvre pompier' } },
+      ],
+    },
+    {
+      key: 'landing-doors',
+      label: { fr: 'Portes palières' },
+      points: [
+        { key: 'landing-door-parts', label: { fr: 'Éléments constitutifs' }, expected: 'État satisfaisant' },
+        { key: 'landing-locks', label: { fr: 'Serrures et dispositifs de verrouillage' }, expected: 'Bon fonctionnement' },
+        { key: 'landing-closing', label: { fr: 'Condamnation électrique, contrôle de fermeture' }, expected: 'Bon fonctionnement' },
+      ],
+    },
+    {
+      key: 'suspension',
+      label: { fr: 'Organes de suspension' },
+      points: [
+        { key: 'suspension-type', label: { fr: 'Caractéristiques' }, expected: 'Type adapté' },
+        { key: 'suspension-state', label: { fr: 'État général' }, expected: 'Sans défaut apparent' },
+        { key: 'attachments', label: { fr: 'Attaches' }, expected: 'Correctement réalisées, sans défaut apparent' },
+        { key: 'pulleys', label: { fr: 'Poulies, pignons' }, expected: 'Sans défaut apparent' },
+        { key: 'ram', label: { fr: 'Vérin — état' } },
+      ],
+    },
+    {
+      key: 'cabin',
+      label: { fr: 'Cabine' },
+      points: [
+        { key: 'cabin-parts', label: { fr: 'Éléments constitutifs' }, expected: 'État satisfaisant' },
+        { key: 'emergency-hatches', label: { fr: 'Trappes de secours' } },
+        { key: 'emergency-doors', label: { fr: 'Portes de secours' } },
+        { key: 'service-face', label: { fr: 'Face de service' }, expected: 'Sans jeu excessif' },
+        { key: 'cabin-toe-guard', label: { fr: 'Garde-pieds' }, expected: 'Dispositions satisfaisantes' },
+        { key: 'cabin-doors', label: { fr: 'Portes de cabine' }, expected: 'Sans défaut apparent' },
+        { key: 'cabin-lock', label: { fr: 'Dispositif de verrouillage' }, expected: 'Réalisation correcte, essais satisfaisants' },
+        { key: 'cabin-closing', label: { fr: 'Contrôle de fermeture' }, expected: 'En place et fonctionne correctement' },
+        { key: 'cabin-lighting', label: { fr: 'Éclairage normal de la cabine' }, expected: 'En place et fonctionne correctement' },
+        { key: 'cabin-display', label: { fr: 'Affichage' }, expected: 'Bon état' },
+        { key: 'cabin-stop', label: { fr: 'Dispositif d’arrêt en cabine' }, expected: 'Bon état' },
+        { key: 'door-reopening', label: { fr: 'Dispositif de réouverture de porte' }, expected: 'En place, essai satisfaisant' },
+        { key: 'roof-stop', label: { fr: 'Dispositif d’arrêt sur le toit' }, expected: 'En place et fonctionne correctement' },
+      ],
+    },
+    {
+      key: 'counterweight',
+      label: { fr: 'Contrepoids' },
+      points: [
+        { key: 'counterweight-parts', label: { fr: 'Éléments constitutifs' }, expected: 'Sans défaut apparent' },
+      ],
+    },
+    {
+      key: 'compensation',
+      label: { fr: 'Organe de compensation' },
+      points: [
+        { key: 'compensation-parts', label: { fr: 'Éléments constitutifs' } },
+      ],
+    },
+    {
+      key: 'safety',
+      label: { fr: 'Dispositifs de sécurité' },
+      points: [
+        { key: 'cabin-safety-gear', label: { fr: 'Parachute de cabine' }, expected: 'Dispositif constructif' },
+        { key: 'counterweight-safety-gear', label: { fr: 'Parachute de contrepoids' } },
+        { key: 'ascending-overspeed', label: { fr: 'Dispositif contre la vitesse excessive en montée' }, expected: 'Dispositif constructif en état' },
+        { key: 'uncontrolled-movement', label: { fr: 'Dispositif contre le mouvement incontrôlé' }, expected: 'Dispositif constructif en état' },
+        { key: 'overspeed-governor', label: { fr: 'Limiteur de vitesse' }, expected: 'Dispositif constructif en état' },
+        { key: 'hydraulic-creep', label: { fr: 'Dispositif s’opposant à la dérive — appareil hydraulique' } },
+        { key: 'maintenance-lock', label: { fr: 'Verrouillage de la cabine (maintenance)' } },
+        { key: 'maintenance-stop', label: { fr: 'Butée de la cabine (maintenance)' } },
+        { key: 'slack-rope', label: { fr: 'Contrôle de rupture ou de mou de suspente' } },
+        { key: 'link', label: { fr: 'Organe de liaison' }, expected: 'Sans défaut apparent' },
+        { key: 'overtravel', label: { fr: 'Hors course' }, expected: 'Sans défaut apparent' },
+      ],
+    },
+    {
+      key: 'machine-room',
+      label: { fr: 'Locaux de la machine et des poulies' },
+      points: [
+        { key: 'room-access', label: { fr: 'Accès aux locaux' } },
+        { key: 'floor', label: { fr: 'Sol' } },
+        { key: 'inner-access', label: { fr: 'Accès à l’intérieur du local' } },
+        { key: 'main-switch', label: { fr: 'Interrupteur de force motrice' }, expected: 'En place, bon fonctionnement' },
+        { key: 'room-lighting', label: { fr: 'Éclairage normal et de secours' } },
+        { key: 'pulley-stop', label: { fr: 'Interrupteur d’arrêt du local des poulies' }, expected: 'Réalisation correcte, bon état, fonctionne correctement' },
+      ],
+    },
+    {
+      key: 'machine',
+      label: { fr: 'Machine' },
+      points: [
+        { key: 'machine', label: { fr: 'Machine' }, expected: 'Sans défaut apparent' },
+        { key: 'manual-rescue', label: { fr: 'Manœuvre de secours manuelle' }, expected: 'Réalisation correcte, sans défaut apparent, fonctionnement satisfaisant' },
+        { key: 'electric-recall', label: { fr: 'Manœuvre électrique de rappel' } },
+        { key: 'switchgear', label: { fr: 'Appareillage électrique' }, expected: 'Sans défaut apparent' },
+      ],
+    },
+  ],
+};
 
 /**
  * En-tête de visite pont roulant. Seuls les textes réglementaires cités
@@ -3531,135 +3666,238 @@ export const TEMPLATES: TemplateSeed[] = [
             { key: 'trippingSpeed', label: { fr: 'Vitesse de prise du parachute' }, type: 'number', required: false, unit: 'm/s', decimals: 2, span: 4 },
           ],
         },
-        {
-          key: 'checks',
-          label: { fr: 'Constatations' },
-          type: 'checklist',
-          repeatable: false,
-          help: EILM_CHECKS_HELP,
-          groups: [
-            {
-              key: 'shaft',
-              label: { fr: 'Gaine' },
-              points: [
-                { key: 'shaft-walls', label: { fr: 'Parois de protection' }, expected: 'Sans défaut apparent' },
-                { key: 'shaft-doors', label: { fr: 'Panneau, porte, portillon, visite de secours' }, expected: 'Réalisation, état, fonctionnement corrects' },
-                { key: 'shaft-toe-guards', label: { fr: 'Garde-pieds, seuils' }, expected: 'État satisfaisant' },
-                { key: 'pit-access', label: { fr: 'Moyens d’accès à la cuvette' }, expected: 'Sans défaut apparent' },
-                { key: 'pit', label: { fr: 'Cuvette' }, expected: 'État satisfaisant' },
-                { key: 'pit-stop', label: { fr: 'Dispositif d’arrêt en cuvette' }, expected: 'Bon état et fonctionne correctement' },
-                { key: 'buffers', label: { fr: 'Amortisseurs, socles, butées' }, expected: 'Bon état et fonctionne correctement' },
-                { key: 'guides', label: { fr: 'Éléments de guidage' }, expected: 'Fixation sans défaut apparent' },
-              ],
-            },
-            {
-              key: 'landings',
-              label: { fr: 'Équipement des paliers' },
-              points: [
-                { key: 'landing-lighting', label: { fr: 'Éclairage' }, expected: 'Fonctionne' },
-                { key: 'landing-signals', label: { fr: 'Signalisation' }, expected: 'Fonctionne' },
-                { key: 'landing-display', label: { fr: 'Affichage' }, expected: 'En bon état' },
-                { key: 'firefighter', label: { fr: 'Manœuvre pompier' } },
-              ],
-            },
-            {
-              key: 'landing-doors',
-              label: { fr: 'Portes palières' },
-              points: [
-                { key: 'landing-door-parts', label: { fr: 'Éléments constitutifs' }, expected: 'État satisfaisant' },
-                { key: 'landing-locks', label: { fr: 'Serrures et dispositifs de verrouillage' }, expected: 'Bon fonctionnement' },
-                { key: 'landing-closing', label: { fr: 'Condamnation électrique, contrôle de fermeture' }, expected: 'Bon fonctionnement' },
-              ],
-            },
-            {
-              key: 'suspension',
-              label: { fr: 'Organes de suspension' },
-              points: [
-                { key: 'suspension-type', label: { fr: 'Caractéristiques' }, expected: 'Type adapté' },
-                { key: 'suspension-state', label: { fr: 'État général' }, expected: 'Sans défaut apparent' },
-                { key: 'attachments', label: { fr: 'Attaches' }, expected: 'Correctement réalisées, sans défaut apparent' },
-                { key: 'pulleys', label: { fr: 'Poulies, pignons' }, expected: 'Sans défaut apparent' },
-                { key: 'ram', label: { fr: 'Vérin — état' } },
-              ],
-            },
-            {
-              key: 'cabin',
-              label: { fr: 'Cabine' },
-              points: [
-                { key: 'cabin-parts', label: { fr: 'Éléments constitutifs' }, expected: 'État satisfaisant' },
-                { key: 'emergency-hatches', label: { fr: 'Trappes de secours' } },
-                { key: 'emergency-doors', label: { fr: 'Portes de secours' } },
-                { key: 'service-face', label: { fr: 'Face de service' }, expected: 'Sans jeu excessif' },
-                { key: 'cabin-toe-guard', label: { fr: 'Garde-pieds' }, expected: 'Dispositions satisfaisantes' },
-                { key: 'cabin-doors', label: { fr: 'Portes de cabine' }, expected: 'Sans défaut apparent' },
-                { key: 'cabin-lock', label: { fr: 'Dispositif de verrouillage' }, expected: 'Réalisation correcte, essais satisfaisants' },
-                { key: 'cabin-closing', label: { fr: 'Contrôle de fermeture' }, expected: 'En place et fonctionne correctement' },
-                { key: 'cabin-lighting', label: { fr: 'Éclairage normal de la cabine' }, expected: 'En place et fonctionne correctement' },
-                { key: 'cabin-display', label: { fr: 'Affichage' }, expected: 'Bon état' },
-                { key: 'cabin-stop', label: { fr: 'Dispositif d’arrêt en cabine' }, expected: 'Bon état' },
-                { key: 'door-reopening', label: { fr: 'Dispositif de réouverture de porte' }, expected: 'En place, essai satisfaisant' },
-                { key: 'roof-stop', label: { fr: 'Dispositif d’arrêt sur le toit' }, expected: 'En place et fonctionne correctement' },
-              ],
-            },
-            {
-              key: 'counterweight',
-              label: { fr: 'Contrepoids' },
-              points: [
-                { key: 'counterweight-parts', label: { fr: 'Éléments constitutifs' }, expected: 'Sans défaut apparent' },
-              ],
-            },
-            {
-              key: 'compensation',
-              label: { fr: 'Organe de compensation' },
-              points: [
-                { key: 'compensation-parts', label: { fr: 'Éléments constitutifs' } },
-              ],
-            },
-            {
-              key: 'safety',
-              label: { fr: 'Dispositifs de sécurité' },
-              points: [
-                { key: 'cabin-safety-gear', label: { fr: 'Parachute de cabine' }, expected: 'Dispositif constructif' },
-                { key: 'counterweight-safety-gear', label: { fr: 'Parachute de contrepoids' } },
-                { key: 'ascending-overspeed', label: { fr: 'Dispositif contre la vitesse excessive en montée' }, expected: 'Dispositif constructif en état' },
-                { key: 'uncontrolled-movement', label: { fr: 'Dispositif contre le mouvement incontrôlé' }, expected: 'Dispositif constructif en état' },
-                { key: 'overspeed-governor', label: { fr: 'Limiteur de vitesse' }, expected: 'Dispositif constructif en état' },
-                { key: 'hydraulic-creep', label: { fr: 'Dispositif s’opposant à la dérive — appareil hydraulique' } },
-                { key: 'maintenance-lock', label: { fr: 'Verrouillage de la cabine (maintenance)' } },
-                { key: 'maintenance-stop', label: { fr: 'Butée de la cabine (maintenance)' } },
-                { key: 'slack-rope', label: { fr: 'Contrôle de rupture ou de mou de suspente' } },
-                { key: 'link', label: { fr: 'Organe de liaison' }, expected: 'Sans défaut apparent' },
-                { key: 'overtravel', label: { fr: 'Hors course' }, expected: 'Sans défaut apparent' },
-              ],
-            },
-            {
-              key: 'machine-room',
-              label: { fr: 'Locaux de la machine et des poulies' },
-              points: [
-                { key: 'room-access', label: { fr: 'Accès aux locaux' } },
-                { key: 'floor', label: { fr: 'Sol' } },
-                { key: 'inner-access', label: { fr: 'Accès à l’intérieur du local' } },
-                { key: 'main-switch', label: { fr: 'Interrupteur de force motrice' }, expected: 'En place, bon fonctionnement' },
-                { key: 'room-lighting', label: { fr: 'Éclairage normal et de secours' } },
-                { key: 'pulley-stop', label: { fr: 'Interrupteur d’arrêt du local des poulies' }, expected: 'Réalisation correcte, bon état, fonctionne correctement' },
-              ],
-            },
-            {
-              key: 'machine',
-              label: { fr: 'Machine' },
-              points: [
-                { key: 'machine', label: { fr: 'Machine' }, expected: 'Sans défaut apparent' },
-                { key: 'manual-rescue', label: { fr: 'Manœuvre de secours manuelle' }, expected: 'Réalisation correcte, sans défaut apparent, fonctionnement satisfaisant' },
-                { key: 'electric-recall', label: { fr: 'Manœuvre électrique de rappel' } },
-                { key: 'switchgear', label: { fr: 'Appareillage électrique' }, expected: 'Sans défaut apparent' },
-              ],
-            },
-          ],
-        },
+        ASCENSEUR_CHECKS,
         EILM_OBSERVATIONS,
         EILM_CONCLUSION,
         EILM_PHOTOS,
         EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F34 — VÉRIFICATION AVANT MISE EN SERVICE D'ASCENSEUR
+   *
+   *  Mêmes constatations que la vérification périodique (F12), complétées
+   *  des essais de mise en service, des certificats d'approbation de type
+   *  et des distances libres. Visé par le chef du service EILM.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F34',
+    version: '00',
+    title: 'Rapport de vérification avant mise en service — ascenseur ou monte-charge',
+    methodCode: 'LIFT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Prestation' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'Avis sur le respect des règles techniques normatives et réglementaires lors des travaux d’installation. Hors prestation : l’analyse des risques et les mesures de bruit, vibrations, rayonnements, polluants ou ventilation.',
+          fields: [
+            { key: 'client', label: { fr: 'Société' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'requester', label: { fr: 'Demandeur' }, type: 'text', required: false, span: 6 },
+            { key: 'location', label: { fr: 'Lieu de contrôle' }, type: 'ref', required: true, autofill: 'site', span: 6 },
+            { key: 'date', label: { fr: 'Date d’intervention' }, type: 'date', required: true, autofill: 'date', span: 6 },
+            { key: 'installation', label: { fr: 'Installation vérifiée' }, type: 'text', required: true, span: 6 },
+            { key: 'inspector', label: { fr: 'Vérification effectuée par' }, type: 'ref', required: true, autofill: 'inspector', span: 6 },
+            { key: 'collaborator', label: { fr: 'En collaboration avec' }, type: 'text', required: false, span: 6 },
+            { key: 'inService', label: { fr: 'L’ascenseur était en service lors de la vérification' }, type: 'boolean', required: false, span: 6 },
+          ],
+        },
+        {
+          key: 'references',
+          label: { fr: 'Référentiel de vérification' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'Toujours visés : article 6 de l’arrêté du 7 septembre 1954 modifiant l’arrêté du 9 avril 1953 ; décret n° 2-14-499 sur la sécurité incendie des constructions (ascenseurs en immeuble de grande hauteur). Cocher les textes supplémentaires.',
+          fields: [
+            { key: 'accessibility2007', label: { fr: 'Arrêté du 26 février 2007 (accessibilité des bâtiments d’habitation)' }, type: 'boolean', required: false, span: 6 },
+            { key: 'nfP82212', label: { fr: 'Norme NF P82-212 de novembre 2005' }, type: 'boolean', required: false, span: 6 },
+            { key: 'nfP82312', label: { fr: 'Norme NF P82-312 de novembre 2005' }, type: 'boolean', required: false, span: 6 },
+            { key: 'nfP82230', label: { fr: 'Norme NF P82-230 de juin 2021' }, type: 'boolean', required: false, span: 6 },
+            { key: 'cctp', label: { fr: 'CCTP ou commande des travaux — référence' }, type: 'text', required: false, span: 6 },
+            { key: 'previousReport', label: { fr: 'Levée des observations du rapport n°' }, type: 'text', required: false, span: 6 },
+            { key: 'other', label: { fr: 'Autre' }, type: 'text', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Renseignements généraux' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+            { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+            { key: 'commissioningYear', label: { fr: 'Année de mise en service' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'travel', label: { fr: 'Course' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 3 },
+            { key: 'ratedLoad', label: { fr: 'Capacité' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 3 },
+            { key: 'persons', label: { fr: 'Nombre de personnes' }, type: 'number', required: false, decimals: 0, span: 3 },
+            { key: 'speed', label: { fr: 'Vitesse nominale' }, type: 'number', required: false, unit: 'm/s', decimals: 2, span: 3 },
+            { key: 'levels', label: { fr: 'Nombre de niveaux existants' }, type: 'number', required: false, decimals: 0, span: 3 },
+            { key: 'unservedLevels', label: { fr: 'Nombre de niveaux non desservis' }, type: 'number', required: false, decimals: 0, span: 3 },
+            { key: 'cabinDoors', label: { fr: 'Portes de cabine (type)' }, type: 'text', required: false, span: 3 },
+            { key: 'landingDoors', label: { fr: 'Portes palières (type)' }, type: 'text', required: false, span: 3 },
+            { key: 'machineRoom', label: { fr: 'Position du local des machines' }, type: 'text', required: false, span: 6 },
+            { key: 'machineType', label: { fr: 'Type de machine' }, type: 'text', required: false, span: 6 },
+            { key: 'machineBrand', label: { fr: 'Machine — marque' }, type: 'text', required: false, span: 3 },
+            { key: 'machineModel', label: { fr: 'Machine — type' }, type: 'text', required: false, span: 3 },
+            { key: 'machinePower', label: { fr: 'Machine — puissance' }, type: 'number', required: false, unit: 'kW', decimals: 1, span: 3 },
+            { key: 'machineCurrent', label: { fr: 'Machine — intensité nominale' }, type: 'number', required: false, unit: 'A', decimals: 1, span: 3 },
+            // Descriptifs portés au modèle en tête de chaque groupe de constatations.
+            { key: 'shaftType', label: { fr: 'Gaine' }, type: 'text', required: false, span: 4 },
+            { key: 'landingControls', label: { fr: 'Équipement des paliers' }, type: 'text', required: false, span: 4 },
+            { key: 'suspension', label: { fr: 'Organes de suspension' }, type: 'text', required: false, span: 4 },
+            { key: 'counterweightType', label: { fr: 'Contrepoids' }, type: 'text', required: false, span: 4 },
+            { key: 'compensation', label: { fr: 'Organe de compensation' }, type: 'text', required: false, span: 4 },
+            { key: 'safetyGear', label: { fr: 'Dispositifs de sécurité — parachute' }, type: 'text', required: false, span: 4 },
+          ],
+        },
+        ASCENSEUR_CHECKS,
+        {
+          key: 'tests',
+          label: { fr: 'Mesures, essais et vérifications' },
+          type: 'checklist',
+          repeatable: false,
+          help: 'Au modèle : SO, C, D. D (défavorable) se saisit NC.',
+          groups: [
+            {
+              key: 'running',
+              label: { fr: 'Essais et mesures' },
+              points: [
+                { key: 'cabin-travel', label: { fr: 'Déplacement de la cabine' } },
+                { key: 'braking', label: { fr: 'Essais de freinage à vitesse nominale' } },
+                { key: 'balancing', label: { fr: 'Conformité de l’équilibrage' } },
+                { key: 'traction-dynamic', label: { fr: 'Vérification de l’adhérence — dynamique' } },
+                { key: 'traction-static', label: { fr: 'Vérification de l’adhérence — statique' } },
+              ],
+            },
+            {
+              key: 'governor',
+              label: { fr: 'Essai du limiteur de vitesse' },
+              points: [
+                { key: 'governor-cabin', label: { fr: 'Cabine et déclenchement' } },
+                { key: 'governor-counterweight', label: { fr: 'Contrepoids et déclenchement' } },
+                { key: 'governor-stop', label: { fr: 'Commande d’arrêt' } },
+              ],
+            },
+            {
+              key: 'cabin-safety-gear',
+              label: { fr: 'Essai du parachute de cabine' },
+              points: [
+                { key: 'cabin-instant', label: { fr: 'Prise instantanée, à vitesse nominale' } },
+                { key: 'cabin-progressive', label: { fr: 'Prise amortie, à vitesse réduite (isonivelage ou inspection, à vide)' } },
+              ],
+            },
+            {
+              key: 'counterweight-safety-gear',
+              label: { fr: 'Essai du parachute de contrepoids' },
+              points: [
+                { key: 'counterweight-instant', label: { fr: 'Prise instantanée, à vitesse nominale si commandée par limiteur' } },
+                { key: 'counterweight-progressive', label: { fr: 'Prise amortie, à vitesse réduite si commandée par limiteur' } },
+                { key: 'counterweight-other', label: { fr: 'Tous types, en dynamique si commande autre que limiteur' } },
+              ],
+            },
+            {
+              key: 'buffers',
+              label: { fr: 'Essai des amortisseurs' },
+              points: [
+                { key: 'buffers-hydraulic', label: { fr: 'À accumulation hydraulique, cabine posée sans vitesse' } },
+                { key: 'buffers-other', label: { fr: 'Autres types, à vitesse nominale ou limitée' } },
+              ],
+            },
+            {
+              key: 'other-tests',
+              label: { fr: 'Autres essais et mesures' },
+              points: [
+                { key: 'insulation', label: { fr: 'Résistance d’isolement des circuits' } },
+                { key: 'earth-continuity', label: { fr: 'Continuité de la liaison à la terre' } },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'measures',
+          label: { fr: 'Valeurs mesurées' },
+          type: 'conditions',
+          repeatable: false,
+          fields: [
+            { key: 'current', label: { fr: 'Intensité' }, type: 'number', required: false, unit: 'A', decimals: 1, span: 3 },
+            { key: 'voltage', label: { fr: 'Tension' }, type: 'number', required: false, unit: 'V', decimals: 0, span: 3 },
+            { key: 'speed', label: { fr: 'Vitesse' }, type: 'number', required: false, unit: 'm/s', decimals: 2, span: 3 },
+            { key: 'balancing', label: { fr: 'Équilibrage' }, type: 'number', required: false, unit: '%', decimals: 0, span: 3 },
+            { key: 'governorCabin', label: { fr: 'Déclenchement limiteur — cabine' }, type: 'number', required: false, unit: 'm/s', decimals: 2, span: 4 },
+            { key: 'governorCounterweight', label: { fr: 'Déclenchement limiteur — contrepoids' }, type: 'number', required: false, unit: 'm/s', decimals: 2, span: 4 },
+            { key: 'governorStop', label: { fr: 'Commande d’arrêt du limiteur' }, type: 'number', required: false, unit: 'm/s', decimals: 2, span: 4 },
+          ],
+        },
+        {
+          key: 'certificates',
+          label: { fr: 'Certificats d’approbation de type — références relevées' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'lockCertificate', label: { fr: 'Dispositif de verrouillage — laboratoire et n° d’essai' }, type: 'text', required: false, span: 4 },
+            { key: 'safetyGearCertificate', label: { fr: 'Parachute — laboratoire et n° d’essai' }, type: 'text', required: false, span: 4 },
+            { key: 'governorCertificate', label: { fr: 'Limiteur de vitesse — n° d’essai' }, type: 'text', required: false, span: 4 },
+          ],
+        },
+        {
+          key: 'clearances',
+          label: { fr: 'Réserves supérieures et distances libres en cuvette' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'Pour chaque distance, la valeur nominalisée puis la valeur relevée.',
+          fields: [
+            { key: 'guidedTravelNominal', label: { fr: 'Course guidée encore possible en montée — nominale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'guidedTravelMeasured', label: { fr: 'Course guidée encore possible en montée — relevée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'roofNominal', label: { fr: 'Distance libre au-dessus du toit de cabine — nominale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'roofMeasured', label: { fr: 'Distance libre au-dessus du toit de cabine — relevée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'ceilingNominal', label: { fr: 'Plafond — organes les plus hauts du toit de cabine — nominale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'ceilingMeasured', label: { fr: 'Plafond — organes les plus hauts du toit de cabine — relevée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'guideShoesTopNominal', label: { fr: 'Plafond — coulisseaux, attaches, fronton, portes verticales — nominale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'guideShoesTopMeasured', label: { fr: 'Plafond — coulisseaux, attaches, fronton, portes verticales — relevée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'pitNominal', label: { fr: 'Fond de cuvette — parties les plus basses de la cabine — nominale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'pitMeasured', label: { fr: 'Fond de cuvette — parties les plus basses de la cabine — relevée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'guideShoesBottomNominal', label: { fr: 'Fond de cuvette — coulisseaux, parachute, garde-pieds, portes verticales — nominale' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+            { key: 'guideShoesBottomMeasured', label: { fr: 'Fond de cuvette — coulisseaux, parachute, garde-pieds, portes verticales — relevée' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 6 },
+          ],
+        },
+        {
+          key: 'horizontalDistances',
+          label: { fr: 'Ascenseurs munis de portes de cabine — distances horizontales' },
+          type: 'conditions',
+          repeatable: false,
+          help: 'Valeurs nominales du modèle, dont le signe de comparaison est reconstitué d’après l’EN 81 : paroi de service ≤ 15 cm, seuils ≤ 3,5 cm, portes ≤ 12 cm, jeu cabine-contrepoids ≥ 5 cm.',
+          fields: [
+            { key: 'serviceWall', label: { fr: 'Paroi de service — seuil ou baie de cabine' }, type: 'number', required: false, unit: 'cm', decimals: 1, span: 6 },
+            { key: 'sills', label: { fr: 'Seuil de cabine — seuil des portes palières' }, type: 'number', required: false, unit: 'cm', decimals: 1, span: 6 },
+            { key: 'doors', label: { fr: 'Porte de cabine — portes palières fermées' }, type: 'number', required: false, unit: 'cm', decimals: 1, span: 6 },
+            { key: 'counterweightGap', label: { fr: 'Jeu cabine — contrepoids' }, type: 'number', required: false, unit: 'cm', decimals: 1, span: 6 },
+          ],
+        },
+        EILM_CONCLUSION,
+        {
+          key: 'observations',
+          label: { fr: 'Observations réglementaires' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'observations', label: { fr: 'Observations réglementaires' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        EILM_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visa' },
+          type: 'signature-matrix',
+          repeatable: false,
+          help: 'Fait à Mohammedia.',
+          signatories: [{ fr: 'Chef du service EILM' }],
+        },
       ],
     },
   },
