@@ -11,6 +11,9 @@
  *   PR01-F07  Contrôle de rotondité                 → mesures dimensionnelles
  *   PR01-F08  Examen visuel                         → mesures et indications
  *   PR01-F10  Contrôle de déformation locale        → mesures dimensionnelles
+ *   PR01-F13  Qualification de soudeur (ASME IX)    → variables et essais
+ *   PR01-F14  Réception et suivi des travaux        → constats et décisions
+ *   PR01-F18  Identification des matériaux (PMI)    → composition par élément
  *   PR01-F21  Contrôle peinture                     → préparation et épaisseurs
  *   PR01-F22  Interprétation de clichés radio       → mesures et indications
  *   PR01-F26  Essai de dureté                       → mesures et indications
@@ -4376,6 +4379,296 @@ export const TEMPLATES: TemplateSeed[] = [
             { fr: 'Rapport établi par', en: 'Report established by' },
             { fr: 'Client / tierce partie', en: 'Customer / third party' },
           ],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F18 — IDENTIFICATION DES MATÉRIAUX (PMI)
+   *
+   *  Composition mesurée par élément, point par point, rapprochée de la
+   *  nuance attendue. Le modèle Excel est la copie d'un rapport réel
+   *  (repères de tuyauteries, analyses, nom du vérificateur) : seule sa
+   *  structure est reprise.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F18',
+    version: '00',
+    title: 'Rapport d’identification des matériaux (PMI)',
+    titleEn: 'Positive material identification (PMI) report',
+    methodCode: 'PMI',
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Identification', en: 'Identification' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'client', label: { fr: 'Client', en: 'Client' }, type: 'ref', required: true, autofill: 'client', span: 4 },
+            { key: 'affairNumber', label: { fr: 'N° d’affaire', en: 'Transaction N°' }, type: 'ref', required: true, autofill: 'affairNumber', span: 4 },
+            { key: 'plant', label: { fr: 'Site de l’usine', en: 'Plant location' }, type: 'ref', required: true, autofill: 'site', span: 4 },
+            { key: 'project', label: { fr: 'Intitulé du projet', en: 'Project title' }, type: 'text', required: false, span: 6 },
+            { key: 'itp', label: { fr: 'Référence du plan d’inspection (ITP)', en: 'ITP reference' }, type: 'text', required: false, span: 6 },
+            { key: 'clientDocument', label: { fr: 'N° de document client', en: 'Document number (client)' }, type: 'text', required: false, span: 4 },
+            { key: 'notification', label: { fr: 'N° d’avis d’intervention client', en: 'Notification for intervention N° (client)' }, type: 'text', required: false, span: 4 },
+            { key: 'engineeringDocument', label: { fr: 'N° de document d’ingénierie', en: 'Engineering document N°' }, type: 'text', required: false, span: 4 },
+            { key: 'supplierDocument', label: { fr: 'N° de document fournisseur', en: 'Supplier document N°' }, type: 'text', required: false, span: 6 },
+            { key: 'standard', label: { fr: 'Code / spécification', en: 'Code / specification' }, type: 'standard-ref', required: true, autofill: 'standards', span: 6 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Appareils de surveillance et de mesure', en: 'Monitoring and measuring devices' },
+          type: 'devices',
+          repeatable: false,
+          minRows: 1,
+          help: 'Analyseur par fluorescence X. Un appareil hors étalonnage empêche la soumission du rapport.',
+          fields: [{ key: 'device', label: { fr: 'Analyseur', en: 'Analyser' }, type: 'device', required: true, span: 12 }],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Inspection — éléments PMI (%)', en: 'Inspection — PMI elements (%)' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          help: 'Résultat PMI indicatif : la mesure comporte un intervalle de tolérance.',
+          columns: [
+            { key: 'item', label: { fr: 'Repère / équipement', en: 'Tag / item' }, type: 'text', required: true, span: 1 },
+            { key: 'joint', label: { fr: 'Joint n°', en: 'Joint N°' }, type: 'text', required: false, span: 1 },
+            ...['Cr', 'Cu', 'Fe', 'S', 'Ni', 'Mn', 'Co', 'Mo', 'Si', 'P', 'Al', 'Zn', 'Bi', 'Nb', 'Mg', 'V'].map((el) => ({
+              key: el.toLowerCase(),
+              label: { fr: el, en: el },
+              type: 'number',
+              required: false,
+              unit: '%',
+              decimals: 2,
+              span: 1,
+            })),
+            { key: 'grade', label: { fr: 'Nuance identifiée', en: 'Specification' }, type: 'text', required: true, span: 1 },
+            { key: 'acceptable', label: { fr: 'Acceptable', en: 'Acceptable' }, type: 'enum', required: true, options: ['Oui', 'Non'], span: 1 },
+          ],
+        },
+        {
+          key: 'reference',
+          label: { fr: 'Composition de référence', en: 'Reference composition' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          help: 'Limites de la nuance attendue, telles que données par la norme matière (ex. SA335 P9).',
+          columns: [
+            { key: 'material', label: { fr: 'Matériau', en: 'Material' }, type: 'text', required: true, span: 3 },
+            { key: 'si', label: { fr: 'Si', en: 'Si' }, type: 'text', required: false, span: 1 },
+            { key: 'sMax', label: { fr: 'S max', en: 'S max' }, type: 'text', required: false, span: 1 },
+            { key: 'ni', label: { fr: 'Ni', en: 'Ni' }, type: 'text', required: false, span: 1 },
+            { key: 'pMax', label: { fr: 'P max', en: 'P max' }, type: 'text', required: false, span: 1 },
+            { key: 'mn', label: { fr: 'Mn', en: 'Mn' }, type: 'text', required: false, span: 1 },
+            { key: 'cr', label: { fr: 'Cr', en: 'Cr' }, type: 'text', required: false, span: 1 },
+            { key: 'mo', label: { fr: 'Mo', en: 'Mo' }, type: 'text', required: false, span: 1 },
+            { key: 'v', label: { fr: 'V', en: 'V' }, type: 'text', required: false, span: 2 },
+          ],
+        },
+        END_NOTE,
+        {
+          key: 'signatures',
+          label: { fr: 'Visas', en: 'Signatures' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [
+            { fr: 'Examen effectué par', en: 'Examination carried on by' },
+            { fr: 'Rapport établi par', en: 'Report established by' },
+            { fr: 'Rapport vérifié et approuvé par', en: 'Checked and approved by' },
+          ],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F14 — RÉCEPTION ET SUIVI DES TRAVAUX
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F14',
+    version: '00',
+    title: 'Rapport de réception et de suivi des travaux',
+    titleEn: 'Report of receipt and work monitoring',
+    methodCode: null,
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Identification', en: 'Identification' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'client', label: { fr: 'Client', en: 'Customer' }, type: 'ref', required: true, autofill: 'client', span: 4 },
+            { key: 'subcontractor', label: { fr: 'Sous-traitant', en: 'Subcontractor' }, type: 'text', required: false, span: 4 },
+            { key: 'place', label: { fr: 'Lieu d’inspection', en: 'Place of inspection' }, type: 'ref', required: true, autofill: 'site', span: 4 },
+            { key: 'drawing', label: { fr: 'Repère plan', en: 'Drawing N°' }, type: 'text', required: false, span: 4 },
+            { key: 'designation', label: { fr: 'Désignation', en: 'Designation' }, type: 'ref', required: true, autofill: 'asset', span: 4 },
+            { key: 'standard', label: { fr: 'Spécification applicable', en: 'Examination according to' }, type: 'standard-ref', required: true, autofill: 'standards', span: 4 },
+          ],
+        },
+        {
+          key: 'findings',
+          label: { fr: 'Constats et observations', en: 'Statements and observations' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          columns: [
+            { key: 'nature', label: { fr: 'Nature des travaux', en: 'Work type' }, type: 'enum', required: true, options: ['Construction', 'Réhabilitation', 'Réparation', 'Peinture'], span: 2 },
+            { key: 'finding', label: { fr: 'Constat et observation', en: 'Statement and observation' }, type: 'text', required: true, span: 7 },
+            { key: 'decision', label: { fr: 'Décision', en: 'Decision' }, type: 'text', required: true, span: 3 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Illustrations photographiques', en: 'Photographic illustrations' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+        },
+        {
+          key: 'signatures',
+          label: { fr: 'Visas', en: 'Signatures' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [
+            { fr: 'Sous-traitant', en: 'Subcontractor' },
+            { fr: 'I2S TESTING', en: 'I2S TESTING' },
+            { fr: 'Client / tierce partie', en: 'Customer / third party' },
+          ],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F13 — CERTIFICAT DE QUALIFICATION DE SOUDEUR (ASME IX)
+   *
+   *  Chaque variable de soudage se lit en deux valeurs : celle de
+   *  l'assemblage de qualification et le domaine de validité qu'elle ouvre.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F13',
+    version: '00',
+    title: 'Certificat de qualification de soudeur',
+    titleEn: 'Welder performance qualification (WPQ)',
+    methodCode: 'WELD',
+    paradigm: 'CRITERIA',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'welder',
+          label: { fr: 'Soudeur', en: 'Welder' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'name', label: { fr: 'Nom', en: 'Name' }, type: 'text', required: true, span: 6 },
+            { key: 'stamp', label: { fr: 'Repère', en: 'Stamp' }, type: 'text', required: true, span: 6 },
+            { key: 'idNumber', label: { fr: 'CIN', en: 'ID N°' }, type: 'text', required: true, span: 4 },
+            { key: 'code', label: { fr: 'Norme de référence', en: 'Code' }, type: 'standard-ref', required: true, autofill: 'standards', span: 4 },
+            { key: 'employer', label: { fr: 'Employeur', en: 'Company' }, type: 'ref', required: true, autofill: 'client', span: 4 },
+            { key: 'wps', label: { fr: 'DMOS n°', en: 'WPS N°' }, type: 'text', required: true, span: 6 },
+          ],
+        },
+        {
+          key: 'test',
+          label: { fr: 'Description de l’essai', en: 'Test description' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'wpsFollowed', label: { fr: 'DMOS suivi', en: 'Identification of WPS followed' }, type: 'text', required: true, span: 6 },
+            { key: 'weldType', label: { fr: 'Soudure', en: 'Weld' }, type: 'enum', required: true, options: ['Coupon d’essai', 'Soudure de production'], span: 6 },
+            { key: 'baseMetal', label: { fr: 'Spécification du métal de base', en: 'Specification of base metal' }, type: 'text', required: true, span: 6 },
+            { key: 'thickness', label: { fr: 'Épaisseur', en: 'Thickness' }, type: 'number', required: true, unit: 'mm', decimals: 1, span: 6 },
+          ],
+        },
+        {
+          key: 'variables',
+          label: { fr: 'Paramètres de soudage — assemblage de qualification et domaine de validité', en: 'Welding parameters — qualification assembly and range qualified' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            ['process', 'Procédé de soudage', 'Welding process'],
+            ['mode', 'Type (manuel, semi-automatique…)', 'Type (manual, semi-automatic…)'],
+            ['backing', 'Support envers (avec, sans) — QW-402', 'Backing (with, without) — QW-402'],
+            ['plateOrTube', 'Tôle (P) ou tube (T)', 'Plate (P) or tube (T)'],
+            ['pNumber', 'Métal de base, P-Number à P-Number', 'Base metal P-Number to P-Number'],
+            ['fillerSpec', 'Spécification du métal d’apport (SFA)', 'Filler metal specification (SFA)'],
+            ['fillerClass', 'Classification du métal d’apport', 'Filler metal classification'],
+            ['fNumber', 'F-Number du métal d’apport', 'Filler metal F-Number'],
+            ['insert', 'Insert consommable (GTAW, PAW)', 'Consumable insert (GTAW, PAW)'],
+            ['productForm', 'Forme du métal d’apport (GTAW, PAW)', 'Filler metal product form (GTAW, PAW)'],
+            ['deposit', 'Épaisseur déposée par procédé (mm)', 'Deposit thickness for each process (mm)'],
+            ['position', 'Position (2G, 6G, 3F…)', 'Position (2G, 6G, 3F…)'],
+            ['progression', 'Progression verticale (montante, descendante)', 'Vertical progression (uphill, downhill)'],
+            ['fuelGas', 'Type de gaz combustible (OFW)', 'Type of fuel gas (OFW)'],
+            ['backingGas', 'Gaz inerte envers (GTAW, PAW, GMAW)', 'Inert gas backing (GTAW, PAW, GMAW)'],
+            ['transfer', 'Mode de transfert (GMAW)', 'Transfer mode (GMAW)'],
+            ['current', 'Courant et polarité GTAW (AC, DCEP, DCEN)', 'GTAW current type / polarity (AC, DCEP, DCEN)'],
+          ].flatMap(([key, fr, en]) => [
+            { key: `${key}Test`, label: { fr: `${fr} — assemblage`, en: `${en} — assembly` }, type: 'text', required: false, span: 6 },
+            { key: `${key}Range`, label: { fr: `${fr} — domaine de validité`, en: `${en} — range qualified` }, type: 'text', required: false, span: 6 },
+          ]),
+        },
+        {
+          key: 'bendTests',
+          label: { fr: 'Essais de pliage guidé', en: 'Guided bend tests' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          columns: [
+            { key: 'type', label: { fr: 'Type de pliage', en: 'Type' }, type: 'enum', required: true, options: ['QW-462.2 — côté', 'QW-462.3(a) — transversal endroit et envers', 'QW-462.3(b) — longitudinal endroit et envers'], span: 5 },
+            { key: 'result', label: { fr: 'Résultat', en: 'Result' }, type: 'enum', required: true, options: ['Acceptable', 'Non acceptable'], span: 3 },
+            { key: 'remarks', label: { fr: 'Observations', en: 'Remarks' }, type: 'text', required: false, span: 4 },
+          ],
+        },
+        {
+          key: 'destructive',
+          label: { fr: 'Autres essais destructifs', en: 'Other destructive tests' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'fractureDefects', label: { fr: 'Soudure d’angle, essai de rupture — longueur et pourcentage des défauts', en: 'Fillet weld fracture test — length and percent of defects' }, type: 'text', required: false, span: 12 },
+            { key: 'filletLeg', label: { fr: 'Macroscopie — dimension du cordon', en: 'Macro test — fillet leg size' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 6 },
+            { key: 'concavity', label: { fr: 'Macroscopie — concavité / convexité', en: 'Macro test — concavity / convexity' }, type: 'text', required: false, span: 6 },
+            { key: 'mechanicalBy', label: { fr: 'Essais mécaniques dirigés par', en: 'Mechanical tests conducted by' }, type: 'text', required: false, span: 6 },
+            { key: 'labReport', label: { fr: 'Rapport d’essai laboratoire n°', en: 'Laboratory test N°' }, type: 'text', required: false, span: 6 },
+          ],
+        },
+        {
+          key: 'ndt',
+          label: { fr: 'Résultats des CND', en: 'NDT results' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'visualResult', label: { fr: 'Examen visuel (QW-302.4) — résultat', en: 'Visual examination (QW-302.4) — result' }, type: 'enum', required: true, options: ['Acceptable', 'Non acceptable'], span: 6 },
+            { key: 'visualReport', label: { fr: 'Examen visuel — rapport n°', en: 'Visual examination — report N°' }, type: 'text', required: false, span: 6 },
+            { key: 'volumetricResult', label: { fr: 'Examen volumique (QW-304) — résultat', en: 'Volumetric test (QW-304) — result' }, type: 'enum', required: false, options: ['Acceptable', 'Non acceptable'], span: 6 },
+            { key: 'volumetricReport', label: { fr: 'Examen volumique — rapport n°', en: 'Volumetric test — report N°' }, type: 'text', required: false, span: 6 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Photo du soudeur', en: 'Photo' },
+          type: 'photos',
+          repeatable: false,
+          minRows: 1,
+        },
+        {
+          key: 'signatures',
+          label: { fr: 'Visa', en: 'Signature' },
+          type: 'signature-matrix',
+          repeatable: false,
+          help: 'Nous certifions que les indications de ce document sont exactes et que les soudures d’essai ont été préparées, soudées et essayées conformément à la section IX du code ASME, édition 2015.',
+          signatories: [{ fr: 'Inspecteur', en: 'Inspector' }],
         },
       ],
     },
