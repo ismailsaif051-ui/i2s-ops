@@ -514,7 +514,11 @@ async function main() {
     ]),
   );
   let addedForms = 0;
+  // Un formulaire construit est publié plus bas avec sa propre version : lui
+  // créer d'abord une coquille vide ne ferait que laisser un brouillon remplacé.
+  const built = new Set(REPORT_TEMPLATES.map((t) => t.formCode));
   for (const form of REPORT_FORMS) {
+    if (built.has(form.formCode)) continue;
     const existing = await prisma.inspectionTemplate.findFirst({
       where: { formCode: form.formCode },
       select: { id: true },
@@ -581,6 +585,20 @@ async function main() {
         status: 'PUBLISHED',
         schema: template.schema as never,
       },
+    });
+
+    // Une version publiée remplace les précédentes : sans cela, l'écran de
+    // saisie proposerait le même formulaire deux fois, dont une coquille
+    // vide. Les versions sont numérotées sur deux chiffres, la comparaison
+    // de chaînes suit donc leur ordre. Rien n'est supprimé : les rapports
+    // émis sur une ancienne version la gardent.
+    await prisma.inspectionTemplate.updateMany({
+      where: {
+        formCode: template.formCode,
+        version: { lt: template.version },
+        status: { in: ['DRAFT', 'PUBLISHED'] },
+      },
+      data: { status: 'SUPERSEDED' },
     });
   }
   const sections = REPORT_TEMPLATES.reduce(
