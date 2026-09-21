@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CHECK_VERDICTS,
@@ -347,7 +347,10 @@ function SectionRenderer({
         ) : section.type === 'signature-matrix' ? (
           <SignatureMatrix section={section} />
         ) : (
-          <div className="grid grid-cols-12 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+            {/* Une colonne sur téléphone : à quatre champs par ligne, les listes
+                y tombaient à 70 px et les libellés se chevauchaient. La largeur
+                prévue par le formulaire s'applique à partir de la tablette. */}
             {(section.fields ?? []).map((field) => (
               <FieldRenderer
                 key={field.key}
@@ -401,9 +404,11 @@ function FieldRenderer({
     'h-10 w-full rounded-[8px] border border-border-strong bg-surface px-3 text-[14.5px] outline-none focus:border-accent disabled:bg-surface-2 disabled:text-subtle';
 
   return (
-    <div style={{ gridColumn: `span ${span}` }}>
-      <label className="block">
-        <span className="mb-1.5 block text-[13.5px] font-medium">
+    <div style={{ '--span': span } as CSSProperties} className="sm:[grid-column:span_var(--span)]">
+      {/* Le libellé prend la hauteur libre de la cellule : un libellé sur deux
+          lignes ne décale plus son champ sous ceux de ses voisins. */}
+      <label className="flex h-full flex-col">
+        <span className="mb-1.5 block flex-1 text-[13.5px] font-medium">
           {field.label.fr}
           {field.required && <span className="ml-1 text-accent">*</span>}
           {field.unit && <span className="ml-1.5 font-normal text-subtle">({field.unit})</span>}
