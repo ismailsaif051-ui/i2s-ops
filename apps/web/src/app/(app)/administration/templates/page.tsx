@@ -45,6 +45,9 @@ const CATALOGUE = [
   { department: 'CND', total: 20, lot: 'L1 et L2' },
   { department: 'EILM', total: 39, lot: 'L3 et L4' },
   { department: 'CTC', total: 2, lot: 'L5' },
+  // Supervision HSE : quatre canevas du service et six rapports ajoutés,
+  // sous une codification PR04 encore à valider par le QHSE.
+  { department: 'QHSE', total: 10, lot: 'L6' },
 ];
 
 export default async function TemplatesPage() {

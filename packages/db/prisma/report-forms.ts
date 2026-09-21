@@ -14,7 +14,7 @@
 export interface ReportForm {
   formCode: string;
   title: string;
-  dept: 'CND' | 'EILM' | 'CTC';
+  dept: 'CND' | 'EILM' | 'CTC' | 'QHSE';
   /** Méthode d'inspection du référentiel, quand une méthode existe pour ce contrôle. */
   methodCode: string | null;
   paradigm: 'MEASUREMENT' | 'CHECKLIST' | 'CRITERIA';
@@ -26,6 +26,12 @@ const cnd = (
   methodCode: string | null,
   paradigm: ReportForm['paradigm'] = 'MEASUREMENT',
 ): ReportForm => ({ formCode, title, dept: 'CND', methodCode, paradigm });
+
+const hse = (
+  formCode: string,
+  title: string,
+  paradigm: ReportForm['paradigm'] = 'CHECKLIST',
+): ReportForm => ({ formCode, title, dept: 'QHSE', methodCode: 'HSE', paradigm });
 
 const eilm = (
   formCode: string,
@@ -103,4 +109,19 @@ export const REPORT_FORMS: ReportForm[] = [
   /* ── PR03 — Contrôle technique de construction ──────────────────── */
   { formCode: 'PR03-F01', title: 'Rapport de contrôle technique de construction', dept: 'CTC', methodCode: 'CTC', paradigm: 'CRITERIA' },
   { formCode: 'PR03-F02', title: 'Rapport sur notice de sécurité incendie', dept: 'CTC', methodCode: 'CTC', paradigm: 'CRITERIA' },
+
+  /* ── PR04 — Supervision HSE de chantier ─────────────────────────── */
+  // Codification proposée : ces rapports n'ont pas encore de processus au
+  // référentiel qualité. Les quatre premiers reprennent les canevas du
+  // service ; les six suivants complètent le suivi d'un chantier.
+  hse('PR04-F01', 'Plan HSE global', 'CRITERIA'),
+  hse('PR04-F02', 'Rapport journalier HSE'),
+  hse('PR04-F03', 'Rapport hebdomadaire HSE'),
+  hse('PR04-F04', 'Rapport mensuel de suivi HSE'),
+  hse('PR04-F05', 'Rapport d’accident ou d’incident'),
+  hse('PR04-F06', 'Rapport d’inspection HSE de chantier'),
+  hse('PR04-F07', 'Permis de travail'),
+  hse('PR04-F08', 'Fiche d’accueil sécurité'),
+  hse('PR04-F09', 'Compte rendu de causerie sécurité'),
+  hse('PR04-F10', 'Contrôle d’engin avant accès au chantier'),
 ];

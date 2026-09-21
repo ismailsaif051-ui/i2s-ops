@@ -162,13 +162,17 @@ export type TemplateSchema = z.infer<typeof templateSchemaSchema>;
 
 /**
  * Le service d'un formulaire se lit dans son code QMS : PR01 CND, PR02 EILM,
- * PR03 CTC. Il ne dépend donc pas de la méthode, qu'un compte rendu général
- * peut ne pas avoir.
+ * PR03 CTC, PR04 QHSE. Il ne dépend donc pas de la méthode, qu'un compte
+ * rendu général peut ne pas avoir.
+ *
+ * PR04 est une proposition pour les rapports de supervision HSE, qui n'ont
+ * pas encore de processus au référentiel qualité : à confirmer par le QHSE.
  */
-export function departmentOfForm(formCode: string): 'CND' | 'EILM' | 'CTC' | null {
+export function departmentOfForm(formCode: string): 'CND' | 'EILM' | 'CTC' | 'QHSE' | null {
   if (formCode.startsWith('PR01')) return 'CND';
   if (formCode.startsWith('PR02')) return 'EILM';
   if (formCode.startsWith('PR03')) return 'CTC';
+  if (formCode.startsWith('PR04')) return 'QHSE';
   return null;
 }
 

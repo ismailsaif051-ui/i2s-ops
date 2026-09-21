@@ -64,6 +64,20 @@
  *   PR02-F42  Centrale hydraulique                  → accessoire
  *   PR03-F01  Rapport de contrôle technique         → critères d'acceptation
  *   PR03-F02  Notice de sécurité incendie           → avis par disposition
+ *   PR04-F01  Plan HSE global                       → plan et évaluation des risques
+ *   PR04-F02  Rapport journalier HSE                → notes TS / S / I / SO et constats
+ *   PR04-F03  Rapport hebdomadaire HSE              → indicateurs et suivi par entreprise
+ *   PR04-F04  Rapport mensuel de suivi HSE          → synthèse et taux de résolution
+ *   PR04-F05  Accident ou incident                  → analyse des causes et actions
+ *   PR04-F06  Inspection HSE de chantier            → check-list par thème de risque
+ *   PR04-F07  Permis de travail                     → mesures, atmosphère, clôture
+ *   PR04-F08  Fiche d’accueil sécurité              → modules et émargement
+ *   PR04-F09  Causerie sécurité                     → thème et participants
+ *   PR04-F10  Contrôle d’engin avant accès          → documents, état, décision
+ *
+ * Les rapports PR04 ne viennent pas du référentiel qualité : les quatre
+ * premiers reprennent les canevas du service HSE, les six autres les
+ * complètent. Leur codification est une proposition à valider par le QHSE.
  *
  * Tous les formulaires du catalogue (`report-forms.ts`) sont construits. Là
  * où le modèle d'origine s'écarte de son titre, cite un texte abrogé ou
@@ -291,6 +305,91 @@ const tableau = (key: string, fr: string, en: string, columns: unknown[], help?:
 });
 
 const OUI_NON = ['Oui', 'Non'];
+
+/* ── Supervision HSE de chantier (PR04, codification proposée) ────── */
+
+/** Champ en français seul, demi-largeur par défaut : les canevas HSE ne sont pas bilingues. */
+const hc = (key: string, fr: string, type = 'text', extra: Record<string, unknown> = {}) => ({
+  key,
+  label: { fr },
+  type,
+  required: false,
+  span: 6,
+  ...extra,
+});
+
+const hSection = (key: string, fr: string, fields: unknown[], type = 'keyvalue', help?: string) => ({
+  key,
+  label: { fr },
+  type,
+  repeatable: false,
+  ...(help ? { help } : {}),
+  fields,
+});
+
+const hTable = (key: string, fr: string, columns: unknown[], help?: string, minRows = 0) => ({
+  key,
+  label: { fr },
+  type: 'table',
+  repeatable: true,
+  minRows,
+  ...(help ? { help } : {}),
+  columns,
+});
+
+/** En-tête de tous les rapports HSE : le projet suivi et le superviseur I2S. */
+const HSE_PROJECT = (fields: unknown[] = []) =>
+  hSection('project', 'Projet', [
+    hc('project', 'Projet', 'text', { required: true }),
+    hc('client', 'Maître d’ouvrage', 'ref', { required: true, autofill: 'client' }),
+    hc('affairNumber', 'N° d’affaire', 'ref', { required: true, autofill: 'affairNumber', span: 4 }),
+    hc('site', 'Site', 'ref', { required: true, autofill: 'site', span: 4 }),
+    hc('supervisor', 'Superviseur HSE', 'ref', { required: true, autofill: 'inspector', span: 4 }),
+    ...fields,
+  ]);
+
+/**
+ * Échelle de notation du canevas journalier. La lecture de « TS » (très
+ * satisfaisant) est une hypothèse : le canevas ne la définit pas.
+ */
+const NOTE_HSE = ['TS', 'S', 'I', 'SO'];
+const NOTE_HSE_HELP = 'TS : très satisfaisant · S : satisfaisant · I : insuffisant · SO : sans objet. Toute note « I » appelle un constat dans le tableau ci-dessous.';
+
+const STATUT_ACTION = ['Ouverte', 'En cours', 'Close'];
+
+/**
+ * Indicateurs de sécurité, sur la période et en cumul chantier. Les taux
+ * ne sont pas calculés par le moteur : leur formule est rappelée.
+ */
+const hseIndicators = (periode: string) =>
+  hSection(
+    'indicators',
+    'Indicateurs de sécurité',
+    [
+      ['dangerous', 'Situations dangereuses'],
+      ['incidents', 'Incidents'],
+      ['lostTime', 'Accidents avec arrêt'],
+      ['noLostTime', 'Accidents sans arrêt'],
+      ['lostDays', 'Nombre de jours d’arrêt'],
+      ['firstAid', 'Soins'],
+      ['commuting', 'Accidents de trajet ou de circulation'],
+      ['frequencyRate', 'Taux de fréquence'],
+      ['severityRate', 'Taux de gravité'],
+    ].flatMap(([key, fr]) => [
+      hc(`${key}Period`, `${fr} — ${periode}`, 'number', { decimals: key.endsWith('Rate') ? 2 : 0, span: 6 }),
+      hc(`${key}Total`, `${fr} — cumul chantier`, 'number', { decimals: key.endsWith('Rate') ? 2 : 0, span: 6 }),
+    ]),
+    'conditions',
+    'Taux de fréquence = accidents avec arrêt × 1 000 000 / heures travaillées · taux de gravité = jours d’arrêt × 1 000 / heures travaillées.',
+  );
+
+const HSE_PHOTOS = {
+  key: 'photos',
+  label: { fr: 'Photos chantier' },
+  type: 'photos',
+  repeatable: true,
+  minRows: 0,
+};
 
 /* ── Blocs communs aux vérifications réglementaires EILM ──────────── */
 
@@ -5480,6 +5579,814 @@ export const TEMPLATES: TemplateSeed[] = [
             { fr: 'Vérificateur de conformité' },
             { fr: 'Représentant du client' },
           ],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F01 — PLAN HSE GLOBAL
+   *
+   *  Le canevas n'est qu'un sommaire, à la numérotation incohérente (deux
+   *  « 2 », un « 4.3 » sous la rubrique 5, un « 5.4 » sous la 6). Les
+   *  rubriques sont renumérotées d'un seul tenant, et l'évaluation des
+   *  risques reçoit une grille gravité × probabilité qu'il ne précisait pas.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F01',
+    version: '00',
+    title: 'Plan HSE global',
+    methodCode: 'HSE',
+    paradigm: 'CRITERIA',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('version', 'Indice de version', 'text', { required: true, span: 4 }),
+          hc('date', 'Date', 'date', { required: true, autofill: 'date', span: 4 }),
+          hc('approvedBy', 'Validé par', 'text', { span: 4 }),
+        ]),
+        hSection('introduction', '1 à 4 — Cadre du plan', [
+          hc('introduction', '1 — Introduction', 'textarea', { span: 12 }),
+          hc('purpose', '2 — Objet du plan HSE', 'textarea', { required: true, span: 12 }),
+          hc('regulations', '3 — Cadre réglementaire', 'textarea', { required: true, span: 12 }),
+          hc('documents', '4 — Références documentaires', 'textarea', { span: 12 }),
+        ], 'text'),
+        hTable('stakeholders', '5 — Intervenants du projet', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 4 }),
+          hc('role', 'Rôle', 'enum', { required: true, options: ['Maître d’ouvrage', 'Maître d’œuvre', 'Entreprise principale', 'Sous-traitant', 'Supervision HSE', 'Autre'], span: 3 }),
+          hc('manager', 'Responsable HSE', 'text', { span: 3 }),
+          hc('phone', 'Téléphone', 'text', { span: 2 }),
+        ], undefined, 1),
+        hSection('organisation', '6 — Organisation des travaux', [
+          hc('scope', '6.1 — Étendue des travaux', 'textarea', { required: true, span: 12 }),
+          hc('planning', '6.2 — Planning, modes opératoires et ressources mobilisées', 'textarea', { span: 12 }),
+        ], 'text'),
+        hTable('risks', '6.3 — Évaluation des risques HSE', [
+          hc('activity', 'Activité ou tâche', 'text', { required: true, span: 2 }),
+          hc('hazard', 'Danger', 'text', { required: true, span: 2 }),
+          hc('risk', 'Risque', 'text', { required: true, span: 2 }),
+          hc('severity', 'Gravité', 'enum', { required: true, options: ['1', '2', '3', '4'], span: 1 }),
+          hc('probability', 'Probabilité', 'enum', { required: true, options: ['1', '2', '3', '4'], span: 1 }),
+          hc('criticality', 'Criticité', 'number', { required: true, decimals: 0, span: 1 }),
+          hc('measures', 'Mesures de prévention et de protection', 'text', { required: true, span: 2 }),
+          hc('residual', 'Risque résiduel', 'enum', { options: ['Acceptable', 'À surveiller', 'Inacceptable'], span: 1 }),
+        ], 'Gravité et probabilité de 1 (faible) à 4 (très élevée) ; criticité = gravité × probabilité. Au-delà de 8, le risque doit être réduit avant le démarrage de la tâche.', 1),
+        hSection('prevention', '7 — Mesures de prévention et de protection', [
+          hc('training', '7.1 — Formation et sensibilisation des collaborateurs', 'textarea', { span: 12 }),
+          hc('equipmentCheck', '7.2 — Contrôle des équipements et engins avant l’entrée sur le chantier', 'textarea', { span: 12 }),
+          hc('environment', '7.3 — Gestion environnementale (déchets, rejets, pollution)', 'textarea', { span: 12 }),
+          hc('reporting', '7.4 — Suivi, contrôle et reporting HSE', 'textarea', { span: 12 }),
+        ], 'text', 'Le reporting s’appuie sur les rapports journalier, hebdomadaire et mensuel HSE (PR04-F02 à F04).'),
+        hSection('emergency', '8 — Gestion des situations d’urgence', [
+          hc('assemblyPoint', 'Point de rassemblement', 'text', { required: true }),
+          hc('hospital', 'Structure de soins la plus proche', 'text', { required: true }),
+          hc('contacts', 'Contacts d’urgence', 'textarea', { required: true, span: 12 }),
+          hc('means', '8.1 — Moyens d’urgence disponibles sur le chantier', 'textarea', { span: 12 }),
+          hc('fire', '8.2 — Procédure en cas d’incendie', 'textarea', { span: 12 }),
+          hc('explosion', '8.3 — Procédure en cas d’explosion ou de risque d’explosion imminent', 'textarea', { span: 12 }),
+          hc('spill', '8.4 — Procédure en cas de déversement de produit', 'textarea', { span: 12 }),
+          hc('injury', '8.5 — Procédure en cas d’accident corporel ou de presque-accident', 'textarea', { span: 12 }),
+        ]),
+        hSection('conclusion', '9 — Conclusion', [hc('conclusion', 'Conclusion', 'textarea', { span: 12 })], 'text'),
+        {
+          key: 'signatures',
+          label: { fr: 'Historique du document' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Rédigé par' }, { fr: 'Validé par' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F02 — RAPPORT JOURNALIER HSE
+   *
+   *  Le canevas Word, complété de ce que le journal Excel du service
+   *  suivait en plus : l'analyse des risques des tâches de la journée. Les
+   *  effectifs sont comptés, pas listés : le journal relevait CIN et CNSS
+   *  de chaque ouvrier, ce qu'un rapport de supervision n'a pas à porter.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F02',
+    version: '00',
+    title: 'Rapport journalier HSE',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('date', 'Date', 'date', { required: true, autofill: 'date', span: 4 }),
+          hc('contractor', 'Contractant', 'text', { required: true, span: 4 }),
+          hc('weather', 'Conditions météorologiques', 'text', { span: 4 }),
+          hc('zone', 'Zone de l’activité', 'text', { required: true, span: 4 }),
+          hc('newcomers', 'Nouveaux arrivants', 'number', { decimals: 0, span: 4 }),
+          hc('headcount', 'Effectif', 'number', { required: true, decimals: 0, span: 4 }),
+          hc('hours', 'Heures travaillées', 'number', { required: true, unit: 'h', decimals: 1, span: 4 }),
+          hc('spa', 'Nombre de SPA', 'number', { decimals: 0, span: 4 }),
+          hc('permits', 'Permis de travail délivrés', 'number', { decimals: 0, span: 4 }),
+          hc('works', 'Description des travaux', 'textarea', { required: true, span: 12 }),
+        ]),
+        hTable('previousActions', 'Suivi des actions correctives antérieures', [
+          hc('action', 'Action ouverte issue des rapports précédents', 'text', { required: true, span: 6 }),
+          hc('status', 'Statut', 'enum', { required: true, options: STATUT_ACTION, span: 2 }),
+          hc('reference', 'Référence du rapport hebdomadaire ou mensuel', 'text', { span: 4 }),
+        ]),
+        hSection('prevention', 'Mesures de prévention mises en œuvre', [
+          hc('ppe', 'EPI utilisés', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+          hc('marking', 'Balisage et signalisation', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+          hc('checks', 'Contrôles effectués (équipements, gaz, atmosphère)', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+          hc('briefings', 'Briefings sécurité avant travaux', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+        ], 'conditions', NOTE_HSE_HELP),
+        hSection('environment', 'Environnement', [
+          hc('sorting', 'Tri des déchets', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+          hc('housekeeping', 'Aspect, propreté, rangement', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+          hc('wasteArea', 'Aire de stockage des déchets', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+          hc('retention', 'Mise sous rétention des produits chimiques', 'enum', { required: true, options: NOTE_HSE, span: 3 }),
+        ], 'conditions', NOTE_HSE_HELP),
+        hTable('findings', 'Constats et actions après audit', [
+          hc('theme', 'Mesure concernée', 'enum', { required: true, options: ['EPI', 'Balisage et signalisation', 'Contrôles', 'Briefings', 'Tri des déchets', 'Propreté et rangement', 'Aire de déchets', 'Rétention', 'Autre'], span: 2 }),
+          hc('finding', 'Constat', 'text', { required: true, span: 3 }),
+          hc('contractor', 'Contractant', 'text', { span: 2 }),
+          hc('action', 'Décision ou action après audit', 'text', { required: true, span: 3 }),
+          hc('deadline', 'Délai', 'text', { span: 2 }),
+        ]),
+        hTable('risks', 'Risques et situations observées', [
+          hc('risk', 'Risque', 'enum', { required: true, options: ['Situation dangereuse', 'Incident ou accident survenu', 'Zone sensible (ATEX, circulation, coactivité)'], span: 3 }),
+          hc('observation', 'Observations', 'text', { required: true, span: 3 }),
+          hc('contractor', 'Contractant', 'text', { span: 2 }),
+          hc('recommendation', 'Décision ou recommandation', 'text', { span: 2 }),
+          hc('deadline', 'Délai', 'text', { span: 2 }),
+        ], 'Un incident ou un accident fait en outre l’objet d’un rapport dédié (PR04-F05).'),
+        hTable('taskRisks', 'Analyse des risques des tâches de la journée', [
+          hc('task', 'Tâche élémentaire', 'text', { required: true, span: 3 }),
+          hc('hazards', 'Dangers', 'text', { required: true, span: 3 }),
+          hc('risks', 'Risques', 'text', { required: true, span: 3 }),
+          hc('measures', 'Mesures préventives', 'text', { required: true, span: 3 }),
+        ]),
+        HSE_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Superviseur HSE' }, { fr: 'Représentant du contractant' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F03 — RAPPORT HEBDOMADAIRE HSE
+   *
+   *  Les dix rubriques du canevas Excel. Les entreprises n'y sont plus des
+   *  colonnes figées (STROB, CEGELEC, SGTI) mais des lignes, pour servir
+   *  n'importe quel chantier ; les deux tableaux d'engins sont réunis.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F03',
+    version: '00',
+    title: 'Rapport hebdomadaire HSE',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('from', 'Semaine du', 'date', { required: true, span: 6 }),
+          hc('to', 'au', 'date', { required: true, span: 6 }),
+        ]),
+        hseIndicators('semaine'),
+        hTable('hours', '2 — Effectif et heures travaillées par entreprise', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 6 }),
+          hc('headcount', 'Effectif', 'number', { required: true, decimals: 0, span: 3 }),
+          hc('hours', 'Heures travaillées', 'number', { required: true, unit: 'h', decimals: 0, span: 3 }),
+        ], undefined, 1),
+        hTable('works', '3 — Travaux réalisés', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 4 }),
+          hc('works', 'Travaux réalisés', 'text', { required: true, span: 8 }),
+        ]),
+        hTable('permits', '4 — Permis de travail', [
+          hc('date', 'Date', 'text', { required: true, span: 3 }),
+          hc('company', 'Entreprise', 'text', { required: true, span: 3 }),
+          hc('permits', 'Permis de travail', 'number', { decimals: 0, span: 3 }),
+          hc('authorisations', 'Autorisations de travail', 'number', { decimals: 0, span: 3 }),
+        ]),
+        hTable('animation', '5 et 6 — Animation et accueil sécurité', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 3 }),
+          hc('inductions', 'Accueils sécurité', 'number', { decimals: 0, span: 3 }),
+          hc('briefings', 'Briefings avant travaux', 'number', { decimals: 0, span: 3 }),
+          hc('meetings', 'Réunions HSE', 'number', { decimals: 0, span: 3 }),
+        ]),
+        hTable('machines', '7 — Engins de chantier', [
+          hc('designation', 'Désignation', 'text', { required: true, span: 2 }),
+          hc('serial', 'N° de série ou de châssis', 'text', { span: 2 }),
+          hc('company', 'Entreprise', 'text', { span: 2 }),
+          hc('insurance', 'Fin d’assurance', 'text', { span: 2 }),
+          hc('inspection', 'Fin de validité du contrôle réglementaire', 'text', { span: 2 }),
+          hc('checklist', 'Check-list', 'enum', { required: true, options: ['Conforme', 'Non conforme'], span: 1 }),
+          hc('observation', 'Observation', 'text', { span: 1 }),
+        ], 'Un engin sans contrôle réglementaire en cours de validité n’entre pas sur le chantier (voir PR04-F10).'),
+        hTable('nonConformities', '8 — Non-conformités HSE par entreprise', [
+          hc('date', 'Date', 'text', { required: true, span: 1 }),
+          hc('finding', 'Constat HSE', 'text', { required: true, span: 3 }),
+          hc('action', 'Actions correctives', 'text', { required: true, span: 3 }),
+          hc('contractor', 'Contractant', 'text', { span: 2 }),
+          hc('nature', 'Nature', 'enum', { required: true, options: ['Anomalie', 'Incident potentiel ou situation dangereuse'], span: 2 }),
+          hc('status', 'Statut', 'enum', { required: true, options: STATUT_ACTION, span: 1 }),
+        ]),
+        hTable('recap', '9 — Récapitulatif par entreprise', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 2 }),
+          hc('headcount', 'Effectif (semaine)', 'number', { decimals: 0, span: 1 }),
+          hc('hours', 'Heures (semaine)', 'number', { unit: 'h', decimals: 0, span: 1 }),
+          hc('hoursTotal', 'Heures cumulées (chantier)', 'number', { unit: 'h', decimals: 0, span: 2 }),
+          hc('incidents', 'Incidents', 'number', { decimals: 0, span: 1 }),
+          hc('lostTime', 'Accidents avec arrêt', 'number', { decimals: 0, span: 1 }),
+          hc('noLostTime', 'Accidents sans arrêt', 'number', { decimals: 0, span: 1 }),
+          hc('firstAid', 'Soins', 'number', { decimals: 0, span: 1 }),
+          hc('frequencyRate', 'Taux de fréquence', 'number', { decimals: 2, span: 2 }),
+        ]),
+        HSE_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visa' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Superviseur HSE' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F04 — RAPPORT MENSUEL DE SUIVI HSE
+   *
+   *  Les neuf rubriques du sommaire du canevas PowerPoint, seule partie
+   *  rédigée du modèle. Le taux de résolution des constats y devient un
+   *  indicateur explicite.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F04',
+    version: '00',
+    title: 'Rapport mensuel de suivi HSE',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([hc('month', 'Mois', 'text', { required: true, span: 12 })]),
+        hSection('purpose', '1 — Objet du rapport', [hc('purpose', 'Objet du rapport', 'textarea', { required: true, span: 12 })], 'text'),
+        hTable('stakeholders', '2 — Intervenants du projet', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 5 }),
+          hc('role', 'Rôle', 'text', { required: true, span: 4 }),
+          hc('manager', 'Responsable HSE', 'text', { span: 3 }),
+        ], undefined, 1),
+        hTable('works', '3 — Synthèse des travaux réalisés et des permis de travail', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 3 }),
+          hc('works', 'Travaux réalisés', 'text', { required: true, span: 5 }),
+          hc('permits', 'Permis de travail', 'number', { decimals: 0, span: 2 }),
+          hc('authorisations', 'Autorisations de travail', 'number', { decimals: 0, span: 2 }),
+        ]),
+        hTable('hours', '4 — Évolution des heures travaillées et des effectifs par entreprise', [
+          hc('company', 'Entreprise', 'text', { required: true, span: 4 }),
+          hc('headcount', 'Effectif moyen', 'number', { decimals: 0, span: 2 }),
+          hc('hours', 'Heures du mois', 'number', { unit: 'h', decimals: 0, span: 3 }),
+          hc('hoursTotal', 'Heures cumulées', 'number', { unit: 'h', decimals: 0, span: 3 }),
+        ], undefined, 1),
+        { ...hseIndicators('mois'), label: { fr: '5 — Synoptique des indicateurs de sécurité' } },
+        hTable('findings', '6 — Constats HSE relevés', [
+          hc('finding', 'Constat', 'text', { required: true, span: 5 }),
+          hc('company', 'Entreprise', 'text', { span: 2 }),
+          hc('action', 'Action', 'text', { span: 3 }),
+          hc('status', 'Statut', 'enum', { required: true, options: STATUT_ACTION, span: 2 }),
+        ], 'Illustrer les constats marquants dans les photos du rapport.'),
+        hSection('resolution', '7 — Taux de résolution mensuel des constats HSE', [
+          hc('raised', 'Constats relevés', 'number', { required: true, decimals: 0, span: 4 }),
+          hc('closed', 'Constats clos', 'number', { required: true, decimals: 0, span: 4 }),
+          hc('rate', 'Taux de résolution', 'number', { required: true, unit: '%', decimals: 0, span: 4 }),
+        ], 'conditions', 'Taux de résolution = constats clos / constats relevés.'),
+        hSection('closing', '8 et 9 — Axes d’amélioration et conclusion', [
+          hc('improvements', '8 — Axes d’amélioration', 'textarea', { required: true, span: 12 }),
+          hc('conclusion', '9 — Conclusion', 'textarea', { required: true, span: 12 }),
+        ], 'text'),
+        HSE_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Rédigé par' }, { fr: 'Validé par' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F05 — RAPPORT D'ACCIDENT OU D'INCIDENT
+   *
+   *  Ajouté : le canevas journalier signale les incidents sans les analyser.
+   *  Ce rapport classe l'événement, décrit la victime éventuelle, cherche
+   *  les causes par les 5 M et suit les actions jusqu'à leur clôture.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F05',
+    version: '00',
+    title: 'Rapport d’accident ou d’incident',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('eventDate', 'Date de l’événement', 'date', { required: true, span: 4 }),
+          hc('eventTime', 'Heure', 'text', { required: true, span: 4 }),
+          hc('reportDate', 'Date du rapport', 'date', { required: true, autofill: 'date', span: 4 }),
+          hc('zone', 'Lieu ou zone', 'text', { required: true }),
+          hc('company', 'Entreprise concernée', 'text', { required: true }),
+          hc('classification', 'Classification', 'enum', { required: true, options: ['Situation dangereuse', 'Presque-accident', 'Incident matériel', 'Incident environnemental', 'Soins', 'Accident sans arrêt', 'Accident avec arrêt', 'Accident de trajet'], span: 12 }),
+        ]),
+        hSection('facts', 'Description des faits', [
+          hc('description', 'Déroulement de l’événement', 'textarea', { required: true, span: 12 }),
+          hc('task', 'Tâche en cours au moment des faits', 'text'),
+          hc('witnesses', 'Témoins', 'text'),
+          hc('immediate', 'Mesures immédiates prises', 'textarea', { required: true, span: 12 }),
+        ], 'text'),
+        hSection('victim', 'Victime', [
+          hc('name', 'Nom', 'text'),
+          hc('position', 'Fonction', 'text', { span: 3 }),
+          hc('seniority', 'Ancienneté au poste', 'text', { span: 3 }),
+          hc('injury', 'Nature des lésions', 'text'),
+          hc('bodyPart', 'Siège des lésions', 'text'),
+          hc('firstAid', 'Premiers soins prodigués', 'text'),
+          hc('evacuated', 'Évacuation vers une structure de soins', 'boolean', { span: 3 }),
+          hc('lostDays', 'Jours d’arrêt', 'number', { decimals: 0, span: 3 }),
+        ], 'keyvalue', 'À renseigner seulement en cas de dommage corporel. Ne pas porter d’information médicale au-delà de ce qu’exige le suivi.'),
+        hTable('causes', 'Analyse des causes (5 M)', [
+          hc('family', 'Famille', 'enum', { required: true, options: ['Main-d’œuvre', 'Matériel', 'Méthode', 'Milieu', 'Matière'], span: 3 }),
+          hc('cause', 'Cause identifiée', 'text', { required: true, span: 9 }),
+        ], undefined, 1),
+        hSection('rootCause', 'Cause racine', [hc('rootCause', 'Cause racine retenue', 'textarea', { required: true, span: 12 })], 'text'),
+        hTable('actions', 'Plan d’actions', [
+          hc('action', 'Action', 'text', { required: true, span: 4 }),
+          hc('type', 'Type', 'enum', { required: true, options: ['Immédiate', 'Corrective', 'Préventive'], span: 2 }),
+          hc('owner', 'Responsable', 'text', { required: true, span: 2 }),
+          hc('deadline', 'Échéance', 'text', { required: true, span: 2 }),
+          hc('status', 'Statut', 'enum', { required: true, options: STATUT_ACTION, span: 2 }),
+        ], undefined, 1),
+        HSE_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Superviseur HSE' }, { fr: 'Responsable de l’entreprise concernée' }, { fr: 'Direction de projet' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F06 — RAPPORT D'INSPECTION HSE DE CHANTIER
+   *
+   *  Ajouté : visite inopinée ou planifiée, par thème de risque. Les
+   *  réponses sont celles des vérifications réglementaires (SO, NA, C, NC),
+   *  et chaque non-conformité est reportée avec sa criticité.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F06',
+    version: '00',
+    title: 'Rapport d’inspection HSE de chantier',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('date', 'Date de l’inspection', 'date', { required: true, autofill: 'date', span: 4 }),
+          hc('kind', 'Nature', 'enum', { required: true, options: ['Planifiée', 'Inopinée'], span: 4 }),
+          hc('contractor', 'Entreprise inspectée', 'text', { required: true, span: 4 }),
+          hc('zone', 'Zones visitées', 'text', { span: 12 }),
+        ]),
+        {
+          key: 'checks',
+          label: { fr: 'Points inspectés' },
+          type: 'checklist',
+          repeatable: false,
+          help: EILM_CHECKS_HELP,
+          groups: [
+            {
+              key: 'organisation',
+              label: { fr: 'Organisation et documents' },
+              points: [
+                { key: 'hse-plan', label: { fr: 'Plan HSE disponible et à jour' } },
+                { key: 'risk-analyses', label: { fr: 'Analyses de risques et modes opératoires disponibles' } },
+                { key: 'permits', label: { fr: 'Permis de travail affichés et en cours de validité' } },
+                { key: 'inductions', label: { fr: 'Accueil sécurité des arrivants tracé' } },
+                { key: 'postings', label: { fr: 'Affichage obligatoire en place' } },
+                { key: 'hse-staff', label: { fr: 'Animateur HSE de l’entreprise présent' } },
+              ],
+            },
+            {
+              key: 'ppe',
+              label: { fr: 'Équipements de protection individuelle' },
+              points: [
+                { key: 'helmet', label: { fr: 'Casque' } },
+                { key: 'shoes', label: { fr: 'Chaussures de sécurité' } },
+                { key: 'vest', label: { fr: 'Gilet haute visibilité' } },
+                { key: 'glasses', label: { fr: 'Lunettes de protection' } },
+                { key: 'gloves', label: { fr: 'Gants adaptés à la tâche' } },
+                { key: 'hearing', label: { fr: 'Protections auditives' } },
+                { key: 'harness', label: { fr: 'Harnais pour les travaux en hauteur' } },
+              ],
+            },
+            {
+              key: 'traffic',
+              label: { fr: 'Circulation et balisage' },
+              points: [
+                { key: 'traffic-plan', label: { fr: 'Plan de circulation respecté' } },
+                { key: 'work-marking', label: { fr: 'Zones de travail balisées' } },
+                { key: 'separation', label: { fr: 'Séparation des piétons et des engins' } },
+                { key: 'signage', label: { fr: 'Signalisation en place' } },
+              ],
+            },
+            {
+              key: 'height',
+              label: { fr: 'Travaux en hauteur' },
+              points: [
+                { key: 'scaffolds', label: { fr: 'Échafaudages réceptionnés et étiquetés' } },
+                { key: 'guardrails', label: { fr: 'Garde-corps en place' } },
+                { key: 'anchors', label: { fr: 'Points d’ancrage et lignes de vie' } },
+                { key: 'ladders', label: { fr: 'Échelles conformes et bien utilisées' } },
+              ],
+            },
+            {
+              key: 'lifting',
+              label: { fr: 'Levage' },
+              points: [
+                { key: 'lifting-inspection', label: { fr: 'Appareils vérifiés, rapport en cours de validité' } },
+                { key: 'accessories', label: { fr: 'Accessoires marqués et vérifiés' } },
+                { key: 'banksman', label: { fr: 'Élingueur ou chef de manœuvre désigné' } },
+                { key: 'lifting-zone', label: { fr: 'Zone de levage balisée, personne sous la charge' } },
+              ],
+            },
+            {
+              key: 'electrical',
+              label: { fr: 'Électricité' },
+              points: [
+                { key: 'boxes', label: { fr: 'Coffrets de chantier protégés par différentiel 30 mA' } },
+                { key: 'cables', label: { fr: 'Câbles en bon état et protégés' } },
+                { key: 'earthing', label: { fr: 'Mises à la terre' } },
+                { key: 'lockout', label: { fr: 'Consignations réalisées et tracées' } },
+              ],
+            },
+            {
+              key: 'confined',
+              label: { fr: 'Fouilles et espaces confinés' },
+              points: [
+                { key: 'shoring', label: { fr: 'Blindage ou talutage des fouilles' } },
+                { key: 'excavation-access', label: { fr: 'Accès et sorties des fouilles' } },
+                { key: 'gas-test', label: { fr: 'Contrôle d’atmosphère avant entrée' } },
+                { key: 'attendant', label: { fr: 'Surveillant extérieur présent' } },
+              ],
+            },
+            {
+              key: 'hot-work',
+              label: { fr: 'Travaux par points chauds' },
+              points: [
+                { key: 'fire-permit', label: { fr: 'Permis de feu délivré' } },
+                { key: 'extinguisher-near', label: { fr: 'Extincteur à proximité' } },
+                { key: 'screens', label: { fr: 'Écrans et protection des matières combustibles' } },
+                { key: 'fire-watch', label: { fr: 'Surveillance après travaux' } },
+              ],
+            },
+            {
+              key: 'chemicals',
+              label: { fr: 'Produits chimiques' },
+              points: [
+                { key: 'sds', label: { fr: 'Fiches de données de sécurité disponibles' } },
+                { key: 'labelling', label: { fr: 'Contenants étiquetés' } },
+                { key: 'chemical-retention', label: { fr: 'Stockage sur rétention' } },
+              ],
+            },
+            {
+              key: 'machines',
+              label: { fr: 'Engins' },
+              points: [
+                { key: 'machine-inspection', label: { fr: 'Vérification réglementaire en cours de validité' } },
+                { key: 'driver', label: { fr: 'Conducteur autorisé' } },
+                { key: 'reverse-alarm', label: { fr: 'Avertisseur de recul et gyrophare' } },
+                { key: 'daily-check', label: { fr: 'Check-list quotidienne renseignée' } },
+              ],
+            },
+            {
+              key: 'emergency',
+              label: { fr: 'Incendie et secours' },
+              points: [
+                { key: 'extinguishers', label: { fr: 'Extincteurs vérifiés et accessibles' } },
+                { key: 'first-aid-kit', label: { fr: 'Trousse de secours complète' } },
+                { key: 'first-aider', label: { fr: 'Secouriste désigné sur le chantier' } },
+                { key: 'instructions', label: { fr: 'Consignes d’urgence affichées' } },
+                { key: 'assembly', label: { fr: 'Point de rassemblement signalé' } },
+              ],
+            },
+            {
+              key: 'environment',
+              label: { fr: 'Environnement et hygiène' },
+              points: [
+                { key: 'waste', label: { fr: 'Tri et évacuation des déchets' } },
+                { key: 'housekeeping', label: { fr: 'Propreté et rangement' } },
+                { key: 'sanitary', label: { fr: 'Installations sanitaires' } },
+                { key: 'water', label: { fr: 'Eau potable disponible' } },
+                { key: 'spill-kit', label: { fr: 'Kit antipollution' } },
+              ],
+            },
+          ],
+        },
+        hTable('findings', 'Non-conformités relevées', [
+          hc('finding', 'Constat', 'text', { required: true, span: 4 }),
+          hc('criticality', 'Criticité', 'enum', { required: true, options: ['Mineure', 'Majeure', 'Critique — arrêt de l’activité'], span: 2 }),
+          hc('contractor', 'Entreprise', 'text', { span: 2 }),
+          hc('action', 'Action demandée', 'text', { required: true, span: 2 }),
+          hc('deadline', 'Délai', 'text', { span: 2 }),
+        ], 'Une criticité « critique » impose l’arrêt immédiat de l’activité concernée jusqu’à sa levée.'),
+        hSection('observations', 'Observations', [hc('observations', 'Observations', 'textarea', { span: 12 })], 'text'),
+        {
+          key: 'conclusion',
+          label: { fr: 'Conclusion' },
+          type: 'verdict',
+          repeatable: false,
+          verdicts: [
+            { fr: 'Chantier conforme' },
+            { fr: 'Chantier conforme avec écarts à lever' },
+            { fr: 'Chantier non conforme — arrêt de l’activité concernée' },
+          ],
+        },
+        HSE_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Inspecteur HSE' }, { fr: 'Représentant de l’entreprise' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F07 — PERMIS DE TRAVAIL
+   *
+   *  Ajouté : les rapports comptent les permis sans en avoir le modèle.
+   *  Un permis couvre un ou plusieurs types de travaux dangereux, liste les
+   *  mesures vérifiées avant délivrance, trace les mesures d'atmosphère et
+   *  se clôt par la remise en état de la zone.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F07',
+    version: '00',
+    title: 'Permis de travail',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('number', 'N° de permis', 'text', { required: true, span: 4 }),
+          hc('date', 'Date', 'date', { required: true, autofill: 'date', span: 4 }),
+          hc('validity', 'Validité (de … à …)', 'text', { required: true, span: 4 }),
+          hc('zone', 'Zone ou équipement', 'text', { required: true }),
+          hc('company', 'Entreprise exécutante', 'text', { required: true }),
+          hc('worksManager', 'Responsable des travaux', 'text', { required: true }),
+          hc('workers', 'Nombre d’intervenants', 'number', { decimals: 0 }),
+          hc('description', 'Description des travaux', 'textarea', { required: true, span: 12 }),
+        ]),
+        hSection('types', 'Type de travaux', [
+          hc('hotWork', 'Travaux par points chauds (permis de feu)', 'boolean', { span: 4 }),
+          hc('height', 'Travail en hauteur', 'boolean', { span: 4 }),
+          hc('confinedSpace', 'Espace confiné', 'boolean', { span: 4 }),
+          hc('electrical', 'Consignation électrique', 'boolean', { span: 4 }),
+          hc('lifting', 'Levage', 'boolean', { span: 4 }),
+          hc('excavation', 'Fouille ou excavation', 'boolean', { span: 4 }),
+          hc('networks', 'Travaux à proximité de réseaux', 'boolean', { span: 4 }),
+          hc('otherType', 'Autre', 'text', { span: 8 }),
+        ]),
+        hSection('measures', 'Mesures vérifiées avant délivrance', [
+          hc('lockout', 'Consignation réalisée', 'boolean', { span: 4 }),
+          hc('marking', 'Zone balisée', 'boolean', { span: 4 }),
+          hc('extinguisher', 'Extincteur sur place', 'boolean', { span: 4 }),
+          hc('gasTest', 'Mesure d’atmosphère réalisée', 'boolean', { span: 4 }),
+          hc('specificPpe', 'EPI spécifiques fournis', 'boolean', { span: 4 }),
+          hc('watcher', 'Surveillant désigné', 'boolean', { span: 4 }),
+          hc('rescue', 'Moyens de secours disponibles', 'boolean', { span: 4 }),
+          hc('riskAnalysis', 'Analyse de risques communiquée à l’équipe', 'boolean', { span: 4 }),
+          hc('otherMeasures', 'Autres mesures', 'text', { span: 4 }),
+        ], 'keyvalue', 'Le permis n’est délivré que si toutes les mesures applicables au type de travaux sont en place.'),
+        hTable('gasTests', 'Mesures d’atmosphère', [
+          hc('time', 'Heure', 'text', { required: true, span: 2 }),
+          hc('oxygen', 'O₂', 'number', { unit: '%', decimals: 1, span: 2 }),
+          hc('lel', 'LIE', 'number', { unit: '%', decimals: 0, span: 2 }),
+          hc('h2s', 'H₂S', 'number', { unit: 'ppm', decimals: 0, span: 2 }),
+          hc('co', 'CO', 'number', { unit: 'ppm', decimals: 0, span: 2 }),
+          hc('operator', 'Opérateur', 'text', { span: 2 }),
+        ], 'Seuils selon la procédure du site ; pour les travaux à chaud, LIE = 0 %.'),
+        hSection('closure', 'Clôture du permis', [
+          hc('endTime', 'Fin des travaux (heure)', 'text', { span: 4 }),
+          hc('zoneRestored', 'Zone remise en état', 'boolean', { span: 4 }),
+          hc('fireWatch', 'Surveillance après travaux à chaud', 'number', { unit: 'min', decimals: 0, span: 4 }),
+        ]),
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Émetteur du permis' }, { fr: 'Responsable de l’exécution' }, { fr: 'Superviseur HSE' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F08 — FICHE D'ACCUEIL SÉCURITÉ
+   *
+   *  Ajoutée : trace de l'accueil des nouveaux arrivants, que le journal du
+   *  service consignait sans modèle. Pas de n° d'identité : le nom,
+   *  l'entreprise et la fonction suffisent à prouver l'accueil.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F08',
+    version: '00',
+    title: 'Fiche d’accueil sécurité',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([hc('date', 'Date', 'date', { required: true, autofill: 'date', span: 12 })]),
+        hSection('modules', 'Modules traités', [
+          hc('site', 'Présentation du chantier et de ses risques', 'boolean', { span: 6 }),
+          hc('traffic', 'Règles de circulation', 'boolean', { span: 6 }),
+          hc('ppe', 'EPI obligatoires', 'boolean', { span: 6 }),
+          hc('permits', 'Permis de travail', 'boolean', { span: 6 }),
+          hc('emergency', 'Consignes d’urgence et point de rassemblement', 'boolean', { span: 6 }),
+          hc('waste', 'Gestion des déchets', 'boolean', { span: 6 }),
+          hc('prohibitions', 'Interdictions (alcool, tabac, téléphone en zone de travail)', 'boolean', { span: 6 }),
+          hc('reporting', 'Remontée des situations dangereuses', 'boolean', { span: 6 }),
+          hc('other', 'Autres modules', 'text', { span: 12 }),
+        ]),
+        hTable('participants', 'Personnes accueillies', [
+          hc('name', 'Nom et prénom', 'text', { required: true, span: 4 }),
+          hc('company', 'Entreprise', 'text', { required: true, span: 3 }),
+          hc('position', 'Fonction', 'text', { required: true, span: 3 }),
+          hc('signed', 'Émargé', 'enum', { required: true, options: ['Oui', 'Non'], span: 2 }),
+        ], undefined, 1),
+        {
+          key: 'signatures',
+          label: { fr: 'Visa' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Animateur de l’accueil' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F09 — COMPTE RENDU DE CAUSERIE SÉCURITÉ
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F09',
+    version: '00',
+    title: 'Compte rendu de causerie sécurité',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('date', 'Date', 'date', { required: true, autofill: 'date', span: 4 }),
+          hc('company', 'Entreprise', 'text', { required: true, span: 4 }),
+          hc('duration', 'Durée', 'number', { unit: 'min', decimals: 0, span: 4 }),
+          hc('animator', 'Animateur', 'text', { required: true }),
+          hc('topic', 'Thème', 'text', { required: true }),
+        ]),
+        hSection('content', 'Contenu', [
+          hc('keyPoints', 'Points clés transmis', 'textarea', { required: true, span: 12 }),
+          hc('questions', 'Questions et remarques des participants', 'textarea', { span: 12 }),
+        ], 'text'),
+        hTable('participants', 'Participants', [
+          hc('name', 'Nom et prénom', 'text', { required: true, span: 4 }),
+          hc('company', 'Entreprise', 'text', { required: true, span: 3 }),
+          hc('position', 'Fonction', 'text', { span: 3 }),
+          hc('signed', 'Émargé', 'enum', { required: true, options: ['Oui', 'Non'], span: 2 }),
+        ], undefined, 1),
+        {
+          key: 'signatures',
+          label: { fr: 'Visa' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Animateur' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR04-F10 — CONTRÔLE D'ENGIN AVANT ACCÈS AU CHANTIER
+   *
+   *  Ajouté : le plan HSE prévoit ce contrôle (rubrique 7.2) et le rapport
+   *  hebdomadaire en suit le résultat, sans que la grille existe. Il ne
+   *  remplace pas la vérification générale périodique (PR02-F20 à F28).
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR04-F10',
+    version: '00',
+    title: 'Contrôle d’engin avant accès au chantier',
+    methodCode: 'HSE',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2026-09-21',
+    schema: {
+      sections: [
+        HSE_PROJECT([
+          hc('date', 'Date du contrôle', 'date', { required: true, autofill: 'date', span: 6 }),
+          hc('company', 'Entreprise', 'text', { required: true, span: 6 }),
+        ]),
+        hSection('machine', 'Engin et conducteur', [
+          hc('designation', 'Désignation', 'text', { required: true, span: 4 }),
+          hc('model', 'Marque et type', 'text', { span: 4 }),
+          hc('serial', 'Immatriculation ou n° de série', 'text', { required: true, span: 4 }),
+          hc('driver', 'Conducteur', 'text', { required: true, span: 4 }),
+          hc('licence', 'Autorisation de conduite — n° et validité', 'text', { required: true, span: 8 }),
+        ]),
+        hSection('documents', 'Documents', [
+          hc('insurance', 'Fin d’assurance', 'date', { required: true, span: 4 }),
+          hc('technical', 'Fin de visite technique', 'date', { span: 4 }),
+          hc('inspectionEnd', 'Fin de validité du contrôle réglementaire', 'date', { required: true, span: 4 }),
+          hc('inspectionReport', 'Rapport de vérification réglementaire n°', 'text', { span: 12 }),
+        ], 'keyvalue', 'Un document échu à la date du contrôle refuse l’accès.'),
+        {
+          key: 'checks',
+          label: { fr: 'État de l’engin' },
+          type: 'checklist',
+          repeatable: false,
+          help: EILM_CHECKS_HELP,
+          groups: [
+            {
+              key: 'general',
+              label: { fr: 'État général' },
+              points: [
+                { key: 'brakes', label: { fr: 'Freins de service et de stationnement' } },
+                { key: 'steering', label: { fr: 'Direction' } },
+                { key: 'tyres', label: { fr: 'Pneumatiques ou chenilles' } },
+                { key: 'leaks', label: { fr: 'Absence de fuite (huile, carburant, hydraulique)' } },
+                { key: 'mirrors', label: { fr: 'Rétroviseurs' } },
+                { key: 'windows', label: { fr: 'Pare-brise et vitres' } },
+              ],
+            },
+            {
+              key: 'safety',
+              label: { fr: 'Sécurité' },
+              points: [
+                { key: 'horn', label: { fr: 'Avertisseur sonore' } },
+                { key: 'reverse-alarm', label: { fr: 'Avertisseur de recul' } },
+                { key: 'beacon', label: { fr: 'Gyrophare' } },
+                { key: 'lights', label: { fr: 'Feux' } },
+                { key: 'seatbelt', label: { fr: 'Ceinture de sécurité' } },
+                { key: 'extinguisher', label: { fr: 'Extincteur' } },
+                { key: 'cab-protection', label: { fr: 'Structure de protection de la cabine (ROPS, FOPS)' } },
+                { key: 'first-aid', label: { fr: 'Trousse de secours' } },
+              ],
+            },
+            {
+              key: 'equipment',
+              label: { fr: 'Équipement de travail' },
+              points: [
+                { key: 'attachment', label: { fr: 'Flèche, godet, fourches ou accessoire' } },
+                { key: 'hydraulics', label: { fr: 'Vérins et flexibles' } },
+                { key: 'locks', label: { fr: 'Dispositifs de verrouillage' } },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'decision',
+          label: { fr: 'Décision' },
+          type: 'verdict',
+          repeatable: false,
+          verdicts: [
+            { fr: 'Accès autorisé' },
+            { fr: 'Accès autorisé après levée des réserves' },
+            { fr: 'Accès refusé' },
+          ],
+        },
+        HSE_PHOTOS,
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'Contrôleur HSE' }, { fr: 'Conducteur ou entreprise' }],
         },
       ],
     },

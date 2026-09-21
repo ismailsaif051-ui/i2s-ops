@@ -354,6 +354,9 @@ const METHODS = [
   { code: 'ELEC', name: 'Vérification des installations électriques', dept: 'EILM', standards: [] },
   { code: 'THERMO', name: 'Thermographie infrarouge', dept: 'EILM', standards: [] },
   { code: 'FIRE', name: 'Prévention incendie', dept: 'EILM', standards: [] },
+  // Supervision HSE des chantiers clients : plan, suivi journalier à mensuel,
+  // inspections, permis et accidents. Rattachée au service QHSE.
+  { code: 'HSE', name: 'Supervision HSE de chantier', dept: 'QHSE', standards: ['Code du travail marocain (loi 65-99)'] },
   { code: 'CTC', name: 'Contrôle technique de construction', dept: 'CTC', standards: ['BAEL 91', 'Eurocodes', 'CM66', 'NV65', 'RPS 2011', 'DTU'] },
 ];
 
