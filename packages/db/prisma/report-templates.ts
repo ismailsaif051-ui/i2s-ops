@@ -11,12 +11,16 @@
  *   PR01-F07  Contrôle de rotondité                 → mesures dimensionnelles
  *   PR01-F08  Examen visuel                         → mesures et indications
  *   PR01-F10  Contrôle de déformation locale        → mesures dimensionnelles
+ *   PR01-F11  Composition d’atmosphère              → attestation sur mesures
  *   PR01-F13  Qualification de soudeur (ASME IX)    → variables et essais
  *   PR01-F14  Réception et suivi des travaux        → constats et décisions
+ *   PR01-F17  Rapport d’inspection de réservoir     → rapport rédigé structuré
  *   PR01-F18  Identification des matériaux (PMI)    → composition par élément
  *   PR01-F21  Contrôle peinture                     → préparation et épaisseurs
  *   PR01-F22  Interprétation de clichés radio       → mesures et indications
+ *   PR01-F25  Tarage de soupape                     → essai par soupape
  *   PR01-F26  Essai de dureté                       → mesures et indications
+ *   PR01-F27  Fonctionnement des appareils          → fiches et résultat
  *   PR02-F01  Grue auxiliaire de chargement         → appareil de levage
  *   PR02-F02  Plate-forme suspendue                 → appareil de levage
  *   PR02-F03  Chariot à flèche télescopique         → appareil de levage
@@ -4670,6 +4674,362 @@ export const TEMPLATES: TemplateSeed[] = [
           help: 'Nous certifions que les indications de ce document sont exactes et que les soudures d’essai ont été préparées, soudées et essayées conformément à la section IX du code ASME, édition 2015.',
           signatories: [{ fr: 'Inspecteur', en: 'Inspector' }],
         },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F11 — ATTESTATION DE COMPOSITION D'ATMOSPHÈRE
+   *
+   *  Délivrée avant travaux à chaud ou à froid : explosivité et teneur en
+   *  oxygène, puis l'une des deux attestations. Le modèle porte encore une
+   *  ancienne référence (« SCR, révision du 25/11/2014 ») en plus de son
+   *  code QMS.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F11',
+    version: '00',
+    title: 'Attestation de vérification de composition d’atmosphère',
+    methodCode: null,
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Vérification' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'date', label: { fr: 'Date de la vérification' }, type: 'date', required: true, autofill: 'date', span: 3 },
+            { key: 'place', label: { fr: 'Lieu de la vérification' }, type: 'ref', required: true, autofill: 'site', span: 3 },
+            { key: 'client', label: { fr: 'Client' }, type: 'ref', required: true, autofill: 'client', span: 3 },
+            { key: 'agent', label: { fr: 'Agent de contrôle' }, type: 'ref', required: true, autofill: 'inspector', span: 3 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Équipement de vérification' },
+          type: 'devices',
+          repeatable: false,
+          minRows: 1,
+          help: 'Détecteur multigaz. Un appareil hors étalonnage à la date de la vérification empêche la soumission.',
+          fields: [{ key: 'device', label: { fr: 'Détecteur' }, type: 'device', required: true, span: 12 }],
+        },
+        {
+          key: 'subject',
+          label: { fr: 'Équipement ou zone sujet à vérification' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'plantId', label: { fr: 'Identification usine' }, type: 'text', required: false, span: 6 },
+            { key: 'constructionId', label: { fr: 'Identification de construction' }, type: 'text', required: false, span: 6 },
+            { key: 'equipmentType', label: { fr: 'Type d’équipement' }, type: 'ref', required: true, autofill: 'asset', span: 6 },
+            { key: 'location', label: { fr: 'Localisation de la vérification' }, type: 'enum', required: true, options: ['Atmosphère interne', 'Atmosphère externe', 'Autre'], span: 6 },
+          ],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Objet de la vérification — résultats' },
+          type: 'conditions',
+          repeatable: false,
+          help: 'Explosivité conforme si LIE = 0 % · teneur en oxygène conforme si 20 % ≤ O₂ ≤ 21 %.',
+          fields: [
+            { key: 'lel', label: { fr: 'Explosivité (LIE)' }, type: 'number', required: true, unit: '%', decimals: 1, span: 3 },
+            { key: 'lelResult', label: { fr: 'Explosivité — résultat' }, type: 'enum', required: true, options: ['Conforme', 'Non conforme'], span: 3 },
+            { key: 'oxygen', label: { fr: 'Teneur en oxygène (O₂)' }, type: 'number', required: true, unit: '%', decimals: 1, span: 3 },
+            { key: 'oxygenResult', label: { fr: 'Oxygène — résultat' }, type: 'enum', required: true, options: ['Conforme', 'Non conforme'], span: 3 },
+          ],
+        },
+        {
+          key: 'attestation',
+          label: { fr: 'Attestation' },
+          type: 'verdict',
+          repeatable: false,
+          help: 'I2S TESTING atteste, au vu des valeurs relevées et pour les paramètres et l’atmosphère contrôlés. Pour servir et valoir ce que de droit.',
+          verdicts: [
+            { fr: 'Efficacité du dégazage et sécurité assurée pour des travaux à chaud ou à froid (LIE = 0 %)' },
+            { fr: 'Absence de sécurité assurée pour des travaux à chaud (LIE > 0 %)' },
+          ],
+        },
+        {
+          key: 'signatures',
+          label: { fr: 'Visa' },
+          type: 'signature-matrix',
+          repeatable: false,
+          help: 'Fait à Casablanca, au modèle.',
+          signatories: [{ fr: 'Agent de contrôle' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F25 — TARAGE DE SOUPAPE
+   *
+   *  Une ligne par soupape à ressort : caractéristiques et essai de tarage
+   *  se lisent ensemble, un même rapport couvrant souvent plusieurs
+   *  soupapes d'un appareil.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F25',
+    version: '00',
+    title: 'Rapport de tarage de soupape',
+    methodCode: null,
+    paradigm: 'MEASUREMENT',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'parties',
+          label: { fr: 'Propriétaire et demandeur de l’essai' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'owner', label: { fr: 'Propriétaire — identité' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'ownerAddress', label: { fr: 'Propriétaire — adresse' }, type: 'text', required: false, span: 6 },
+            { key: 'requester', label: { fr: 'Demandeur de l’essai — identité' }, type: 'text', required: false, span: 6 },
+            { key: 'requesterAddress', label: { fr: 'Demandeur de l’essai — adresse' }, type: 'text', required: false, span: 6 },
+          ],
+        },
+        {
+          key: 'equipment',
+          label: { fr: 'Caractéristiques de l’appareil' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'type', label: { fr: 'Type d’appareil' }, type: 'ref', required: true, autofill: 'asset', span: 6 },
+            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: false, span: 6 },
+            { key: 'serial', label: { fr: 'N° de fabrication' }, type: 'text', required: true, span: 4 },
+            { key: 'year', label: { fr: 'Année de construction' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'place', label: { fr: 'Lieu de construction' }, type: 'text', required: false, span: 4 },
+          ],
+        },
+        {
+          key: 'test',
+          label: { fr: 'Essai' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'date', label: { fr: 'Date de l’essai' }, type: 'date', required: true, autofill: 'date', span: 4 },
+            { key: 'circumstance', label: { fr: 'Circonstance' }, type: 'text', required: true, span: 4 },
+            { key: 'nextTest', label: { fr: 'Date du prochain essai' }, type: 'date', required: false, span: 4 },
+          ],
+        },
+        {
+          key: 'valves',
+          label: { fr: 'Soupapes à ressort — essai de tarage' },
+          type: 'table',
+          repeatable: true,
+          minRows: 1,
+          columns: [
+            { key: 'number', label: { fr: 'N° de soupape' }, type: 'text', required: true, span: 1 },
+            { key: 'brand', label: { fr: 'Marque / type' }, type: 'text', required: false, span: 2 },
+            { key: 'inletDiameter', label: { fr: 'Diamètre d’entrée' }, type: 'number', required: false, unit: 'mm', decimals: 0, span: 1 },
+            { key: 'setPressure', label: { fr: 'Pression de tarage' }, type: 'number', required: true, unit: 'bar', decimals: 2, span: 1 },
+            { key: 'seatTightness', label: { fr: 'Étanchéité buse-clapet à 90 % P' }, type: 'number', required: false, unit: 'bar', decimals: 2, span: 2 },
+            { key: 'backPressure', label: { fr: 'Contre-pression' }, type: 'number', required: false, unit: 'bar', decimals: 2, span: 1 },
+            { key: 'fluid', label: { fr: 'Fluide' }, type: 'text', required: true, span: 2 },
+            { key: 'bubbles', label: { fr: 'Étanchéité' }, type: 'number', required: false, unit: 'bulles/min', decimals: 0, span: 1 },
+            { key: 'duration', label: { fr: 'Temps' }, type: 'number', required: false, unit: 'min', decimals: 0, span: 1 },
+          ],
+        },
+        {
+          key: 'results',
+          label: { fr: 'Résultats des essais' },
+          type: 'text',
+          repeatable: false,
+          fields: [{ key: 'results', label: { fr: 'Résultats des essais' }, type: 'textarea', required: true, span: 12 }],
+        },
+        {
+          key: 'signatures',
+          label: { fr: 'Visas' },
+          type: 'signature-matrix',
+          repeatable: false,
+          signatories: [{ fr: 'L’inspecteur' }, { fr: 'La direction' }, { fr: 'Le demandeur' }],
+        },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F27 — FONCTIONNEMENT DES APPAREILS
+   *
+   *  Compresseur et son réservoir d'air : deux fiches côte à côte, puis un
+   *  résultat d'examen rédigé.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F27',
+    version: '00',
+    title: 'Rapport de fonctionnement des appareils',
+    methodCode: null,
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Renseignements généraux' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'client', label: { fr: 'Client' }, type: 'ref', required: true, autofill: 'client', span: 6 },
+            { key: 'owner', label: { fr: 'Propriétaire' }, type: 'text', required: false, span: 6 },
+            { key: 'place', label: { fr: 'Lieu d’examen' }, type: 'ref', required: true, autofill: 'site', span: 6 },
+            { key: 'purpose', label: { fr: 'Objet de la visite' }, type: 'text', required: true, span: 6 },
+          ],
+        },
+        {
+          key: 'apparatus',
+          label: { fr: 'Caractéristiques de l’appareil' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'designation', label: { fr: 'Désignation' }, type: 'ref', required: true, autofill: 'asset', span: 4 },
+            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: false, span: 4 },
+            { key: 'model', label: { fr: 'Modèle / type' }, type: 'text', required: false, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'serial', label: { fr: 'N° de série' }, type: 'text', required: true, span: 4 },
+            { key: 'servicePressure', label: { fr: 'Pression de service' }, type: 'number', required: false, unit: 'bar', decimals: 1, span: 4 },
+            { key: 'maxPressure', label: { fr: 'Pression maximale' }, type: 'number', required: false, unit: 'bar', decimals: 1, span: 4 },
+            { key: 'cylinders', label: { fr: 'Nombre de cylindres' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'engineBrand', label: { fr: 'Marque du moteur' }, type: 'text', required: false, span: 4 },
+          ],
+        },
+        {
+          key: 'receiver',
+          label: { fr: 'Caractéristiques du réservoir d’air' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'designation', label: { fr: 'Désignation' }, type: 'text', required: false, span: 4 },
+            { key: 'manufacturer', label: { fr: 'Constructeur' }, type: 'text', required: false, span: 4 },
+            { key: 'model', label: { fr: 'Modèle / type' }, type: 'text', required: false, span: 4 },
+            { key: 'year', label: { fr: 'Année de fabrication' }, type: 'number', required: false, decimals: 0, span: 4 },
+            { key: 'serial', label: { fr: 'N° de série' }, type: 'text', required: false, span: 4 },
+            { key: 'servicePressure', label: { fr: 'Pression de service' }, type: 'number', required: false, unit: 'bar', decimals: 1, span: 4 },
+            { key: 'minTemperature', label: { fr: 'Température minimale' }, type: 'number', required: false, unit: '°C', decimals: 0, span: 6 },
+            { key: 'maxTemperature', label: { fr: 'Température maximale' }, type: 'number', required: false, unit: '°C', decimals: 0, span: 6 },
+          ],
+        },
+        {
+          key: 'result',
+          label: { fr: 'Résultat de l’examen' },
+          type: 'text',
+          repeatable: false,
+          help: 'Il est systématiquement préconisé que l’opérateur procède, avant chaque utilisation, à une ultime vérification de bon fonctionnement.',
+          fields: [{ key: 'result', label: { fr: 'Résultat de l’examen' }, type: 'textarea', required: true, span: 12 }],
+        },
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR01-F17 — RAPPORT D'INSPECTION DE RÉSERVOIR
+   *
+   *  Le modèle n'est qu'un sommaire de rapport d'ingénierie : robe, toit et
+   *  fond (inspection visuelle, épaisseurs, évaluation, préconisations),
+   *  géométrie, stabilité au vent et au séisme. Ses rubriques deviennent
+   *  les sections du formulaire ; les épaisseurs sont relevées ligne à
+   *  ligne, le reste est rédigé.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR01-F17',
+    version: '00',
+    title: 'Rapport d’inspection',
+    methodCode: null,
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Rapport d’inspection' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'department', label: { fr: 'Département' }, type: 'text', required: false, span: 4 },
+            { key: 'author', label: { fr: 'Rapport établi par' }, type: 'ref', required: true, autofill: 'inspector', span: 4 },
+            { key: 'date', label: { fr: 'Établi le' }, type: 'date', required: true, autofill: 'date', span: 4 },
+            { key: 'inspectionDates', label: { fr: 'Date(s) de contrôle' }, type: 'text', required: true, span: 6 },
+            { key: 'inspectors', label: { fr: 'Intervenant(s)' }, type: 'text', required: true, span: 6 },
+          ],
+        },
+        {
+          key: 'presentation',
+          label: { fr: 'Objectif, équipement, référentiels et programme' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'objective', label: { fr: '1 — Objectif de la prestation' }, type: 'textarea', required: true, span: 12 },
+            { key: 'equipment', label: { fr: '2 — Description de l’équipement' }, type: 'textarea', required: true, span: 12 },
+            { key: 'references', label: { fr: '3 — Référentiels' }, type: 'textarea', required: true, span: 12 },
+            { key: 'programme', label: { fr: '4 — Programme d’inspection' }, type: 'textarea', required: true, span: 12 },
+          ],
+        },
+        {
+          key: 'thickness',
+          label: { fr: '5 — Mesures d’épaisseur' },
+          type: 'table',
+          repeatable: true,
+          minRows: 0,
+          columns: [
+            { key: 'part', label: { fr: 'Partie' }, type: 'enum', required: true, options: ['Robe', 'Toit', 'Fond'], span: 2 },
+            { key: 'mark', label: { fr: 'Repère (virole, tôle, point)' }, type: 'text', required: true, span: 4 },
+            { key: 'nominal', label: { fr: 'Épaisseur nominale' }, type: 'number', required: false, unit: 'mm', decimals: 1, span: 3 },
+            { key: 'measured', label: { fr: 'Épaisseur mesurée' }, type: 'number', required: true, unit: 'mm', decimals: 1, span: 3 },
+          ],
+        },
+        ...(['shell', 'roof', 'bottom'] as const).map((part, i) => {
+          const nom = ['Robe et accessoires', 'Toit et accessoires', 'Fond'][i];
+          return {
+            key: part,
+            label: { fr: `5.${i + 1} — ${nom}` },
+            type: 'text',
+            repeatable: false,
+            fields: [
+              { key: 'visual', label: { fr: 'Inspection visuelle' }, type: 'textarea', required: true, span: 12 },
+              { key: 'evaluation', label: { fr: 'Évaluation des résultats' }, type: 'textarea', required: true, span: 12 },
+              ...(part === 'roof'
+                ? [{ key: 'vents', label: { fr: 'Calcul et vérification des évents' }, type: 'textarea', required: false, span: 12 }]
+                : []),
+              { key: 'recommendations', label: { fr: 'Préconisations' }, type: 'textarea', required: false, span: 12 },
+            ],
+          };
+        }),
+        {
+          key: 'geometry',
+          label: { fr: '6 — Contrôle de la géométrie du réservoir' },
+          type: 'text',
+          repeatable: false,
+          help: 'La rotondité et la verticalité peuvent faire l’objet de leurs propres rapports (PR01-F07 et PR01-F03).',
+          fields: [
+            { key: 'settlement', label: { fr: '6.1 — Tassement' }, type: 'textarea', required: false, span: 12 },
+            { key: 'roundness', label: { fr: '6.2 — Rotondité' }, type: 'textarea', required: false, span: 12 },
+            { key: 'plumbness', label: { fr: '6.3 — Verticalité' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'stability',
+          label: { fr: '7 — Calcul de la stabilité du réservoir' },
+          type: 'text',
+          repeatable: false,
+          fields: [
+            { key: 'wind', label: { fr: '7.1 — Effet du vent' }, type: 'textarea', required: false, span: 12 },
+            { key: 'seismic', label: { fr: '7.2 — Effet du séisme' }, type: 'textarea', required: false, span: 12 },
+            { key: 'stiffeners', label: { fr: '7.3 — Raidisseurs intermédiaires' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'photos',
+          label: { fr: 'Annexes' },
+          type: 'photos',
+          repeatable: true,
+          minRows: 0,
+        },
+        EILM_VISAS,
       ],
     },
   },
