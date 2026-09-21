@@ -14,6 +14,7 @@ import {
   ExpenseCapType,
 } from '@prisma/client';
 import { REPORT_FORMS } from './report-forms';
+import { templateSchemaSchema } from '@i2s/contracts';
 import { TEMPLATES as REPORT_TEMPLATES } from './report-templates';
 
 const prisma = new PrismaClient();
@@ -540,6 +541,14 @@ async function main() {
   // ne proposerait aucun formulaire saisissable. Le versionnement reste
   // immuable — republier crée une version, ne modifie jamais un rapport émis.
   for (const template of REPORT_TEMPLATES) {
+    // Un modèle hors contrat serait publié puis mal rendu à la saisie : on
+    // arrête le seed avant d'écrire quoi que ce soit de ce modèle.
+    const contrat = templateSchemaSchema.safeParse(template.schema);
+    if (!contrat.success) {
+      const detail = contrat.error.issues.map((i) => `${i.path.join('.')} : ${i.message}`).join(' ; ');
+      throw new Error(`${template.formCode} ne respecte pas le contrat des formulaires — ${detail}`);
+    }
+
     // Une méthode absente du référentiel rattacherait le modèle à rien : le
     // rapport citerait alors le mauvais texte réglementaire, ou aucun.
     const methodId = methodIds.get(template.methodCode);
