@@ -20,6 +20,11 @@
  *   PR02-F09  Élingue                               → accessoire
  *   PR02-F10  Manille                               → accessoire
  *   PR02-F11  Treuil manuel de levage               → accessoire
+ *   PR02-F15  Mise en service de ligne de vie       → compte rendu et essai
+ *   PR02-F16  Échafaudage roulant                   → échafaudage
+ *   PR02-F17  Ligne de vie                          → travail en hauteur
+ *   PR02-F18  Plateforme individuelle roulante      → échafaudage
+ *   PR02-F19  Échafaudage fixe                      → échafaudage
  *   PR02-F20  Pelle de chargement                   → engin de chantier
  *   PR02-F21  Porte automatique                     → check-list propre
  *   PR02-F23  Niveleuse                             → engin de chantier
@@ -450,10 +455,14 @@ const enginChecks = (groups: unknown[]) => ({
 
 /**
  * « Références client » des accessoires : plus court que l'en-tête des
- * appareils, il ajoute la ville et l'interlocuteur rencontré sur place. Le
- * harnais seul ne demande pas d'interlocuteur.
+ * appareils, il ajoute la ville et l'interlocuteur rencontré sur place. Selon
+ * le modèle, l'une ou l'autre manque, et l'échafaudage fixe ajoute la nature
+ * des travaux : chaque variante reste superposable à son modèle Word.
  */
-const accessoireClient = (textes: string, interlocuteur = true) => ({
+const accessoireClient = (
+  textes: string,
+  { ville = true, interlocuteur = true, champs = [] as unknown[] } = {},
+) => ({
   key: 'client',
   label: { fr: 'Références client' },
   type: 'keyvalue',
@@ -462,12 +471,13 @@ const accessoireClient = (textes: string, interlocuteur = true) => ({
   fields: [
     { key: 'establishment', label: { fr: 'Établissement' }, type: 'ref', required: true, autofill: 'client', span: 6 },
     { key: 'address', label: { fr: 'Adresse' }, type: 'text', required: false, span: 6 },
-    { key: 'city', label: { fr: 'Ville' }, type: 'text', required: false, span: 4 },
+    ...(ville ? [{ key: 'city', label: { fr: 'Ville' }, type: 'text', required: false, span: 4 }] : []),
     { key: 'nature', label: { fr: 'Nature de la vérification' }, type: 'enum', required: true, options: ['Vérification générale périodique', 'Mise en service', 'Remise en service'], span: 4 },
     { key: 'location', label: { fr: 'Lieu d’intervention' }, type: 'ref', required: true, autofill: 'site', span: 4 },
     ...(interlocuteur
       ? [{ key: 'contact', label: { fr: 'Interlocuteur sur place' }, type: 'text', required: false, span: 4 }]
       : []),
+    ...champs,
     { key: 'date', label: { fr: 'Date de la vérification' }, type: 'date', required: true, autofill: 'date', span: 4 },
     { key: 'nextInspection', label: { fr: 'Prochaine vérification' }, type: 'date', required: false, span: 4 },
   ],
@@ -497,6 +507,74 @@ const accessoireEquipment = (champs: unknown[]) => ({
  * ne serait repérable qu'en relisant le texte de chaque rapport.
  */
 const ACCESSOIRE_FIN = [EILM_OBSERVATIONS, EILM_CONCLUSION, EILM_PHOTOS, EILM_VISAS];
+
+/* ── Échafaudages et plateformes roulantes ────────────────────────── */
+
+/**
+ * Check-list commune à l'échafaudage roulant, à la plateforme individuelle
+ * roulante et à l'échafaudage fixe : mêmes quatre rubriques, mêmes points.
+ * Seul l'intitulé du second document de montage change — l'échafaudage fixe
+ * exige des notes de calcul en plus des plans.
+ *
+ * Aucun attendu : les réponses imprimées diffèrent d'un modèle à l'autre
+ * (« Affichée », « En place », « Présentée »), ce sont des saisies passées.
+ */
+const echafaudageChecks = (documentMontage: string) => ({
+  key: 'checks',
+  label: { fr: 'Vérification et inspection' },
+  type: 'checklist',
+  repeatable: false,
+  help: EILM_CHECKS_HELP,
+  groups: [
+    {
+      key: 'documents',
+      label: { fr: 'Montage et installation — documents relatifs au montage et à l’installation' },
+      points: [
+        { key: 'assembly-manual', label: { fr: 'Notice de montage' } },
+        { key: 'assembly-plans', label: { fr: documentMontage } },
+      ],
+    },
+    {
+      key: 'assembly',
+      label: { fr: 'Montage et installation — examen relatif au montage' },
+      points: [
+        { key: 'structure', label: { fr: 'Structure' } },
+        { key: 'support', label: { fr: 'Appui, ancrage, stabilité' } },
+        { key: 'floors', label: { fr: 'Planchers, garde-corps' } },
+        { key: 'access', label: { fr: 'Accès' } },
+        { key: 'lifting-device', label: { fr: 'Appareil de levage' } },
+      ],
+    },
+    {
+      key: 'installation',
+      label: { fr: 'Montage et installation — examen relatif à l’installation' },
+      points: [
+        { key: 'clearance', label: { fr: 'Distance aux éléments environnants' } },
+        { key: 'lightning', label: { fr: 'Protection contre la foudre' } },
+        { key: 'passers-by', label: { fr: 'Protection des passants sur la voie publique' } },
+        { key: 'impacts', label: { fr: 'Protection contre les heurts par véhicules ou engins' } },
+        { key: 'signage', label: { fr: 'Signalisation' } },
+        { key: 'notices', label: { fr: 'Affichage' } },
+      ],
+    },
+    {
+      key: 'condition',
+      label: { fr: 'Examen de l’état de conservation' },
+      points: [
+        { key: 'state-structure', label: { fr: 'Structure' } },
+        { key: 'state-wedging', label: { fr: 'Calage' } },
+        { key: 'state-floors', label: { fr: 'Planchers, garde-corps' } },
+        { key: 'state-access', label: { fr: 'Accès' } },
+        { key: 'state-passers-by', label: { fr: 'Protection des passants' } },
+        { key: 'state-lightning', label: { fr: 'Protection contre la foudre' } },
+        { key: 'state-impacts', label: { fr: 'Protection contre les heurts' } },
+        { key: 'state-signage', label: { fr: 'Signalisation' } },
+        { key: 'state-notices', label: { fr: 'Affichage' } },
+        { key: 'conditions-of-use', label: { fr: 'Conditions d’utilisation' } },
+      ],
+    },
+  ],
+});
 
 /**
  * En-tête de visite pont roulant. Seuls les textes réglementaires cités
@@ -2079,7 +2157,7 @@ export const TEMPLATES: TemplateSeed[] = [
     applicationDate: '2022-10-01',
     schema: {
       sections: [
-        accessoireClient(ARRETE_1953_CODE_TRAVAIL, false),
+        accessoireClient(ARRETE_1953_CODE_TRAVAIL, { interlocuteur: false }),
         accessoireEquipment([
           { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
           { key: 'model', label: { fr: 'Modèle' }, type: 'text', required: false, span: 4 },
@@ -2339,6 +2417,326 @@ export const TEMPLATES: TemplateSeed[] = [
           help: 'Fait à Mohammedia.',
           signatories: [{ fr: 'Chef du service EILM' }],
         },
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F16 — ÉCHAFAUDAGE ROULANT
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F16',
+    version: '00',
+    title: 'Rapport de vérification — échafaudage roulant',
+    methodCode: 'HEIGHT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient('Arrêté viziriel du 02/04/1952 ; norme NF EN 1004.', { ville: false }),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'type', label: { fr: 'Type' }, type: 'text', required: false, span: 4 },
+          { key: 'clientRef', label: { fr: 'Repère client' }, type: 'text', required: false, span: 4 },
+          { key: 'erector', label: { fr: 'Monteur' }, type: 'text', required: false, span: 4 },
+          { key: 'calculationNote', label: { fr: 'Note de calcul' }, type: 'text', required: false, span: 4 },
+          { key: 'assemblyPlan', label: { fr: 'Plan du montage' }, type: 'text', required: false, span: 4 },
+          { key: 'width', label: { fr: 'Largeur' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+          { key: 'height', label: { fr: 'Hauteur' }, type: 'number', required: true, unit: 'm', decimals: 2, span: 4 },
+          { key: 'length', label: { fr: 'Longueur' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+          { key: 'class', label: { fr: 'Classe' }, type: 'text', required: false, span: 4 },
+          { key: 'load', label: { fr: 'Charge' }, type: 'number', required: false, unit: 'daN/m²', decimals: 0, span: 4 },
+          { key: 'stabilisers', label: { fr: 'Nombre de stabilisateurs' }, type: 'number', required: false, decimals: 0, span: 4 },
+        ]),
+        echafaudageChecks('Plans de montage'),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F18 — PLATEFORME INDIVIDUELLE ROULANTE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F18',
+    version: '00',
+    title: 'Rapport de vérification — plateforme individuelle roulante',
+    methodCode: 'HEIGHT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(
+          'Code du travail marocain, art. 287 (maintien en bon état des équipements de travail) ; norme NF P 93-353.',
+          { interlocuteur: false },
+        ),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'clientRef', label: { fr: 'Repère client' }, type: 'text', required: false, span: 4 },
+          { key: 'height', label: { fr: 'Hauteur' }, type: 'number', required: true, unit: 'm', decimals: 2, span: 4 },
+          { key: 'capacity', label: { fr: 'Charge maximale d’utilisation (CMU)' }, type: 'number', required: true, unit: 'kg', decimals: 0, span: 4 },
+          { key: 'floorLevels', label: { fr: 'Nombre de niveaux de planchers' }, type: 'number', required: false, decimals: 0, span: 4 },
+          { key: 'stabilisers', label: { fr: 'Nombre de stabilisateurs' }, type: 'number', required: false, decimals: 0, span: 4 },
+        ]),
+        echafaudageChecks('Plans de montage'),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F19 — ÉCHAFAUDAGE FIXE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F19',
+    version: '00',
+    title: 'Rapport de vérification — échafaudage fixe',
+    methodCode: 'HEIGHT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient('Arrêté viziriel du 02/04/1952 ; norme NF EN 12811-1 et -2.', {
+          interlocuteur: false,
+          champs: [{ key: 'works', label: { fr: 'Nature des travaux' }, type: 'text', required: false, span: 4 }],
+        }),
+        accessoireEquipment([
+          { key: 'manufacturer', label: { fr: 'Fabricant' }, type: 'text', required: true, span: 4 },
+          { key: 'erector', label: { fr: 'Monteur' }, type: 'text', required: false, span: 4 },
+          { key: 'identification', label: { fr: 'N° d’identification' }, type: 'text', required: true, span: 4 },
+          { key: 'clientRef', label: { fr: 'Repère client' }, type: 'text', required: false, span: 4 },
+          { key: 'width', label: { fr: 'Largeur' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+          { key: 'height', label: { fr: 'Hauteur' }, type: 'number', required: true, unit: 'm', decimals: 2, span: 4 },
+          { key: 'length', label: { fr: 'Longueur' }, type: 'number', required: false, unit: 'm', decimals: 2, span: 4 },
+          { key: 'class', label: { fr: 'Classe' }, type: 'text', required: false, span: 4 },
+          { key: 'scaffoldLoad', label: { fr: 'Charge de l’échafaudage' }, type: 'number', required: false, unit: 'daN/m²', decimals: 0, span: 4 },
+          { key: 'floorLoad', label: { fr: 'Charge des planchers' }, type: 'number', required: false, unit: 'daN/m²', decimals: 0, span: 4 },
+          { key: 'floorLevels', label: { fr: 'Nombre de niveaux de planchers équipés' }, type: 'number', required: false, decimals: 0, span: 4 },
+          { key: 'bays', label: { fr: 'Nombre de travées' }, type: 'number', required: false, decimals: 0, span: 4 },
+          { key: 'ties', label: { fr: 'Nombre d’amarrages' }, type: 'number', required: false, decimals: 0, span: 4 },
+        ]),
+        echafaudageChecks('Notes de calcul et plans de montage'),
+        ...ACCESSOIRE_FIN,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F17 — VÉRIFICATION DE LIGNE DE VIE
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F17',
+    version: '00',
+    title: 'Rapport de vérification — ligne de vie',
+    methodCode: 'HEIGHT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        accessoireClient(CODE_TRAVAIL, { ville: false }),
+        {
+          key: 'equipment',
+          label: { fr: 'Identification de l’équipement' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'placement', label: { fr: 'Implantation' }, type: 'text', required: true, span: 6 },
+            { key: 'class', label: { fr: 'Classe' }, type: 'text', required: false, span: 6 },
+            { key: 'description', label: { fr: 'Description' }, type: 'textarea', required: false, span: 12 },
+            { key: 'installer', label: { fr: 'Installateur' }, type: 'text', required: false, span: 4 },
+            { key: 'maxUsers', label: { fr: 'Nombre d’utilisateurs maximal' }, type: 'number', required: true, decimals: 0, span: 4 },
+            { key: 'commissioningDate', label: { fr: 'Date de mise en service' }, type: 'date', required: false, span: 4 },
+            { key: 'lastInspection', label: { fr: 'Date du dernier contrôle' }, type: 'date', required: false, span: 6 },
+            { key: 'lastBody', label: { fr: 'Nom du dernier organisme' }, type: 'text', required: false, span: 6 },
+          ],
+        },
+        {
+          key: 'checks',
+          label: { fr: 'Vérifications et inspections' },
+          type: 'checklist',
+          repeatable: false,
+          help: EILM_CHECKS_HELP,
+          groups: [
+            {
+              key: 'documents',
+              label: { fr: 'Montage et installation — documents relatifs au montage et à l’installation' },
+              points: [
+                { key: 'assembly-manual', label: { fr: 'Notice de montage' } },
+                { key: 'calculation-note', label: { fr: 'Note de calcul' } },
+              ],
+            },
+            {
+              key: 'assembly',
+              label: { fr: 'Montage et installation — examen relatif au montage' },
+              points: [
+                { key: 'connectors', label: { fr: 'État général des connecteurs' } },
+                { key: 'anchor-plates', label: { fr: 'Platines d’accrochage des ancres structurelles terminales' } },
+                { key: 'end-anchors', label: { fr: 'Ancres structurelles terminales' } },
+                { key: 'tensioner', label: { fr: 'Tendeur' } },
+                { key: 'pretension-washer', label: { fr: 'Rondelle de prétension' } },
+                { key: 'tensioner-thimble', label: { fr: 'Cosse-cœur du câble au niveau du tendeur' } },
+                { key: 'cable-clamps', label: { fr: 'Serre-câbles' } },
+                { key: 'cable', label: { fr: 'État général du câble' } },
+                { key: 'absorber-thimble', label: { fr: 'Cosse-cœur au niveau de l’absorbeur' } },
+                { key: 'absorber', label: { fr: 'Absorbeur' } },
+              ],
+            },
+            {
+              key: 'misc',
+              label: { fr: 'Dispositions diverses' },
+              points: [
+                { key: 'safety-notice', label: { fr: 'Affichage des consignes de sécurité' } },
+                { key: 'sign', label: { fr: 'Panonceau de signalisation' } },
+              ],
+            },
+          ],
+        },
+        EILM_CONCLUSION,
+        EILM_OBSERVATIONS,
+        EILM_PHOTOS,
+        EILM_VISAS,
+      ],
+    },
+  },
+
+  /* ═══════════════════════════════════════════════════════════════
+   *  PR02-F15 — MISE EN SERVICE DE LIGNE DE VIE
+   *
+   *  Compte rendu d'examen plutôt que rapport de vérification : il expose
+   *  la mission, ses limites, puis l'examen documentaire, de montage et
+   *  l'essai sur site selon l'annexe A de la NF EN 795. Les lettres entre
+   *  parenthèses sont celles du modèle et disent comment chaque point est
+   *  contrôlé.
+   * ═══════════════════════════════════════════════════════════════ */
+  {
+    formCode: 'PR02-F15',
+    version: '00',
+    title: 'Compte rendu d’examen — mise en service de ligne de vie',
+    methodCode: 'HEIGHT',
+    paradigm: 'CHECKLIST',
+    applicationDate: '2022-10-01',
+    schema: {
+      sections: [
+        {
+          key: 'header',
+          label: { fr: 'Rapport d’examen' },
+          type: 'keyvalue',
+          repeatable: false,
+          help: 'Code du travail, art. 281 et 282 ; essais selon l’annexe A de la NF EN 795:2012 (hors dispositifs de types B et E) ; règlements (UE) 2016/425 et 305/2011, décision déléguée (UE) 2018/771.',
+          fields: [
+            { key: 'client', label: { fr: 'Client' }, type: 'ref', required: true, autofill: 'client', span: 4 },
+            { key: 'affairNumber', label: { fr: 'N° d’affaire' }, type: 'ref', required: true, autofill: 'affairNumber', span: 4 },
+            { key: 'date', label: { fr: 'Date de contrôle' }, type: 'date', required: true, autofill: 'date', span: 4 },
+            { key: 'reportNumber', label: { fr: 'N° de compte rendu' }, type: 'text', required: false, span: 4 },
+            { key: 'phase', label: { fr: 'Phase d’exécution' }, type: 'text', required: false, span: 4 },
+            { key: 'affair', label: { fr: 'Affaire' }, type: 'text', required: false, span: 4 },
+            { key: 'documents', label: { fr: 'Documents examinés' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'installation',
+          label: { fr: 'Caractéristiques générales de l’installation' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'address', label: { fr: 'Adresse du lieu d’implantation' }, type: 'text', required: true, span: 6 },
+            { key: 'placement', label: { fr: 'Lieu d’implantation' }, type: 'text', required: true, span: 6 },
+            { key: 'installer', label: { fr: 'Installateur' }, type: 'text', required: false, span: 6 },
+            { key: 'lifeline', label: { fr: 'Ligne de vie' }, type: 'text', required: false, span: 6 },
+            { key: 'length', label: { fr: 'Longueur de la ligne de vie' }, type: 'number', required: false, unit: 'm', decimals: 1, span: 4 },
+            { key: 'equipment', label: { fr: 'Équipement de chaque ligne' }, type: 'text', required: false, span: 4 },
+            { key: 'structure', label: { fr: 'Structure' }, type: 'text', required: false, span: 4 },
+            { key: 'supports', label: { fr: 'Supports' }, type: 'text', required: false, span: 12 },
+            { key: 'layout', label: { fr: 'Plan d’implantation — description' }, type: 'textarea', required: false, span: 12 },
+          ],
+        },
+        {
+          key: 'measures',
+          label: { fr: 'Valeurs relevées à l’examen documentaire' },
+          type: 'keyvalue',
+          repeatable: false,
+          fields: [
+            { key: 'maxLoad', label: { fr: 'Charge maximale transmise à la structure d’accueil (type C)' }, type: 'number', required: false, unit: 'daN', decimals: 0, span: 4 },
+            { key: 'maxAngle', label: { fr: 'Angle maximal d’utilisation par rapport à l’horizontale' }, type: 'number', required: false, unit: '°', decimals: 0, span: 4 },
+            { key: 'maxDeflection', label: { fr: 'Flèche maximale indiquée' }, type: 'number', required: false, unit: 'mm', decimals: 0, span: 4 },
+          ],
+        },
+        {
+          key: 'checks',
+          label: { fr: 'Examen documentaire, examen de montage, essai sur site' },
+          type: 'checklist',
+          repeatable: false,
+          help: EILM_CHECKS_HELP,
+          groups: [
+            {
+              key: 'instructions',
+              label: { fr: '6.1 — Instruction relative à l’installation (P)' },
+              qualifier: 'Examen documentaire',
+              points: [
+                { key: 'address', label: { fr: 'a — Adresse' } },
+                { key: 'product-id', label: { fr: 'b — Identification du produit (fabricant, type, référence)' } },
+                { key: 'diagram', label: { fr: 'c — Plan schématique, nomenclature des pièces' } },
+                { key: 'performance', label: { fr: 'd — Attestation de performance ou essai de type du dispositif d’ancrage' } },
+                { key: 'max-load', label: { fr: 'e — Charge maximale transmise à la structure d’accueil (type C)' } },
+                { key: 'max-angle', label: { fr: 'f — Angle maximal par rapport à l’horizontale d’utilisation (types C et D)' } },
+                { key: 'installer-cert', label: { fr: 'g — Attestation de bonne réalisation du montage de l’installateur (P)' } },
+              ],
+            },
+            {
+              key: 'host-structure',
+              label: { fr: '6.2 — Aptitude de la structure d’accueil (P)' },
+              points: [
+                { key: 'structure-proof', label: { fr: 'Document justifiant de l’aptitude de la structure d’accueil à recevoir ce dispositif' } },
+              ],
+            },
+            {
+              key: 'use-instructions',
+              label: { fr: '6.3 — Instructions d’emploi (P)' },
+              points: [
+                { key: 'use', label: { fr: 'Nombre de personnes, tirant d’air, antichute utilisable, critère de vérification, composant à remplacer' } },
+              ],
+            },
+            {
+              key: 'assembly',
+              label: { fr: '6.4 — Montage' },
+              points: [
+                { key: 'positioning', label: { fr: 'a — Positionnement (R)' } },
+                { key: 'components-choice', label: { fr: 'b — Choix des composants (P)' } },
+                { key: 'components-assembly', label: { fr: 'c — Assemblage des composants (R-E)' } },
+              ],
+            },
+            {
+              key: 'fitting',
+              label: { fr: '6.5 — Pose des composants' },
+              points: [
+                { key: 'immobilisation', label: { fr: 'a — Dispositif d’immobilisation (R-E)' } },
+                { key: 'anchor-test', label: { fr: 'b — Ancres structurelles (F) : traction à la valeur du constructeur, ou 500 daN pendant 15 s' } },
+              ],
+            },
+            {
+              key: 'misc',
+              label: { fr: '6.6 — Dispositions diverses (P-E)' },
+              points: [
+                { key: 'manufacturer', label: { fr: 'Nom du fabricant' } },
+                { key: 'model', label: { fr: 'Identification, modèle, type' } },
+                { key: 'reference-doc', label: { fr: 'Identification du document de référence' } },
+                { key: 'user-info', label: { fr: 'Information exploitable par l’utilisateur' } },
+              ],
+            },
+            {
+              key: 'instructions-posted',
+              label: { fr: '6.7 — Consignes (P)' },
+              points: [
+                { key: 'pictograms', label: { fr: 'Pictogrammes ou informations dans la langue du pays (nombre maximal d’utilisateurs, type de connecteur, tirant d’air)' } },
+                { key: 'access-notice', label: { fr: 'Consigne apposée au niveau de chacun des accès (types C et D)' } },
+              ],
+            },
+          ],
+        },
+        EILM_CONCLUSION,
+        EILM_OBSERVATIONS,
+        EILM_PHOTOS,
+        EILM_VISAS,
       ],
     },
   },
