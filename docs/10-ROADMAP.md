@@ -76,7 +76,7 @@ En parallèle : PWA inspecteur (missions, OM, pointage, frais) livrée en fin de
 | **J3** | S10 | **MVP en production, pilote sur un département** |
 | **J4** | S13 | Premier rapport END généré, superposable au modèle Word |
 | **J5** | S18 | Première facture issue d'attachements validés |
-| **J6** | S24 | **V2 complète, 62 formulaires repris, généralisation** |
+| **J6** | S24 | **V2 complète, 61 formulaires repris, généralisation** |
 | **J7** | S34 | V3, assistant IA et portail client |
 
 ## 7. Stratégie de mise en service
@@ -91,7 +91,7 @@ En parallèle : PWA inspecteur (missions, OM, pointage, frais) livrée en fin de
 
 | Condition | Pourquoi |
 |---|---|
-| Un référent métier disponible par département | La modélisation des 62 formulaires ne peut pas se faire sans validation terrain |
+| Un référent métier disponible par département | La modélisation des 61 formulaires ne peut pas se faire sans validation terrain |
 | Coûts journaliers historiques fournis | Sans eux, aucun calcul rétroactif de marge n'est possible |
 | Discipline de pointage quotidien | Tout le module productivité en dépend ; c'est un changement d'habitude, pas un sujet technique |
 | Décision sur l'hébergement (cloud ou on-premise) avant J1 | Impacte la configuration du socle |

@@ -143,7 +143,7 @@ docs/             Dossier d'architecture (12 documents)
 | 05 | [Workflows](docs/05-WORKFLOWS.md) | 10 machines à états, conditions bloquantes |
 | 06 | [Sitemap & UX](docs/06-SITEMAP-UX.md) | Navigation par profil, wireframes des écrans pivots |
 | 07 | [Design System](docs/07-DESIGN-SYSTEM.md) | Tokens, composants, identité des PDF, accessibilité |
-| 08 | [Moteur de templates](docs/08-MOTEUR-TEMPLATES.md) | 62 formulaires, 3 paradigmes, versionnage, plan de reprise |
+| 08 | [Moteur de templates](docs/08-MOTEUR-TEMPLATES.md) | 61 formulaires, 3 paradigmes, versionnage, plan de reprise |
 | 09 | [Contrôle de gestion](docs/09-CONTROLE-DE-GESTION.md) | Formules de productivité, coûts et rentabilité |
 | 10 | [Roadmap](docs/10-ROADMAP.md) | MVP 10 semaines, V2 12 semaines, V3 10 semaines |
 | 11 | [Décisions à valider](docs/11-DECISIONS-A-VALIDER.md) | Arbitrages requis — D1, D2 et D9 tranchés |

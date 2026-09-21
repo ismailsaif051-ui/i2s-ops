@@ -1,6 +1,6 @@
 # 08 — Moteur de templates d'inspection
 
-C'est la pièce la plus structurante du produit. **62 formulaires** ont été recensés dans le référentiel I2S ; ils évoluent (versions, révisions), diffèrent par département et se déclinent en trois paradigmes de saisie. Les coder en dur condamnerait le produit à une maintenance permanente.
+C'est la pièce la plus structurante du produit. **61 formulaires** ont été recensés dans le référentiel I2S ; ils évoluent (versions, révisions), diffèrent par département et se déclinent en trois paradigmes de saisie. Les coder en dur condamnerait le produit à une maintenance permanente.
 
 ## 1. Les trois paradigmes
 
@@ -91,7 +91,7 @@ Destiné au Document Controller et aux chefs de département — **sans écrire 
 - édition des libellés bilingues FR/EN ;
 - définition des unités, tolérances, listes de valeurs ;
 - aperçu simultané de l'écran de saisie et du rendu PDF ;
-- import assisté depuis un modèle Word/Excel existant : le fichier est analysé, la structure proposée, l'opérateur corrige (accélère fortement la reprise des 62 formulaires) ;
+- import assisté depuis un modèle Word/Excel existant : le fichier est analysé, la structure proposée, l'opérateur corrige (accélère fortement la reprise des 61 formulaires) ;
 - publication versionnée avec note de révision.
 
 ## 7. Stockage et exploitation des données
@@ -104,7 +104,7 @@ Les réponses sont stockées en `JSONB` dans `Inspection.data`, mais **les donn�
 
 On obtient la souplesse du schéma libre **sans perdre** la capacité à répondre à « quels réservoirs ont une épaisseur résiduelle < 8 mm sur les 3 dernières campagnes ? ».
 
-## 8. Plan de reprise des 62 formulaires
+## 8. Plan de reprise des 61 formulaires
 
 | Lot | Contenu | Effort | Jalon |
 |---|---|---|---|

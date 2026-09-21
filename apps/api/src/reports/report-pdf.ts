@@ -5,7 +5,7 @@ import type { TemplateSchema, TemplateSection } from '@i2s/contracts';
  * Rendu PDF d'un rapport d'inspection.
  *
  * Le document est produit à partir du schéma du formulaire, comme l'écran de
- * saisie : les 62 formulaires du référentiel passent par ce seul rendu, et un
+ * saisie : les 61 formulaires du référentiel passent par ce seul rendu, et un
  * formulaire ajouté demain sortira sans qu'on touche à ce fichier.
  *
  * Ce PDF est la pièce remise au client. Il porte donc ce qui l'engage — numéro,

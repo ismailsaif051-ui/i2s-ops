@@ -162,7 +162,7 @@ Ces valeurs sont réappliquées à **chaque** enregistrement du brouillon : tant
 
 ### La pièce remise
 
-L'émission produit le **PDF** du rapport et le dépose à la GED. Le document est rendu à partir du schéma du formulaire — les 62 formulaires du référentiel passent par le même rendu — et porte ce qui engage I2S : numéro, indice de révision, rédacteur, vérificateur, grille de vérification visée, et la saisie elle-même.
+L'émission produit le **PDF** du rapport et le dépose à la GED. Le document est rendu à partir du schéma du formulaire — les 61 formulaires du référentiel passent par le même rendu — et porte ce qui engage I2S : numéro, indice de révision, rédacteur, vérificateur, grille de vérification visée, et la saisie elle-même.
 
 Les fichiers vivent **hors de la base**, rangés sous leur empreinte SHA-256. Un fichier dont le contenu ne correspond plus à son empreinte n'est pas servi : l'altération provoque une erreur au lieu de passer inaperçue. Chaque téléchargement est journalisé.
 

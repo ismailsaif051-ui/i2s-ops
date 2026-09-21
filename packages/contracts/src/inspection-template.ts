@@ -1,7 +1,7 @@
 /**
  * Schéma des formulaires d'inspection.
  *
- * 62 modèles ont été recensés dans le référentiel I2S (20 CND, 40 EILM, 2 CTC).
+ * 61 modèles ont été recensés dans le référentiel I2S (20 CND, 39 EILM, 2 CTC).
  * Aucun n'est codé en dur : chacun est décrit par ce schéma, stocké en base et
  * versionné. Voir docs/08-MOTEUR-TEMPLATES.md.
  */

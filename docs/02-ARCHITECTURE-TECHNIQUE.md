@@ -4,7 +4,7 @@
 
 | Contrainte issue du besoin | Conséquence technique |
 |---|---|
-| 62 formulaires métier évolutifs, non codés en dur | Schéma de formulaire en JSON validé côté serveur, stocké en `JSONB` |
+| 61 formulaires métier évolutifs, non codés en dur | Schéma de formulaire en JSON validé côté serveur, stocké en `JSONB` |
 | Calculs analytiques historisés et reproductibles | Base relationnelle transactionnelle, coûts versionnés, agrégats matérialisés |
 | Inspecteur hors réseau sur chantier | PWA avec base locale + file de synchronisation |
 | PDF conformes au QMS (logo, code formulaire, version, visas) | Moteur de rendu HTML → PDF partageant le design system |
@@ -37,7 +37,7 @@
 
 ### Pourquoi pas les alternatives
 
-- **Odoo / ERPNext** : le cœur de valeur d'I2S (62 formulaires END/réglementaires, productivité par jour non affecté, étalonnage) n'existe pas en standard ; le coût de personnalisation dépasse celui d'un produit dédié, et l'ergonomie reste celle d'un ERP générique.
+- **Odoo / ERPNext** : le cœur de valeur d'I2S (61 formulaires END/réglementaires, productivité par jour non affecté, étalonnage) n'existe pas en standard ; le coût de personnalisation dépasse celui d'un produit dédié, et l'ergonomie reste celle d'un ERP générique.
 - **Laravel / Django** : parfaitement viables, mais imposent un second langage face à un front TypeScript, et donc deux définitions de chaque règle métier.
 - **Base NoSQL** : incompatible avec des agrégats financiers transactionnels et des jointures analytiques profondes.
 - **App mobile native** : le besoin est de la saisie de formulaire et de la photo hors ligne ; la PWA le couvre, sans double base de code ni distribution par store.
@@ -83,7 +83,7 @@ i2s-ops/
 │   ├── contracts/      Types + schémas Zod partagés (source unique)
 │   ├── ui/             Design System (composants, tokens)
 │   ├── pdf/            Gabarits de documents PDF
-│   ├── templates/      Définitions JSON des 62 formulaires
+│   ├── templates/      Définitions JSON des 61 formulaires
 │   └── calc/           Moteur de calcul (productivité, marge, coûts) — testé unitairement
 ├── prisma/             Schéma + migrations + seeds de référentiels
 └── docs/               Ce dossier d'architecture

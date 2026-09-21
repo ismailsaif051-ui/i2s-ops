@@ -15,7 +15,7 @@ import { Button, Card, StatusBadge } from '@/components/ui';
 /**
  * Rendu générique d'un formulaire d'inspection.
  *
- * Un seul composant sert les 62 formulaires du référentiel : il lit le schéma
+ * Un seul composant sert les 61 formulaires du référentiel : il lit le schéma
  * du template et produit la saisie correspondante. Ajouter un formulaire ne
  * demande aucune ligne de code ici.
  */

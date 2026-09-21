@@ -24,7 +24,7 @@
 | `PR02-F16 / PR02-F30 Planning d'étalonnage` | Gabarit opérationnel | Parc d'équipements de mesure I2S + échéances d'étalonnage |
 | `Suivi Cde Partagé I2S.xlsx` | **Système de gestion actuel** | Registre réel des affaires : double statut, montants OP et BC, pilotes, services multiples, ordres de grandeur |
 
-**62 modèles de rapports distincts** ont été recensés (20 CND + 40 EILM + 2 CTC). C'est le chiffre qui commande l'architecture : aucun formulaire ne peut être codé en dur.
+**61 modèles de rapports distincts** ont été recensés (20 CND + 39 EILM + 2 CTC). C'est le chiffre qui commande l'architecture : aucun formulaire ne peut être codé en dur.
 
 ---
 
@@ -257,7 +257,7 @@ Tout ce qui suit est **une proposition**, signalée comme telle conformément à
 Le projet n'est pas un CRUD. Trois natures de complexité le structurent.
 
 1. **Complexité analytique** — un plan analytique unique (Code Affaire) traverse 25 modules, avec des coûts historisés et des calculs de marge et de productivité qui doivent être reproductibles à la date.
-2. **Complexité documentaire** — 62 formulaires métier, bilingues, versionnés, avec trois paradigmes de saisie différents (mesures / check-list / critères), et un PDF fidèle à l'identité graphique et au QMS.
+2. **Complexité documentaire** — 61 formulaires métier, bilingues, versionnés, avec trois paradigmes de saisie différents (mesures / check-list / critères), et un PDF fidèle à l'identité graphique et au QMS.
 3. **Complexité de workflow** — 8 machines à états distinctes (mission, OM, rapport, attachement, facture, note de frais, non-conformité, opportunité) avec des acteurs, des délais et des jalons contractuels.
 
 L'architecture qui suit répond à ces trois axes avant toute considération d'écran.

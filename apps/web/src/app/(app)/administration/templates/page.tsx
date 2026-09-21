@@ -43,7 +43,7 @@ const PARADIGM_TONE: Record<Paradigm, Tone> = {
 /** Volumétrie relevée dans le référentiel I2S — voir docs/08. */
 const CATALOGUE = [
   { department: 'CND', total: 20, lot: 'L1 et L2' },
-  { department: 'EILM', total: 40, lot: 'L3 et L4' },
+  { department: 'EILM', total: 39, lot: 'L3 et L4' },
   { department: 'CTC', total: 2, lot: 'L5' },
 ];
 
