@@ -9,6 +9,8 @@ import { applyFormulas } from '@i2s/calc';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
+import { DocumentsService } from '../documents/documents.service';
+import { StorageService } from '../storage/storage.service';
 import type { RequestUser } from '../common/types';
 
 export interface InspectionData {
@@ -22,6 +24,17 @@ export interface InspectionData {
 const SERVER_AUTOFILL = ['client', 'affairNumber', 'site', 'inspector', 'date'] as const;
 type ServerAutofill = (typeof SERVER_AUTOFILL)[number];
 type AutofillValues = Partial<Record<ServerAutofill, string>>;
+
+/** Formats de photo acceptés, avec l'extension sous laquelle la GED les range. */
+const PHOTO_MIME: Record<string, { extension: string }> = {
+  'image/jpeg': { extension: '.jpg' },
+  'image/png': { extension: '.png' },
+  'image/webp': { extension: '.webp' },
+};
+
+const PHOTO_DOCUMENT_TYPE = 'inspection_photo';
+/** Une photo de chantier prise au téléphone pèse rarement plus : au-delà, c'est une erreur de dépôt. */
+const PHOTO_MAX_BYTES = 8 * 1024 * 1024;
 
 export interface ValidationIssue {
   section: string;
@@ -37,6 +50,8 @@ export class InspectionsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly numbering: NumberingService,
+    private readonly documents: DocumentsService,
+    private readonly storage: StorageService,
   ) {}
 
   /* ── Lecture ──────────────────────────────────────────────────── */
@@ -351,6 +366,167 @@ export class InspectionsService {
     }
 
     return next;
+  }
+
+  /* ── Photographies ────────────────────────────────────────────── */
+
+  /**
+   * Les photos d'une inspection vivent à la GED comme le reste des pièces :
+   * rangées par empreinte, versionnées, retrouvables depuis l'affaire. Elles
+   * ne sont pas stockées dans la saisie — un rapport reste un document léger,
+   * et la même photo déposée deux fois n'occupe qu'une place.
+   */
+  async addPhoto(
+    user: RequestUser,
+    id: string,
+    input: { sectionKey: string; caption?: string; fileName: string; mimeType: string; contentBase64: string },
+    ctx: { ip?: string | null; userAgent?: string | null },
+  ) {
+    const inspection = await this.editableByInspector(user, id);
+
+    const type = PHOTO_MIME[input.mimeType];
+    if (!type) {
+      throw new BadRequestException(
+        'Format de photo non accepté : seuls JPEG, PNG et WebP sont enregistrés.',
+      );
+    }
+
+    const content = Buffer.from(input.contentBase64, 'base64');
+    if (content.byteLength === 0) throw new BadRequestException('Photo vide.');
+    if (content.byteLength > PHOTO_MAX_BYTES) {
+      throw new BadRequestException(
+        `Photo trop lourde (${Math.round(content.byteLength / 1024 / 1024)} Mo) : maximum ${
+          PHOTO_MAX_BYTES / 1024 / 1024
+        } Mo.`,
+      );
+    }
+
+    const document = await this.documents.store(user, {
+      companyId: inspection.mission.affair.companyId,
+      type: PHOTO_DOCUMENT_TYPE,
+      fileName: input.caption?.trim() || input.fileName,
+      mimeType: input.mimeType,
+      content,
+      extension: type.extension,
+      entityType: 'inspection',
+      entityId: inspection.id,
+      affairId: inspection.mission.affairId,
+      tags: [input.sectionKey],
+      // Une photo de chantier coexiste avec les autres au lieu de les remplacer.
+      versioned: false,
+    });
+
+    await this.audit.record(
+      {
+        entity: 'inspection',
+        entityId: inspection.id,
+        action: 'UPDATE',
+        after: { photo: document.fileName, section: input.sectionKey },
+      },
+      { user, ...ctx },
+    );
+
+    return this.photoView(document);
+  }
+
+  /** Photos d'une inspection, dans l'ordre où elles ont été prises. */
+  async listPhotos(user: RequestUser, id: string) {
+    const inspection = await this.get(user, id);
+    const documents = await this.prisma.document.findMany({
+      where: {
+        entityType: 'inspection',
+        entityId: inspection.id,
+        type: PHOTO_DOCUMENT_TYPE,
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return documents.map((d) => this.photoView(d));
+  }
+
+  /** Contenu d'une photo, relu depuis la GED et vérifié par son empreinte. */
+  async photoContent(user: RequestUser, id: string, photoId: string) {
+    const inspection = await this.get(user, id);
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id: photoId,
+        entityType: 'inspection',
+        entityId: inspection.id,
+        type: PHOTO_DOCUMENT_TYPE,
+        deletedAt: null,
+      },
+    });
+    if (!document) throw new NotFoundException('Photo introuvable.');
+
+    return {
+      mimeType: document.mimeType,
+      fileName: document.fileName,
+      content: await this.storage.get(document.storageKey, document.sha256),
+    };
+  }
+
+  /**
+   * Retire une photo d'un brouillon. Le fichier reste à la GED : une pièce
+   * déposée puis écartée doit rester traçable.
+   */
+  async removePhoto(
+    user: RequestUser,
+    id: string,
+    photoId: string,
+    ctx: { ip?: string | null; userAgent?: string | null },
+  ) {
+    const inspection = await this.editableByInspector(user, id);
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id: photoId,
+        entityType: 'inspection',
+        entityId: inspection.id,
+        type: PHOTO_DOCUMENT_TYPE,
+        deletedAt: null,
+      },
+    });
+    if (!document) throw new NotFoundException('Photo introuvable.');
+
+    await this.prisma.document.update({ where: { id: photoId }, data: { deletedAt: new Date() } });
+    await this.audit.record(
+      {
+        entity: 'inspection',
+        entityId: inspection.id,
+        action: 'DELETE',
+        before: { photo: document.fileName },
+      },
+      { user, ...ctx },
+    );
+  }
+
+  private photoView(document: {
+    id: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+    tags: string[];
+    createdAt: Date;
+  }) {
+    return {
+      id: document.id,
+      caption: document.fileName,
+      sectionKey: document.tags[0] ?? null,
+      mimeType: document.mimeType,
+      size: document.size,
+      takenAt: document.createdAt,
+    };
+  }
+
+  /** Une photo ne s'ajoute qu'à un brouillon, et par son inspecteur. */
+  private async editableByInspector(user: RequestUser, id: string) {
+    const inspection = await this.get(user, id);
+    if (inspection.status !== 'DRAFT') {
+      throw new BadRequestException('Cette inspection est soumise : ses photos sont figées.');
+    }
+    if (inspection.inspectorId !== user.employeeId) {
+      throw new ForbiddenException('Seul l’inspecteur affecté peut modifier cette saisie.');
+    }
+    return inspection;
   }
 
   /* ── Validation ───────────────────────────────────────────────── */

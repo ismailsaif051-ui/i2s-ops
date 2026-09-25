@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CHECK_VERDICTS,
@@ -253,6 +253,159 @@ export function InspectionForm({
   );
 }
 
+/* ── Planche photographique ───────────────────────────────────────── */
+
+interface Photo {
+  id: string;
+  caption: string;
+  sectionKey: string | null;
+  mimeType: string;
+  size: number;
+  takenAt: string;
+}
+
+/**
+ * Les photos ne transitent pas par la saisie : elles sont déposées à la GED
+ * dès le choix du fichier, et le rapport les reprend à l'émission. Une saisie
+ * perdue ne fait donc pas perdre les preuves photographiques du constat.
+ */
+function PhotoSection({
+  inspectionId,
+  sectionKey,
+  readOnly,
+}: {
+  inspectionId: string;
+  sectionKey: string;
+  readOnly: boolean;
+}) {
+  const [photos, setPhotos] = useState<Photo[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const response = await fetch(`/api/inspections/${inspectionId}/photos`);
+    if (!response.ok) {
+      setPhotos([]);
+      return;
+    }
+    const payload = (await response.json()) as { items: Photo[] };
+    setPhotos(payload.items.filter((p) => p.sectionKey === sectionKey));
+  }, [inspectionId, sectionKey]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function add(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setBusy(true);
+    setError(null);
+
+    for (const file of Array.from(files)) {
+      const contentBase64 = await lireEnBase64(file);
+      const response = await fetch(`/api/inspections/${inspectionId}/photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sectionKey,
+          fileName: file.name,
+          mimeType: file.type,
+          contentBase64,
+        }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        setError(payload.message ?? `« ${file.name} » n’a pas pu être déposée.`);
+      }
+    }
+
+    await load();
+    setBusy(false);
+  }
+
+  async function remove(id: string) {
+    setBusy(true);
+    await fetch(`/api/inspections/${inspectionId}/photos/${id}`, { method: 'DELETE' });
+    await load();
+    setBusy(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error && <p className="text-[13.5px] text-danger">{error}</p>}
+
+      {photos === null ? (
+        <p className="text-[14px] text-subtle">Chargement des photographies…</p>
+      ) : photos.length === 0 ? (
+        <p className="text-[14px] text-subtle">Aucune photographie.</p>
+      ) : (
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {photos.map((photo) => (
+            <li key={photo.id} className="overflow-hidden rounded-[10px] border border-border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/inspections/${inspectionId}/photos/${photo.id}/contenu`}
+                alt={photo.caption}
+                className="h-32 w-full object-cover"
+              />
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                <span className="truncate text-[12.5px] text-muted" title={photo.caption}>
+                  {photo.caption}
+                </span>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => remove(photo.id)}
+                    disabled={busy}
+                    className="text-[12.5px] text-danger hover:underline"
+                  >
+                    Retirer
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!readOnly && (
+        <label className="inline-flex w-fit cursor-pointer items-center rounded-[8px] border border-border-strong px-3 py-2 text-[14px] hover:bg-surface-2">
+          {busy ? 'Dépôt en cours…' : 'Ajouter des photographies'}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            disabled={busy}
+            className="hidden"
+            onChange={(e) => {
+              void add(e.target.files);
+              e.target.value = '';
+            }}
+          />
+        </label>
+      )}
+
+      <p className="text-[12.5px] text-subtle">
+        JPEG, PNG ou WebP, 8 Mo au plus par photographie. Les photos prises sur mobile hors ligne
+        sont envoyées à la reconnexion.
+      </p>
+    </div>
+  );
+}
+
+/** Le contenu part en base64 : une photo de chantier voyage dans le même appel que sa légende. */
+function lireEnBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Lecture du fichier impossible.'));
+    reader.onload = () => {
+      const result = String(reader.result);
+      resolve(result.slice(result.indexOf(',') + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ── Rendu d'une section ──────────────────────────────────────────── */
 
 function SectionRenderer({
@@ -352,10 +505,11 @@ function SectionRenderer({
             onChange={onSectionChange}
           />
         ) : section.type === 'photos' ? (
-          <p className="text-[14px] text-muted">
-            La prise de photos se fait depuis le mobile de l’inspecteur, hors ligne, avec envoi en
-            tâche de fond. Cet écran de bureau ne la propose pas.
-          </p>
+          <PhotoSection
+            inspectionId={context.id}
+            sectionKey={section.key}
+            readOnly={readOnly}
+          />
         ) : section.type === 'signature-matrix' ? (
           <SignatureMatrix section={section} />
         ) : (

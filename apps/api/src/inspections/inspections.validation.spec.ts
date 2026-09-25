@@ -89,7 +89,9 @@ function service(template: (typeof TEMPLATES)[number], data: Record<string, unkn
     },
   };
 
-  return new InspectionsService(prisma as never, {} as never, {} as never);
+  // Seules la base et les instruments comptent ici : la GED et le stockage
+  // ne sont pas sollicités par la validation.
+  return new InspectionsService(prisma as never, {} as never, {} as never, {} as never, {} as never);
 }
 
 describe('validation des saisies, sur les formulaires du référentiel', () => {

@@ -21,6 +21,11 @@ export interface StoreInput {
   tags?: string[];
   confidentiality?: 'PUBLIC' | 'INTERNAL' | 'RESTRICTED' | 'CONFIDENTIAL';
   comment?: string | null;
+  /**
+   * Un rapport se réédite en versions ; des photos d'inspection coexistent.
+   * Sans cela, la deuxième photo d'une inspection remplacerait la première.
+   */
+  versioned?: boolean;
 }
 
 @Injectable()
@@ -44,7 +49,7 @@ export class DocumentsService {
     const stored = await this.storage.put(input.content, input.extension);
 
     const existing =
-      input.entityType && input.entityId
+      input.versioned !== false && input.entityType && input.entityId
         ? await this.prisma.document.findFirst({
             where: {
               entityType: input.entityType,
@@ -147,6 +152,19 @@ export class DocumentsService {
    * client, savoir qui a sorti quelle version et quand fait partie de ce que
    * le système qualité demande.
    */
+  /**
+   * Contenu brut d'un document, pour un usage interne au serveur — inclure
+   * une photo dans un rapport, par exemple. Sans trace de téléchargement :
+   * personne ne l'a sorti de la plateforme.
+   */
+  async content(id: string): Promise<Buffer> {
+    const document = await this.prisma.document.findFirstOrThrow({
+      where: { id, deletedAt: null },
+      select: { storageKey: true, sha256: true },
+    });
+    return this.storage.get(document.storageKey, document.sha256);
+  }
+
   async download(user: RequestUser, id: string) {
     const document = await this.get(user, id);
 

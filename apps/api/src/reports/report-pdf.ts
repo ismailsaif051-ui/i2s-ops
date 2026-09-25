@@ -44,6 +44,8 @@ export interface ReportPdfInput {
   checkedAt: Date | null;
   issuedAt: Date | null;
   checks: Array<{ criterion: string; applicable: boolean; conform: boolean | null; comment: string | null }>;
+  /** Photographies de l'inspection, dans l'ordre où elles ont été prises. */
+  photos?: Array<{ sectionKey: string | null; caption: string; mimeType: string; content: Buffer }>;
 }
 
 const fr = (date: Date | null | undefined): string =>
@@ -290,6 +292,57 @@ function ensure(doc: Doc, height: number): void {
   if (doc.y + height > doc.page.height - PAGE.margin - 24) doc.addPage();
 }
 
+/** Vrai si cette section est la première planche photo du formulaire. */
+function premierePlanche(input: ReportPdfInput, section: TemplateSection): boolean {
+  const planches = (input.inspection?.schema.sections ?? []).filter((s) => s.type === 'photos');
+  return planches[0]?.key === section.key;
+}
+
+/**
+ * Planche photographique : deux vues par rangée, légende dessous. Une image
+ * que pdfkit ne sait pas lire est signalée à sa place plutôt que d'interrompre
+ * l'émission — le rapport part, le défaut se voit.
+ */
+function photoGrid(
+  doc: Doc,
+  photos: Array<{ caption: string; mimeType: string; content: Buffer }>,
+): void {
+  if (photos.length === 0) {
+    ensure(doc, 20);
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED)
+      .text('Aucune photographie.', PAGE.margin, doc.y, { width: WIDTH });
+    doc.moveDown(0.4);
+    return;
+  }
+
+  const gap = 14;
+  const largeur = (WIDTH - gap) / 2;
+  const hauteur = largeur * 0.72;
+
+  for (let i = 0; i < photos.length; i += 2) {
+    const rangee = photos.slice(i, i + 2);
+    ensure(doc, hauteur + 24);
+    const y = doc.y;
+
+    rangee.forEach((photo, colonne) => {
+      const x = PAGE.margin + colonne * (largeur + gap);
+      try {
+        doc.image(photo.content, x, y, { fit: [largeur, hauteur], align: 'center' });
+      } catch {
+        doc.save().rect(x, y, largeur, hauteur).fill(WASH).restore();
+        doc.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED)
+          .text('Image illisible', x, y + hauteur / 2 - 4, { width: largeur, align: 'center' });
+      }
+      doc.font('Helvetica').fontSize(7.5).fillColor(MUTED)
+        .text(photo.caption, x, y + hauteur + 4, { width: largeur });
+    });
+
+    doc.y = y + hauteur + 20;
+  }
+
+  doc.moveDown(0.4);
+}
+
 /* ── Sections ─────────────────────────────────────────────────────── */
 
 function renderSection(doc: Doc, section: TemplateSection, value: unknown, input: ReportPdfInput): void {
@@ -409,12 +462,12 @@ function renderSection(doc: Doc, section: TemplateSection, value: unknown, input
     }
 
     case 'photos': {
-      ensure(doc, 24);
-      doc.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED)
-        .text('Les photographies sont jointes séparément au dossier.', PAGE.margin, doc.y, {
-          width: WIDTH,
-        });
-      doc.moveDown(0.4);
+      // Une photo prise pour une autre section ne s'imprime pas ici ; celles
+      // qu'aucune section ne réclame rejoignent la première planche.
+      const planches = (input.photos ?? []).filter(
+        (p) => p.sectionKey === section.key || (p.sectionKey === null && premierePlanche(input, section)),
+      );
+      photoGrid(doc, planches);
       break;
     }
 

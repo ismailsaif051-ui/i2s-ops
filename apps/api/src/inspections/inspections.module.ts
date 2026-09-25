@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Module, Param, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Module, Param, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { InspectionsService } from './inspections.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +13,15 @@ const createSchema = z.object({
   templateId: z.string().uuid(),
   assetId: z.string().uuid().optional(),
   date: z.coerce.date().optional(),
+});
+
+const photoSchema = z.object({
+  /** Section du formulaire à laquelle la photo se rattache. */
+  sectionKey: z.string().min(1).max(64),
+  caption: z.string().max(200).optional(),
+  fileName: z.string().min(1).max(200),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  contentBase64: z.string().min(1),
 });
 
 const saveSchema = z.object({
@@ -136,6 +145,53 @@ class InspectionsController {
     @Req() req: Request,
   ) {
     return this.inspections.saveDraft(user, id, body.data, body.deviceIds, ctx(req));
+  }
+
+  /* ── Photographies ────────────────────────────────────────────── */
+
+  @Get(':id/photos')
+  @RequirePermission('inspection', 'VIEW')
+  photos(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.inspections.listPhotos(user, id).then((items) => ({ items }));
+  }
+
+  @Post(':id/photos')
+  @RequirePermission('inspection', 'UPDATE')
+  addPhoto(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(photoSchema))
+    body: z.infer<typeof photoSchema>,
+    @Req() req: Request,
+  ) {
+    return this.inspections.addPhoto(user, id, body, ctx(req));
+  }
+
+  /** Contenu d'une photo : servi depuis la GED, jamais depuis un chemin public. */
+  @Get(':id/photos/:photoId/contenu')
+  @RequirePermission('inspection', 'VIEW')
+  async photoContent(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Param('photoId') photoId: string,
+    @Res() res: Response,
+  ) {
+    const photo = await this.inspections.photoContent(user, id, photoId);
+    res.setHeader('Content-Type', photo.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.send(photo.content);
+  }
+
+  @Delete(':id/photos/:photoId')
+  @RequirePermission('inspection', 'UPDATE')
+  async removePhoto(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Param('photoId') photoId: string,
+    @Req() req: Request,
+  ) {
+    await this.inspections.removePhoto(user, id, photoId, ctx(req));
+    return { removed: true };
   }
 
   @Post(':id/submit')

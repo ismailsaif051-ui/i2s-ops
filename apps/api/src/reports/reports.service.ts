@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { CheckDecision, DistributionChannel } from '@i2s/contracts';
@@ -33,6 +34,8 @@ export interface CheckLine {
 
 @Injectable()
 export class ReportsService {
+  private readonly logger = new Logger(ReportsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -436,6 +439,12 @@ export class ReportsService {
       },
     });
 
+    // Les photos sont relues à la GED, pas stockées dans la saisie : c'est
+    // l'émission qui fige le rapport, photos comprises.
+    const photos = report.inspection
+      ? await this.inspectionPhotos(report.inspection.id)
+      : [];
+
     const content = await renderReportPdf({
       number: report.number,
       revision: report.revision,
@@ -482,6 +491,7 @@ export class ReportsService {
         conform: c.conform,
         comment: c.comment,
       })),
+      photos,
     });
 
     return this.documents.store(null, {
@@ -498,6 +508,40 @@ export class ReportsService {
       comment:
         report.revision > 0 ? `Révision ${report.revision}` : 'Première émission',
     });
+  }
+
+  /**
+   * Photos d'une inspection, prêtes à être imprimées. Une photo illisible
+   * n'interrompt pas l'émission du rapport : elle est seulement absente, et
+   * le défaut reste visible à la GED.
+   */
+  private async inspectionPhotos(inspectionId: string) {
+    const documents = await this.prisma.document.findMany({
+      where: {
+        entityType: 'inspection',
+        entityId: inspectionId,
+        type: 'inspection_photo',
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const photos = [];
+    for (const document of documents) {
+      try {
+        photos.push({
+          sectionKey: document.tags[0] ?? null,
+          caption: document.fileName,
+          mimeType: document.mimeType,
+          content: await this.documents.content(document.id),
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Photo ${document.id} illisible, rapport émis sans elle : ${(error as Error).message}`,
+        );
+      }
+    }
+    return photos;
   }
 
   /* ── Remise au client ─────────────────────────────────────────── */
