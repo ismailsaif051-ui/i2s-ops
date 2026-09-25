@@ -387,6 +387,75 @@ const schema = inspection.template.schema as unknown as TemplateSchema;
         }
       }
 
+      // Colonnes obligatoires des tableaux : sans ce contrôle, une ligne
+      // d'indication entièrement vide passait pour une mesure faite.
+      const requiredColumns = (section.columns ?? []).filter((c) => c.required);
+      if (requiredColumns.length > 0 && Array.isArray(value)) {
+        for (const [index, row] of (value as Record<string, unknown>[]).entries()) {
+          const manquants = requiredColumns.filter((c) => {
+            const raw = row?.[c.key];
+            return raw === undefined || raw === null || raw === '';
+          });
+          if (manquants.length > 0) {
+            issues.push({
+              section: section.label.fr,
+              field: `Ligne ${index + 1}`,
+              message: `Colonne(s) obligatoire(s) non renseignée(s) : ${manquants
+                .map((c) => c.label.fr)
+                .join(', ')}.`,
+              blocking: true,
+            });
+          }
+        }
+      }
+
+      // Points de contrôle sans réponse : une check-list vide valait
+      // jusqu'ici rapport complet, alors qu'aucun point n'avait été examiné.
+      if (section.type === 'checklist') {
+        const verdicts = (value ?? {}) as Record<string, unknown>;
+        const points = (section.groups ?? []).flatMap((group) => group.points);
+        const sansReponse = points.filter((point) => {
+          const raw = verdicts[point.key];
+          return raw === undefined || raw === null || raw === '';
+        });
+        if (sansReponse.length > 0) {
+          issues.push({
+            section: section.label.fr,
+            message:
+              sansReponse.length === points.length
+                ? `Aucun des ${points.length} points de contrôle n’a été renseigné.`
+                : `${sansReponse.length} point(s) de contrôle sans réponse, dont « ${sansReponse[0].label.fr} ».`,
+            blocking: true,
+          });
+        }
+      }
+
+      // Critères d'acceptation non tranchés — même exigence que la check-list.
+      if (section.type === 'criteria') {
+        const decisions = (value ?? {}) as Record<string, { applicable?: boolean; conform?: boolean | null }>;
+        const sansDecision = (section.criteria ?? []).filter((criterion) => {
+          const state = decisions[criterion.key];
+          if (!state) return true;
+          return state.applicable !== false && (state.conform === undefined || state.conform === null);
+        });
+        if (sansDecision.length > 0) {
+          issues.push({
+            section: section.label.fr,
+            message: `${sansDecision.length} critère(s) non tranché(s), dont « ${sansDecision[0].label.fr} ».`,
+            blocking: true,
+          });
+        }
+      }
+
+      // Conclusion : une inspection sans conclusion ne conclut rien.
+      if (section.type === 'verdict' && (value === undefined || value === null || value === '')) {
+        issues.push({
+          section: section.label.fr,
+          message: 'Conclusion non renseignée.',
+          blocking: true,
+        });
+      }
+
       // Lignes minimales d'un tableau répétable
       if (section.repeatable && typeof section.minRows === 'number' && section.minRows > 0) {
         const rows = Array.isArray(value) ? value : [];
