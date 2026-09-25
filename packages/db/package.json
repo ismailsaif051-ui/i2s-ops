@@ -12,7 +12,8 @@
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "demo": "tsx prisma/seed-demo.ts",
-    "demo:assets": "tsx prisma/seed-assets.ts"
+    "demo:assets": "tsx prisma/seed-assets.ts",
+    "reset:admin": "tsx prisma/reset-admin.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

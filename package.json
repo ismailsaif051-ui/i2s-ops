@@ -27,7 +27,8 @@
     "dev": "node scripts/dev.mjs",
     "db:demo": "npm run demo -w @i2s/db",
     "db:reset": "npm run db:setup && npm run db:demo",
-    "db:demo:assets": "npm run demo:assets -w @i2s/db"
+    "db:demo:assets": "npm run demo:assets -w @i2s/db",
+    "db:reset-admin": "npm run reset:admin -w @i2s/db --"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
