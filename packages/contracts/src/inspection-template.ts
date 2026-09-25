@@ -89,6 +89,11 @@ export const fieldSchema = z.object({
   /** Hors de cette plage, l'indication est signalée automatiquement. */
   tolerance: z.object({ min: z.number().optional(), max: z.number().optional() }).optional(),
   options: z.array(z.string()).optional(),
+  /**
+   * Champ calculé : l'expression est résolue par le serveur à chaque
+   * enregistrement (voir `@i2s/calc`), jamais saisie à la main.
+   */
+  formula: z.string().optional(),
   placeholder: z.string().optional(),
   help: z.string().optional(),
   /** Largeur en colonnes de grille (1 à 12) pour le rendu. */

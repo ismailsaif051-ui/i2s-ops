@@ -10,6 +10,7 @@ import {
   type TemplateSchema,
   type TemplateSection,
 } from '@i2s/contracts';
+import { applyFormulas } from '@i2s/calc';
 import { Button, Card, StatusBadge } from '@/components/ui';
 
 /**
@@ -90,6 +91,13 @@ export function InspectionForm({
 
   const sections = inspection.template.schema?.sections ?? [];
   const readOnly = !inspection.editable;
+
+  /**
+   * Les champs calculés suivent la saisie sans attendre l'enregistrement :
+   * l'inspecteur voit l'écart de température ou la criticité au moment où il
+   * saisit. Le serveur les recalcule et fait foi.
+   */
+  const affichage = useMemo(() => applyFormulas(sections, data), [sections, data]);
 
   const setSectionValue = useCallback((sectionKey: string, value: unknown) => {
     setData((prev) => ({ ...prev, [sectionKey]: value }));
@@ -227,7 +235,7 @@ export function InspectionForm({
           key={section.key}
           section={section}
           index={index + 1}
-          value={data[section.key]}
+          value={affichage[section.key]}
           readOnly={readOnly}
           devices={availableDevices}
           selectedDeviceIds={deviceIds}
@@ -418,7 +426,14 @@ function FieldRenderer({
           {field.unit && <span className="ml-1.5 font-normal text-subtle">({field.unit})</span>}
         </span>
 
-        {autofilled !== undefined ? (
+        {/* Un champ calculé ne se saisit pas : il suit les valeurs dont il dépend. */}
+        {field.type === 'formula' ? (
+          <span className="flex h-10 items-center rounded-[8px] border border-border bg-surface-2 px-3 text-[14.5px] tnum">
+            {value === null || value === undefined || value === ''
+              ? <span className="text-subtle">En attente des valeurs</span>
+              : String(value)}
+          </span>
+        ) : autofilled !== undefined ? (
           <span className="flex h-10 items-center rounded-[8px] border border-border bg-surface-2 px-3 text-[14.5px] text-muted">
             {autofilled}
           </span>
@@ -784,7 +799,13 @@ function TableRenderer({
                 <td className="border-b border-border px-2 py-1.5 text-subtle">{index + 1}</td>
                 {columns.map((column) => (
                   <td key={column.key} className="border-b border-border px-1 py-1.5">
-                    {column.type === 'enum' ? (
+                    {column.type === 'formula' ? (
+                      <span className="tnum flex h-9 items-center rounded-[6px] border border-border bg-surface-2 px-2 text-[13.5px]">
+                        {row[column.key] === null || row[column.key] === undefined
+                          ? '—'
+                          : String(row[column.key])}
+                      </span>
+                    ) : column.type === 'enum' ? (
                       <select
                         disabled={readOnly}
                         value={(row[column.key] as string) ?? ''}

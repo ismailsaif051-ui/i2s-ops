@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import { REPORT_FORMS } from './report-forms';
 import { templateSchemaSchema } from '@i2s/contracts';
+import { evaluateFormula } from '@i2s/calc';
 import { TEMPLATES as REPORT_TEMPLATES } from './report-templates';
 
 const prisma = new PrismaClient();
@@ -554,6 +555,23 @@ async function main() {
     if (!contrat.success) {
       const detail = contrat.error.issues.map((i) => `${i.path.join('.')} : ${i.message}`).join(' ; ');
       throw new Error(`${template.formCode} ne respecte pas le contrat des formulaires — ${detail}`);
+    }
+
+    // Une formule mal écrite est un défaut du formulaire : elle doit se voir
+    // ici, pas au milieu d'une saisie sur chantier.
+    for (const section of contrat.data.sections) {
+      for (const champ of [...(section.fields ?? []), ...(section.columns ?? [])]) {
+        if (!champ.formula) continue;
+        try {
+          evaluateFormula(champ.formula, () => null);
+        } catch (error) {
+          throw new Error(
+            `${template.formCode} — formule illisible sur « ${section.key}.${champ.key} » : ${
+              (error as Error).message
+            }`,
+          );
+        }
+      }
     }
 
     // Une méthode absente du référentiel rattacherait le modèle à rien : le

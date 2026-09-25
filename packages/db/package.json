@@ -18,6 +18,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@i2s/calc": "*",
     "@i2s/contracts": "*",
     "@prisma/client": "^6.2.1"
   },

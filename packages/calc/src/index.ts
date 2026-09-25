@@ -7,6 +7,9 @@
  * date. Voir docs/09-CONTROLE-DE-GESTION.md.
  */
 
+export * from './formula';
+export * from './inspection-formulas';
+
 export const TIMESHEET_CATEGORIES = [
   'MISSION_BILLABLE',
   'MISSION_NON_BILLABLE',

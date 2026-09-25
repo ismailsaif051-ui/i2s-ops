@@ -228,13 +228,13 @@ const paintSummary = (avecSeuil60: boolean) => ({
   help: 'Règle du modèle : aucun point < 80 % de l’épaisseur contractuelle (Ep) · au plus 20 % des points entre 80 % d’Ep et Ep · moyenne ≥ Ep.',
   fields: [
     { key: 'contractualThickness', label: { fr: 'Épaisseur contractuelle (Ep)', en: 'Contractual thickness' }, type: 'number', required: true, unit: 'µm', decimals: 0, span: 4 },
-    { key: 'measureCount', label: { fr: 'Nombre de mesures', en: 'Number of measurements' }, type: 'number', required: true, decimals: 0, span: 4 },
-    { key: 'below80', label: { fr: 'Points < 80 % d’Ep', en: 'Points < 80 %' }, type: 'number', required: true, decimals: 0, span: 4 },
+    { key: 'measureCount', label: { fr: 'Nombre de mesures', en: 'Number of measurements' }, type: 'formula', formula: 'count(measures[].thickness)', decimals: 0, span: 4 },
+    { key: 'below80', label: { fr: 'Points < 80 % d’Ep', en: 'Points < 80 %' }, type: 'formula', formula: 'countBelow(measures[].thickness, 0.8 * contractualThickness)', decimals: 0, span: 4 },
     ...(avecSeuil60
-      ? [{ key: 'below60', label: { fr: 'Points < 60 % d’Ep', en: 'Points < 60 %' }, type: 'number', required: false, decimals: 0, span: 4 }]
+      ? [{ key: 'below60', label: { fr: 'Points < 60 % d’Ep', en: 'Points < 60 %' }, type: 'formula', formula: 'countBelow(measures[].thickness, 0.6 * contractualThickness)', decimals: 0, span: 4 }]
       : []),
-    { key: 'between80and100', label: { fr: 'Taux de points entre 80 % d’Ep et Ep', en: 'Rate 80 % ≤ X ≤ Ep' }, type: 'number', required: true, unit: '%', decimals: 0, span: 4 },
-    { key: 'average', label: { fr: 'Moyenne', en: 'Average' }, type: 'number', required: true, unit: 'µm', decimals: 0, span: 4 },
+    { key: 'between80and100', label: { fr: 'Taux de points entre 80 % d’Ep et Ep', en: 'Rate 80 % ≤ X ≤ Ep' }, type: 'formula', formula: 'round(100 * countBetween(measures[].thickness, 0.8 * contractualThickness, contractualThickness) / count(measures[].thickness), 0)', unit: '%', decimals: 0, span: 4 },
+    { key: 'average', label: { fr: 'Moyenne', en: 'Average' }, type: 'formula', formula: 'avg(measures[].thickness)', unit: 'µm', decimals: 0, span: 4 },
   ],
 });
 
@@ -3234,7 +3234,7 @@ export const TEMPLATES: TemplateSeed[] = [
             { key: 'emissivity', label: { fr: 'Émissivité ε' }, type: 'number', required: true, decimals: 2, min: 0, max: 1, span: 1 },
             { key: 'tr', label: { fr: 'Température normale Tr' }, type: 'number', required: true, unit: '°C', decimals: 1, span: 1 },
             { key: 'tc', label: { fr: 'Température composant chaud Tc' }, type: 'number', required: true, unit: '°C', decimals: 1, span: 1 },
-            { key: 'deltaT', label: { fr: 'ΔT = Tc − Tr' }, type: 'number', required: true, unit: '°C', decimals: 1, span: 1 },
+            { key: 'deltaT', label: { fr: 'ΔT = Tc − Tr' }, type: 'formula', formula: 'tc - tr', unit: '°C', decimals: 1, span: 1 },
             { key: 'defectClass', label: { fr: 'Classe de défaut' }, type: 'enum', required: true, options: ['1', '2', '3'], span: 1 },
             { key: 'urgency', label: { fr: 'Degré d’urgence' }, type: 'enum', required: true, options: ['1 — Réparation immédiate', '2 — Réparation à prévoir', '3 — À surveiller régulièrement'], span: 2 },
             { key: 'finding', label: { fr: 'Constat' }, type: 'text', required: false, span: 1 },
@@ -4279,7 +4279,7 @@ export const TEMPLATES: TemplateSeed[] = [
             { key: 'axis', label: { fr: 'Axe', en: 'Axis' }, type: 'number', required: true, decimals: 0, span: 2 },
             { key: 'valueA', label: { fr: 'Valeur A', en: 'Value A' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 2 },
             { key: 'valueB', label: { fr: 'Valeur B', en: 'Value B' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 2 },
-            { key: 'difference', label: { fr: 'Différence', en: 'Difference' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 3 },
+            { key: 'difference', label: { fr: 'Différence', en: 'Difference' }, type: 'formula', formula: 'valueA - valueB', unit: 'mm', decimals: 0, span: 3 },
             { key: 'criterion', label: { fr: 'Critère', en: 'Criterion' }, type: 'enum', required: true, options: ['Acceptable', 'Non acceptable'], span: 3 },
           ],
         },
@@ -4318,7 +4318,7 @@ export const TEMPLATES: TemplateSeed[] = [
             { key: 'axis', label: { fr: 'Axe', en: 'Axis' }, type: 'text', required: true, span: 3 },
             { key: 'designRadius', label: { fr: 'Rayon intérieur de conception', en: 'Design inner radius' }, type: 'number', required: true, unit: 'm', decimals: 3, span: 3 },
             { key: 'measuredRadius', label: { fr: 'Rayon intérieur mesuré', en: 'Measured inner radius' }, type: 'number', required: true, unit: 'm', decimals: 3, span: 3 },
-            { key: 'deviation', label: { fr: 'Écart', en: 'Deviation' }, type: 'number', required: true, unit: 'mm', decimals: 0, span: 3 },
+            { key: 'deviation', label: { fr: 'Écart', en: 'Deviation' }, type: 'formula', formula: 'round(1000 * (measuredRadius - designRadius), 0)', unit: 'mm', decimals: 0, span: 3 },
           ],
         },
         END_NOTE,
@@ -5629,7 +5629,7 @@ export const TEMPLATES: TemplateSeed[] = [
           hc('risk', 'Risque', 'text', { required: true, span: 2 }),
           hc('severity', 'Gravité', 'enum', { required: true, options: ['1', '2', '3', '4'], span: 1 }),
           hc('probability', 'Probabilité', 'enum', { required: true, options: ['1', '2', '3', '4'], span: 1 }),
-          hc('criticality', 'Criticité', 'number', { required: true, decimals: 0, span: 1 }),
+          hc('criticality', 'Criticité', 'formula', { formula: 'severity * probability', decimals: 0, span: 1 }),
           hc('measures', 'Mesures de prévention et de protection', 'text', { required: true, span: 2 }),
           hc('residual', 'Risque résiduel', 'enum', { options: ['Acceptable', 'À surveiller', 'Inacceptable'], span: 1 }),
         ], 'Gravité et probabilité de 1 (faible) à 4 (très élevée) ; criticité = gravité × probabilité. Au-delà de 8, le risque doit être réduit avant le démarrage de la tâche.', 1),
@@ -5866,7 +5866,7 @@ export const TEMPLATES: TemplateSeed[] = [
         hSection('resolution', '7 — Taux de résolution mensuel des constats HSE', [
           hc('raised', 'Constats relevés', 'number', { required: true, decimals: 0, span: 4 }),
           hc('closed', 'Constats clos', 'number', { required: true, decimals: 0, span: 4 }),
-          hc('rate', 'Taux de résolution', 'number', { required: true, unit: '%', decimals: 0, span: 4 }),
+          hc('rate', 'Taux de résolution', 'formula', { formula: 'round(100 * closed / raised, 0)', unit: '%', decimals: 0, span: 4 }),
         ], 'conditions', 'Taux de résolution = constats clos / constats relevés.'),
         hSection('closing', '8 et 9 — Axes d’amélioration et conclusion', [
           hc('improvements', '8 — Axes d’amélioration', 'textarea', { required: true, span: 12 }),

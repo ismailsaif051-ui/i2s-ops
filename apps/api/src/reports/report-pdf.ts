@@ -66,7 +66,8 @@ function text(value: unknown): string {
 function fieldText(field: Pick<TemplateField, 'type' | 'unit' | 'decimals'>, value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
 
-  if (field.type === 'number' && typeof value === 'number' && Number.isFinite(value)) {
+  // Un champ calculé est un nombre : il se lit comme tel, unité comprise.
+  if ((field.type === 'number' || field.type === 'formula') && typeof value === 'number' && Number.isFinite(value)) {
     const formatted = value.toLocaleString('fr-FR', {
       minimumFractionDigits: field.decimals ?? 0,
       maximumFractionDigits: field.decimals ?? 3,

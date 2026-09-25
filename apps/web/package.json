@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@i2s/calc": "*",
     "@i2s/contracts": "*",
     "next": "^15.1.6",
     "react": "^19.0.0",

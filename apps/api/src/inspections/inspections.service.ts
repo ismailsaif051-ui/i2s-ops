@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { TemplateSchema, TemplateSection } from '@i2s/contracts';
+import { applyFormulas } from '@i2s/calc';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
@@ -191,7 +192,7 @@ export class InspectionsService {
     // L'en-tête est réappliqué à chaque enregistrement : le navigateur ne le
     // renvoie pas (il l'affiche en lecture seule) et un brouillon doit rester
     // aligné sur sa mission jusqu'à la soumission, qui le fige.
-const schema = inspection.template.schema as unknown as TemplateSchema;
+    const schema = inspection.template.schema as unknown as TemplateSchema;
 
     const withHeader = this.applyAutofill(
       schema,
@@ -224,7 +225,12 @@ const schema = inspection.template.schema as unknown as TemplateSchema;
           })
         : [];
 
-    const merged = this.applyDeviceFields(schema, withHeader, selected);
+    // Les champs calculés sont résolus ici, au dernier moment : ce qui sera
+    // imprimé au rapport ne dépend pas de ce que le navigateur a envoyé.
+    const merged = applyFormulas(
+      schema.sections ?? [],
+      this.applyDeviceFields(schema, withHeader, selected),
+    ) as InspectionData;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.inspection.update({
