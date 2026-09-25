@@ -20,7 +20,7 @@
     "dev:api": "npm run dev -w @i2s/api",
     "dev:web": "npm run dev -w @i2s/web",
     "build": "npm run build -w @i2s/contracts && npm run build -w @i2s/calc && npm run db:generate && npm run build -w @i2s/api && npm run build -w @i2s/web",
-    "test": "npm run test -w @i2s/contracts && npm run test -w @i2s/api",
+    "test": "npm run test -w @i2s/contracts && npm run test -w @i2s/calc && npm run test -w @i2s/api",
     "typecheck": "tsc -b --pretty",
     "db:setup": "node scripts/setup-db.mjs",
     "db:start": "node scripts/db-start.mjs",
