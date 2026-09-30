@@ -1,23 +1,27 @@
-# Fichier que Render lit tout seul quand vous connectez ce dépôt GitHub
-# (« New + » → « Blueprint » → choisir le dépôt). Il crée et relie à votre
-# place : la base de données, l'API et l'interface.
+# I2S-System — fichier que Render lit tout seul quand vous connectez ce dépôt
+# GitHub (« New + » → « Blueprint » → choisir le dépôt). Il crée et relie à
+# votre place : la base de données, l'API et l'interface.
 #
-# Deux réglages ne peuvent pas être automatisés — Render doit d'abord
-# attribuer une adresse à chaque service avant qu'on puisse la donner à
-# l'autre. Ce sont ANTHROPIC_API_KEY et NEXT_PUBLIC_API_URL / WEB_ORIGIN,
-# marqués « sync: false » ci-dessous : Render vous demandera de les saisir
-# dans son interface après le premier déploiement. Voir les instructions
-# transmises avec ce fichier.
+# Render vous demandera deux valeurs au moment de la création (« sync: false ») :
+#   - DEMO_PASSWORD : le mot de passe des comptes de test — au moins
+#     12 caractères, avec une majuscule, une minuscule et un chiffre ;
+#   - ANTHROPIC_API_KEY : facultative, laissez vide si vous n'en avez pas.
+#     Seul l'assistant de rédaction des offres est alors indisponible.
+#
+# Tout le reste se règle seul. Formule gratuite : les services s'endorment
+# après 15 minutes sans visite (premier chargement ~1 minute), la base
+# gratuite expire au bout de 30 jours, et les fichiers déposés (photos, PDF)
+# sont perdus à chaque redémarrage. Suffisant pour tester, pas pour produire.
 
 databases:
-  - name: i2s-ops-db
-    databaseName: i2s_ops
+  - name: i2s-system-db
+    databaseName: i2s_system
     plan: free
 
 services:
   # ── API (NestJS) ──────────────────────────────────────────────────
   - type: web
-    name: i2s-ops-api
+    name: i2s-system-api
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
@@ -28,7 +32,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: i2s-ops-db
+          name: i2s-system-db
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
@@ -38,20 +42,26 @@ services:
         value: "30"
       - key: STORAGE_ROOT
         value: storage
-      # Adresse de l'interface, une fois que Render la lui aura attribuée
-      # (ex. https://i2s-ops-web.onrender.com) — voir les instructions.
-      - key: WEB_ORIGIN
+      # Charge le jeu de démonstration au premier démarrage — une seule fois,
+      # et jamais sur une base qui contient déjà des affaires.
+      - key: LOAD_DEMO
+        value: "true"
+      # Mot de passe commun des comptes de test, et du compte administrateur
+      # (qui devra le changer à sa première connexion).
+      - key: DEMO_PASSWORD
         sync: false
-      # Facultatif : l'assistant de rédaction des offres reste indisponible
-      # sans elle, le reste de l'application fonctionne normalement.
+      # Facultatif : sans clé, seul l'assistant de rédaction est indisponible.
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: AI_MODEL
         value: claude-sonnet-5
 
   # ── Interface (Next.js) ──────────────────────────────────────────────
+  # L'adresse de l'API est déduite de celle de l'interface
+  # (i2s-system-web… → i2s-system-api…). Si Render a dû ajouter un suffixe aux
+  # noms, renseignez API_URL à la main dans « Environment » (voir le guide).
   - type: web
-    name: i2s-ops-web
+    name: i2s-system-web
     runtime: docker
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .
@@ -59,7 +69,3 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Adresse de l'API, une fois que Render la lui aura attribuée
-      # (ex. https://i2s-ops-api.onrender.com/api/v1) — voir les instructions.
-      - key: NEXT_PUBLIC_API_URL
-        sync: false

@@ -59,7 +59,7 @@ async function main() {
   }
 
   console.log('\n╔══════════════════════════════════════════════════════════╗');
-  console.log('║  JEU DE SIMULATION I2S OPS — DONNÉES FICTIVES            ║');
+  console.log('║  JEU DE SIMULATION I2S-System — DONNÉES FICTIVES         ║');
   console.log('╚══════════════════════════════════════════════════════════╝\n');
 
   const company = await prisma.company.findUnique({ where: { code: 'I2S' } });

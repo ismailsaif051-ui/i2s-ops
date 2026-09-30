@@ -19,7 +19,7 @@ export async function buildXlsx(
   rows: Array<Record<string, unknown>>,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'I2S OPS';
+  workbook.creator = 'I2S-System';
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet(sheetName.slice(0, 31), {

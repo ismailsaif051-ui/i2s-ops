@@ -1,4 +1,4 @@
-// I2S OPS — schéma de données
+// I2S-System — schéma de données
 // Voir docs/03-MODELE-DONNEES.md pour la justification de chaque bloc.
 
 generator client {

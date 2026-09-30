@@ -111,7 +111,7 @@ export function AppShell({
       >
         <div className="px-6 pb-5 pt-6">
           <p className="flex items-baseline gap-2 text-[21px] font-semibold tracking-[-0.02em] text-[var(--rail-text-strong)]">
-            I2S OPS
+            I2S-System
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
           </p>
           <p className="mt-0.5 text-[13px] text-rail-muted">

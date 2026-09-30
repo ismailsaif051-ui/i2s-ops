@@ -31,7 +31,7 @@ async function bootstrap(): Promise<void> {
     const doc = SwaggerModule.createDocument(
       app,
       new DocumentBuilder()
-        .setTitle('I2S OPS — API')
+        .setTitle('I2S-System — API')
         .setDescription(
           "ERP de gestion opérationnelle, inspection et contrôle de gestion. " +
             'Toutes les routes sont protégées par RBAC sauf mention contraire.',

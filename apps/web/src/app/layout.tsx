@@ -3,8 +3,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'I2S OPS',
-    template: '%s · I2S OPS',
+    default: 'I2S-System',
+    template: '%s · I2S-System',
   },
   description:
     "ERP de gestion opérationnelle, inspection et contrôle de gestion — I2S TESTING.",

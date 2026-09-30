@@ -34,4 +34,6 @@ RUN npx prisma generate --schema packages/db/prisma/schema.prisma \
 ENV NODE_ENV=production
 EXPOSE 4000
 
-CMD ["node", "apps/api/dist/main.js"]
+# Prépare la base (schéma, référentiels, démonstration la première fois),
+# puis lance l'API — voir scripts/render-start.mjs.
+CMD ["node", "scripts/render-start.mjs"]

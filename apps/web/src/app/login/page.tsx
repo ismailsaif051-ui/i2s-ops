@@ -51,7 +51,7 @@ export default function LoginPage() {
       <section className="hidden flex-col justify-between bg-rail p-12 text-[var(--rail-text)] lg:flex">
         <div>
           <p className="flex items-baseline gap-2 text-[26px] font-semibold text-white">
-            I2S OPS
+            I2S-System
             <span className="h-2 w-2 rounded-[2px] bg-accent" aria-hidden="true" />
           </p>
           <p className="mt-1.5 text-[12px] text-[var(--rail-muted)]">
@@ -85,7 +85,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center bg-surface px-6 py-12">
         <form onSubmit={submit} className="w-full max-w-[340px]">
           <p className="mb-1 text-[22px] font-semibold lg:hidden">
-            I2S OPS
+            I2S-System
           </p>
           <h1 className="text-[24px] font-semibold">Connexion</h1>
           <p className="mb-7 mt-1 text-[13.5px] text-muted">

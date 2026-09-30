@@ -1,5 +1,5 @@
 /**
- * Seed des référentiels I2S OPS.
+ * Seed des référentiels I2S-System.
  * Idempotent : peut être rejoué sans dupliquer.
  *
  * Sources : docs/00-ANALYSE-CDC.md (barèmes de frais, départements),
@@ -421,7 +421,7 @@ const SETTINGS: Array<[string, unknown]> = [
 ];
 
 async function main() {
-  console.log('→ Seed des référentiels I2S OPS\n');
+  console.log('→ Seed des référentiels I2S-System\n');
 
   // ── Permissions ────────────────────────────────────────────────
   const actions = Object.values(PermissionAction);

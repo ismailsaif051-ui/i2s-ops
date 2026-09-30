@@ -1,5 +1,5 @@
 /**
- * Design System I2S OPS — composants de base.
+ * Design System I2S-System — composants de base.
  *
  * Direction : clair, aéré, contemporain. Aucun libellé en capitales espacées
  * ni en chasse fixe ; la chasse fixe (`.ref`) est réservée aux identifiants

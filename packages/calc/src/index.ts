@@ -1,5 +1,5 @@
 /**
- * Moteur de calcul I2S OPS — fonctions pures, testées unitairement.
+ * Moteur de calcul I2S-System — fonctions pures, testées unitairement.
  *
  * Ce paquet est isolé volontairement : les formules du cahier des charges
  * (productivité nette, coût d'inactivité, marge) n'y dépendent d'aucune base

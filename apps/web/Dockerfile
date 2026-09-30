@@ -24,4 +24,6 @@ RUN npm run build -w @i2s/contracts \
 ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD ["npm", "run", "start", "-w", "@i2s/web"]
+# Render attribue le port par la variable PORT ; 3000 en local.
+WORKDIR /app/apps/web
+CMD ["sh", "-c", "exec npx next start -p ${PORT:-3000}"]
