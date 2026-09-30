@@ -54,8 +54,14 @@ const OCCUPANCY: Record<string, number> = {
 };
 
 async function main() {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Le jeu de démonstration ne doit pas être chargé en production.');
+  // Un serveur de test hébergé tourne en mode production (cookies sécurisés,
+  // pages optimisées) : il faut alors l'autoriser explicitement, par
+  // LOAD_DEMO=true — posé seulement sur l'environnement de test (render.yaml).
+  // Sans cette autorisation, jamais de données fictives en production.
+  if (process.env.NODE_ENV === 'production' && process.env.LOAD_DEMO !== 'true') {
+    throw new Error(
+      'Le jeu de démonstration ne doit pas être chargé en production (sauf environnement de test déclaré par LOAD_DEMO=true).',
+    );
   }
 
   console.log('\n╔══════════════════════════════════════════════════════════╗');
