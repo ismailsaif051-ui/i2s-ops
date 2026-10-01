@@ -13,22 +13,28 @@ export interface MissionOption {
   client: string;
 }
 
+export interface DayEntry {
+  category: string;
+  missionId: string | null;
+  missionNumber: string | null;
+  affairNumber: string | null;
+  /** Part de la journée — 0,5 quand deux interventions se la partagent. */
+  share: number;
+  comment: string | null;
+  status: string;
+  source: string;
+  validatedBy: string | null;
+  locked: boolean;
+}
+
 export interface WeekDay {
   date: string;
   weekday: number;
   isWorkingDay: boolean;
   holidayLabel: string | null;
-  entry: {
-    category: string;
-    missionId: string | null;
-    missionNumber: string | null;
-    affairNumber: string | null;
-    comment: string | null;
-    status: string;
-    source: string;
-    validatedBy: string | null;
-    locked: boolean;
-  } | null;
+  entry: DayEntry | null;
+  /** Toutes les lignes du jour : une par intervention quand il y en a plusieurs. */
+  entries: DayEntry[];
   missions: MissionOption[];
 }
 
@@ -90,6 +96,19 @@ function needsMission(category: string): boolean {
   return CORRECTIONS.find((c) => c.value === category)?.needsMission ?? false;
 }
 
+/** « ½ journée », « ⅓ journée »… — la part d'une intervention dans la journée. */
+function shareLabel(share: number): string {
+  if (share >= 0.999) return 'journée';
+  const known: Array<[number, string]> = [
+    [0.5, '½'],
+    [0.3333, '⅓'],
+    [0.25, '¼'],
+    [0.2, '⅕'],
+  ];
+  const match = known.find(([value]) => Math.abs(value - share) < 0.002);
+  return `${match ? match[1] : share.toLocaleString('fr-FR')} journée`;
+}
+
 function shortDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00.000Z`);
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -98,9 +117,9 @@ function shortDate(iso: string): string {
 export function TimesheetWeek({ payload }: { payload: WeekPayload }) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ category: string; missionId: string | null }>({
+  const [draft, setDraft] = useState<{ category: string; missionIds: string[] }>({
     category: '',
-    missionId: null,
+    missionIds: [],
   });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
@@ -112,9 +131,12 @@ export function TimesheetWeek({ payload }: { payload: WeekPayload }) {
 
   function startEdit(day: WeekDay) {
     setEditing(day.date);
+    // Toutes les interventions déjà pointées ce jour-là, à défaut la première
+    // mission prévue.
+    const current = day.entries.map((e) => e.missionId).filter((id): id is string => Boolean(id));
     setDraft({
       category: day.entry?.category ?? '',
-      missionId: day.entry?.missionId ?? day.missions[0]?.missionId ?? null,
+      missionIds: current.length > 0 ? current : day.missions.slice(0, 1).map((m) => m.missionId),
     });
     setMessage(null);
     setIssues([]);
@@ -134,7 +156,8 @@ export function TimesheetWeek({ payload }: { payload: WeekPayload }) {
           {
             date,
             category: draft.category,
-            missionId: needsMission(draft.category) ? draft.missionId : null,
+            // Plusieurs interventions : la journée se partage à parts égales.
+            missionIds: needsMission(draft.category) ? draft.missionIds : [],
           },
         ],
       }),
@@ -223,9 +246,11 @@ export function TimesheetWeek({ payload }: { payload: WeekPayload }) {
                         onChange={(e) =>
                           setDraft({
                             category: e.target.value,
-                            missionId: needsMission(e.target.value)
-                              ? (draft.missionId ?? day.missions[0]?.missionId ?? null)
-                              : null,
+                            missionIds: needsMission(e.target.value)
+                              ? draft.missionIds.length > 0
+                                ? draft.missionIds
+                                : day.missions.slice(0, 1).map((m) => m.missionId)
+                              : [],
                           })
                         }
                         className={`${selectClass} min-w-[220px] flex-1`}
@@ -239,23 +264,44 @@ export function TimesheetWeek({ payload }: { payload: WeekPayload }) {
                       </select>
 
                       {needsMission(draft.category) && (
-                        <select
-                          value={draft.missionId ?? ''}
-                          onChange={(e) => setDraft({ ...draft, missionId: e.target.value || null })}
-                          className={`${selectClass} min-w-[240px] flex-1`}
-                        >
-                          <option value="">Choisir la mission…</option>
+                        <fieldset className="flex min-w-[240px] flex-1 flex-col gap-1">
+                          <legend className="mb-0.5 text-[12.5px] text-subtle">
+                            Interventions du jour — la journée se partage entre elles
+                          </legend>
+                          {day.missions.length === 0 && (
+                            <span className="text-[13px] text-warning">
+                              Aucune mission prévue ce jour-là au planning.
+                            </span>
+                          )}
                           {day.missions.map((m) => (
-                            <option key={m.missionId} value={m.missionId}>
-                              {m.number} — {m.client}
-                            </option>
+                            <label key={m.missionId} className="flex items-center gap-2 text-[13.5px]">
+                              <input
+                                type="checkbox"
+                                checked={draft.missionIds.includes(m.missionId)}
+                                onChange={(e) =>
+                                  setDraft({
+                                    ...draft,
+                                    missionIds: e.target.checked
+                                      ? [...draft.missionIds, m.missionId]
+                                      : draft.missionIds.filter((id) => id !== m.missionId),
+                                  })
+                                }
+                                className="h-4 w-4 accent-[var(--color-accent)]"
+                              />
+                              <span className="ref">{m.number}</span>
+                              <span className="text-muted">— {m.client}</span>
+                            </label>
                           ))}
-                        </select>
+                        </fieldset>
                       )}
 
                       <Button
                         variant="accent"
-                        disabled={busy || !draft.category}
+                        disabled={
+                          busy ||
+                          !draft.category ||
+                          (needsMission(draft.category) && draft.missionIds.length === 0)
+                        }
                         onClick={() => submit(day.date)}
                       >
                         {busy ? 'Correction…' : 'Corriger'}
@@ -266,18 +312,30 @@ export function TimesheetWeek({ payload }: { payload: WeekPayload }) {
                     <>
                       <div className="min-w-0 flex-1">
                         {entry ? (
-                          <span className="flex flex-wrap items-center gap-2">
-                            <StatusBadge tone={TONE[entry.category] ?? 'neutral'}>
-                              {CATEGORY_LABELS[entry.category] ?? entry.category}
-                            </StatusBadge>
-                            {entry.missionNumber && (
-                              <span className="ref text-[13.5px] text-muted">
-                                {entry.missionNumber}
+                          <span className="flex flex-col gap-1">
+                            {day.entries.map((e, index) => (
+                              <span
+                                key={e.missionId ?? `ligne-${index}`}
+                                className="flex flex-wrap items-center gap-2"
+                              >
+                                <StatusBadge tone={TONE[e.category] ?? 'neutral'}>
+                                  {CATEGORY_LABELS[e.category] ?? e.category}
+                                </StatusBadge>
+                                {e.missionNumber && (
+                                  <span className="ref text-[13.5px] text-muted">
+                                    {e.missionNumber}
+                                  </span>
+                                )}
+                                {day.entries.length > 1 && (
+                                  <span className="text-[12.5px] text-subtle">
+                                    {shareLabel(e.share)}
+                                  </span>
+                                )}
+                                {index === 0 && e.source === 'MANUAL' && (
+                                  <span className="text-[12.5px] text-subtle">corrigée</span>
+                                )}
                               </span>
-                            )}
-                            {entry.source === 'MANUAL' && (
-                              <span className="text-[12.5px] text-subtle">corrigée</span>
-                            )}
+                            ))}
                           </span>
                         ) : (
                           <span className="text-[13.5px] text-subtle">

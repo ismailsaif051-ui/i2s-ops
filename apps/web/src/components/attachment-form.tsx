@@ -15,9 +15,15 @@ interface PreparedLine {
   missionId: string | null;
   missionNumber: string | null;
   designation: string;
+  /** Temps passé, en journées (demi-journées comprises). */
   days: number;
+  /** Unité de facturation du bon de commande. */
+  unit: 'VACATION' | 'INTERVENTION' | 'UNIT' | 'FIXED';
+  /** Ce qui est facturé, dans cette unité. */
+  quantity: number;
+  quantityNote: string | null;
   unitRate: number | null;
-  rateSource: 'AFFAIR_RATE' | 'AFFAIR_DAILY_RATE' | 'MISSING';
+  rateSource: 'AFFAIR_RATE' | 'PO_UNIT_PRICE' | 'AFFAIR_DAILY_RATE' | 'MISSING';
   amountHT: number;
 }
 
@@ -29,8 +35,16 @@ interface Preparation {
   missingRates: number;
 }
 
+const UNIT_LABEL: Record<PreparedLine['unit'], string> = {
+  VACATION: 'vacation(s)',
+  INTERVENTION: 'intervention(s)',
+  UNIT: 'équipement(s)',
+  FIXED: 'forfait',
+};
+
 const RATE_ORIGIN: Record<string, string> = {
   AFFAIR_RATE: 'barème de l’affaire',
+  PO_UNIT_PRICE: 'prix du bon de commande',
   AFFAIR_DAILY_RATE: 'prix de journée de l’affaire',
   MISSING: 'aucun prix connu',
 };
@@ -53,6 +67,9 @@ export function AttachmentForm({ affairs }: { affairs: AffairOption[] }) {
   const [to, setTo] = useState('');
   const [preparation, setPreparation] = useState<Preparation | null>(null);
   const [rates, setRates] = useState<Record<string, number>>({});
+  // Quantités saisies à la main — à l'unité surtout, quand aucun rapport
+  // d'inspection ne permet de compter les équipements contrôlés.
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [issues, setIssues] = useState<Array<{ field: string; message: string }>>([]);
@@ -75,6 +92,11 @@ export function AttachmentForm({ affairs }: { affairs: AffairOption[] }) {
     }
 
     setPreparation(body);
+    setQuantities(
+      Object.fromEntries(
+        body.lines.filter((l) => l.missionId).map((l) => [l.missionId!, l.quantity]),
+      ),
+    );
     setRates(
       Object.fromEntries(
         body.lines
@@ -92,7 +114,7 @@ export function AttachmentForm({ affairs }: { affairs: AffairOption[] }) {
     const response = await fetch('/api/facturation/attachements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ affairId, periodStart: from, periodEnd: to, rates }),
+      body: JSON.stringify({ affairId, periodStart: from, periodEnd: to, rates, quantities }),
     });
 
     const body = (await response.json().catch(() => ({}))) as {
@@ -112,11 +134,13 @@ export function AttachmentForm({ affairs }: { affairs: AffairOption[] }) {
     setMessage({ tone: 'error', text: body.message ?? 'Création impossible.' });
   }
 
+  const quantityOf = (l: PreparedLine) =>
+    l.missionId ? (quantities[l.missionId] ?? l.quantity) : l.quantity;
+  const rateOf = (l: PreparedLine) =>
+    l.missionId ? (rates[l.missionId] ?? 0) : (l.unitRate ?? 0);
+
   const total = preparation
-    ? preparation.lines.reduce(
-        (sum, l) => sum + l.days * (l.missionId ? (rates[l.missionId] ?? 0) : (l.unitRate ?? 0)),
-        0,
-      )
+    ? preparation.lines.reduce((sum, l) => sum + quantityOf(l) * rateOf(l), 0)
     : 0;
 
   const selectClass =
@@ -203,7 +227,8 @@ export function AttachmentForm({ affairs }: { affairs: AffairOption[] }) {
                 <thead>
                   <tr>
                     <Th>Prestation</Th>
-                    <Th align="right">Jours</Th>
+                    <Th align="right">Temps passé</Th>
+                    <Th align="right">Quantité facturée</Th>
                     <Th align="right">Prix unitaire</Th>
                     <Th>Origine du prix</Th>
                     <Th align="right">Montant HT</Th>
@@ -211,15 +236,46 @@ export function AttachmentForm({ affairs }: { affairs: AffairOption[] }) {
                 </thead>
                 <tbody>
                   {preparation.lines.map((line) => {
-                    const rate = line.missionId
-                      ? (rates[line.missionId] ?? 0)
-                      : (line.unitRate ?? 0);
+                    const rate = rateOf(line);
+                    const quantity = quantityOf(line);
 
                     return (
                       <tr key={line.missionId ?? line.designation}>
-                        <Td>{line.designation}</Td>
+                        <Td>
+                          {line.designation}
+                          {line.quantityNote && (
+                            <span className="mt-0.5 block text-[12.5px] text-warning">
+                              {line.quantityNote}
+                            </span>
+                          )}
+                        </Td>
                         <Td mono align="right">
-                          {line.days}
+                          {line.days.toLocaleString('fr-FR')} j
+                        </Td>
+                        <Td align="right">
+                          {line.missionId && line.unit !== 'VACATION' ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={0}
+                                step={line.unit === 'FIXED' ? 1 : 1}
+                                value={Number.isFinite(quantity) ? quantity : ''}
+                                onChange={(e) =>
+                                  setQuantities({
+                                    ...quantities,
+                                    [line.missionId!]: Number(e.target.value),
+                                  })
+                                }
+                                className="h-9 w-20 rounded-[8px] border border-border-strong bg-surface px-2.5 text-right text-[14px] outline-none focus:border-accent"
+                              />
+                              <span className="text-[12.5px] text-subtle">{UNIT_LABEL[line.unit]}</span>
+                            </span>
+                          ) : (
+                            <span className="tnum">
+                              {quantity.toLocaleString('fr-FR')}{' '}
+                              <span className="text-[12.5px] text-subtle">{UNIT_LABEL[line.unit]}</span>
+                            </span>
+                          )}
                         </Td>
                         <Td align="right">
                           {line.missionId ? (
@@ -246,7 +302,7 @@ export function AttachmentForm({ affairs }: { affairs: AffairOption[] }) {
                           </StatusBadge>
                         </Td>
                         <Td mono align="right">
-                          {money(Math.round(line.days * rate * 100) / 100)}
+                          {money(Math.round(quantity * rate * 100) / 100)}
                         </Td>
                       </tr>
                     );

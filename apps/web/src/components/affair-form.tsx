@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BILLING_UNIT_OPTIONS } from '@/components/affair-po-form';
 import { Button, Card, Field, Input, StatusBadge } from '@/components/ui';
 
 interface Option {
@@ -90,6 +91,8 @@ export function AffairForm({
         offerAmountHT: amount('offerAmountHT'),
         poAmountHT: amount('poAmountHT'),
         poNumber: value('poNumber'),
+        billingUnit: value('billingUnit') || 'VACATION',
+        poUnitPrice: amount('poUnitPrice'),
         commercialStatus: value('commercialStatus'),
         worksStatus: value('worksStatus'),
         physicalFileOpened: form.get('physicalFileOpened') === 'on',
@@ -244,6 +247,24 @@ export function AffairForm({
             hint="Texte libre : « BC 34950 », « Commande verbale », « Contrat + avenant »."
           >
             <Input name="poNumber" maxLength={80} />
+          </Field>
+
+          <Field
+            label="Mode de facturation (selon le BC)"
+            error={errorFor('billingUnit')}
+            hint="À la vacation, à l’intervention, à l’équipement contrôlé ou au forfait."
+          >
+            <select name="billingUnit" defaultValue="VACATION" className={selectClass}>
+              {BILLING_UNIT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Prix unitaire du BC (DH HT)" error={errorFor('poUnitPrice')}>
+            <Input name="poUnitPrice" type="number" min={0} step={10} />
           </Field>
 
           <Field label="Bureau d’études" error={errorFor('engineeringOffice')}>

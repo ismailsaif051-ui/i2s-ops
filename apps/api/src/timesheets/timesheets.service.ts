@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../rbac/scope.service';
 import type { RequestUser, ScopeDescriptor } from '../common/types';
+import { splitDay, sumShares } from './day-split';
 
 export const TIMESHEET_SCOPE: ScopeDescriptor = {
   companyPath: 'employee.companyId',
@@ -35,7 +36,18 @@ export interface DayInput {
   date: string;
   category: TimesheetCategory;
   missionId?: string | null;
+  /**
+   * Plusieurs interventions le même jour : la journée se partage alors à
+   * parts égales entre elles. `missionId` seul reste accepté.
+   */
+  missionIds?: string[] | null;
   comment?: string | null;
+}
+
+/** Les missions d'une journée saisie, sans doublon, quelle que soit la forme. */
+function missionsOf(day: DayInput): string[] {
+  const ids = day.missionIds && day.missionIds.length > 0 ? day.missionIds : day.missionId ? [day.missionId] : [];
+  return [...new Set(ids.filter(Boolean))];
 }
 
 export interface SaveWarning {
@@ -104,7 +116,15 @@ export class TimesheetsService {
       }),
       this.prisma.timesheetDay.findMany({
         where: { employeeId: { in: ids }, date: { gte: from, lte: until } },
-        select: { employeeId: true, date: true, source: true, status: true },
+        select: {
+          id: true,
+          employeeId: true,
+          date: true,
+          missionId: true,
+          source: true,
+          status: true,
+          _count: { select: { attachmentLines: true } },
+        },
       }),
       this.prisma.missionAssignment.findMany({
         where: {
@@ -157,10 +177,25 @@ export class TimesheetsService {
     const workingDay = new Map(calendar.map((c) => [iso(c.date), c.isWorkingDay]));
     const holidayLabel = new Map(calendar.map((c) => [iso(c.date), c.label]));
 
-    // Une journée déjà corrigée ou visée est intouchable.
+    // Les lignes existantes, regroupées par personne et par jour : une
+    // journée partagée entre plusieurs interventions en compte plusieurs.
+    const rowsByDay = new Map<string, typeof existing>();
+    for (const row of existing) {
+      const key = `${row.employeeId}|${iso(row.date)}`;
+      rowsByDay.set(key, [...(rowsByDay.get(key) ?? []), row]);
+    }
+
+    // Une journée déjà corrigée, visée ou portée sur un attachement est
+    // intouchable — toutes ses lignes avec elle. Régénérer une journée
+    // attachée la détacherait, et elle pourrait être facturée deux fois.
     const frozen = new Set(
       existing
-        .filter((e) => e.source === 'MANUAL' || ['VALIDATED', 'LOCKED'].includes(e.status))
+        .filter(
+          (e) =>
+            e.source === 'MANUAL' ||
+            ['VALIDATED', 'LOCKED'].includes(e.status) ||
+            e._count.attachmentLines > 0,
+        )
         .map((e) => `${e.employeeId}|${iso(e.date)}`),
     );
 
@@ -171,52 +206,110 @@ export class TimesheetsService {
       for (const employee of employees) {
         for (let day = new Date(from); day <= until; day = addDays(day, 1)) {
           const key = iso(day);
-          if (frozen.has(`${employee.id}|${key}`)) continue;
+          const dayKey = `${employee.id}|${key}`;
+          if (frozen.has(dayKey)) continue;
 
-          const assignment = assignments.find(
-            (a) =>
-              a.employeeId === employee.id &&
-              a.mission.plannedStartDate !== null &&
-              a.mission.plannedEndDate !== null &&
-              iso(a.mission.plannedStartDate) <= key &&
-              iso(a.mission.plannedEndDate) >= key,
-          );
+          const current = rowsByDay.get(dayKey) ?? [];
+
+          // Toutes les missions du jour — plus seulement la première.
+          const missionsOfDay = [
+            ...new Map(
+              assignments
+                .filter(
+                  (a) =>
+                    a.employeeId === employee.id &&
+                    a.mission.plannedStartDate !== null &&
+                    a.mission.plannedEndDate !== null &&
+                    iso(a.mission.plannedStartDate) <= key &&
+                    iso(a.mission.plannedEndDate) >= key,
+                )
+                .map((a) => [a.mission.id, a.mission] as const),
+            ).values(),
+          ];
 
           const isWorkingDay = workingDay.get(key) ?? ![0, 6].includes(day.getUTCDay());
 
           // Un jour chômé ne compte pas — sauf si une mission l'a occupé.
-          if (!isWorkingDay && !assignment) {
-            await tx.timesheetDay.deleteMany({
-              where: { employeeId: employee.id, date: day, source: 'PLAN' },
-            });
+          if (!isWorkingDay && missionsOfDay.length === 0) {
+            if (current.length > 0) {
+              await tx.timesheetDay.deleteMany({ where: { id: { in: current.map((r) => r.id) } } });
+            }
             continue;
           }
 
-          const resolved = this.resolve(employee.id, key, assignment, leaves, trainings);
           const cost = costFor(costs, employee.id, day);
+          const comment = !isWorkingDay
+            ? (holidayLabel.get(key) ?? 'Jour non ouvré travaillé')
+            : null;
 
-          const data = {
-            category: resolved.category,
-            missionId: resolved.missionId,
-            affairId: resolved.affairId,
-            billable: resolved.category === 'MISSION_BILLABLE',
-            dailyCostSnapshot: cost,
-            source: 'PLAN' as const,
-            status: 'DRAFT' as const,
-            comment: !isWorkingDay ? (holidayLabel.get(key) ?? 'Jour non ouvré travaillé') : null,
-          };
+          // Ce que la journée doit contenir : une ligne par intervention,
+          // à parts égales ; à défaut, une seule ligne (congé, formation,
+          // non affectée).
+          const targets =
+            missionsOfDay.length > 0
+              ? missionsOfDay.map((mission, index) => {
+                  const slot = splitDay(missionsOfDay.length, cost)[index];
+                  const category: TimesheetCategory = mission.billable
+                    ? 'MISSION_BILLABLE'
+                    : 'MISSION_NON_BILLABLE';
+                  return {
+                    category,
+                    missionId: mission.id as string | null,
+                    affairId: mission.affairId as string | null,
+                    share: slot.share,
+                    cost: slot.cost,
+                  };
+                })
+              : [
+                  {
+                    ...this.resolve(employee.id, key, undefined, leaves, trainings),
+                    share: 1,
+                    cost,
+                  },
+                ];
 
-          await tx.timesheetDay.upsert({
-            where: { employeeId_date: { employeeId: employee.id, date: day } },
-            update: data,
-            create: { employeeId: employee.id, date: day, ...data },
-          });
+          const kept = new Set<string>();
+          for (const target of targets) {
+            const data = {
+              category: target.category,
+              missionId: target.missionId,
+              affairId: target.affairId,
+              billable: target.category === 'MISSION_BILLABLE',
+              share: target.share,
+              dailyCostSnapshot: target.cost,
+              source: 'PLAN' as const,
+              status: 'DRAFT' as const,
+              comment,
+            };
 
-          byCategory[resolved.category] = (byCategory[resolved.category] ?? 0) + 1;
+            const row = current.find((r) => r.missionId === target.missionId);
+            if (row) {
+              await tx.timesheetDay.update({ where: { id: row.id }, data });
+              kept.add(row.id);
+            } else {
+              await tx.timesheetDay.create({
+                data: { employeeId: employee.id, date: day, ...data },
+              });
+            }
+
+            byCategory[target.category] = (byCategory[target.category] ?? 0) + target.share;
+          }
+
+          // Les lignes qui ne correspondent plus au planning disparaissent
+          // (mission annulée, déplacée, ou journée redevenue libre).
+          const stale = current.filter((r) => !kept.has(r.id)).map((r) => r.id);
+          if (stale.length > 0) {
+            await tx.timesheetDay.deleteMany({ where: { id: { in: stale } } });
+          }
+
           generated += 1;
         }
       }
     });
+
+    for (const category of Object.keys(byCategory)) {
+      byCategory[category] = Math.round(byCategory[category] * 10_000) / 10_000;
+    }
 
     await this.audit.record(
       {
@@ -328,13 +421,38 @@ export class TimesheetsService {
       this.dailyCost(employeeId, from),
     ]);
 
-    const byDate = new Map(entries.map((e) => [iso(e.date), e]));
+    // Une journée peut porter plusieurs lignes — une par intervention.
+    const byDate = new Map<string, typeof entries>();
+    for (const e of entries) {
+      const key = iso(e.date);
+      byDate.set(key, [...(byDate.get(key) ?? []), e]);
+    }
     const calendarByDate = new Map(calendar.map((c) => [iso(c.date), c]));
+
+    const presentEntry = (entry: (typeof entries)[number]) => ({
+      category: entry.category,
+      missionId: entry.missionId,
+      missionNumber: entry.mission?.number ?? null,
+      affairNumber: entry.affair?.number ?? null,
+      /** Part de la journée — 0,5 quand deux interventions se partagent le jour. */
+      share: Number(entry.share),
+      comment: entry.comment,
+      status: entry.status,
+      /** D'où vient cette journée : du planning, ou d'une correction. */
+      source: entry.source,
+      validatedBy: entry.validatedBy
+        ? `${entry.validatedBy.lastName.toUpperCase()} ${entry.validatedBy.firstName}`
+        : null,
+      locked: entry.status === 'VALIDATED' || entry.status === 'LOCKED',
+    });
 
     const days = Array.from({ length: 7 }, (_, i) => {
       const date = addDays(from, i);
       const key = iso(date);
-      const entry = byDate.get(key);
+      const dayEntries = (byDate.get(key) ?? []).sort((a, b) =>
+        (a.mission?.number ?? '').localeCompare(b.mission?.number ?? ''),
+      );
+      const entry = dayEntries[0];
       const day = calendarByDate.get(key);
 
       const missions = assignments
@@ -359,22 +477,10 @@ export class TimesheetsService {
         weekday: date.getUTCDay(),
         isWorkingDay: day?.isWorkingDay ?? ![0, 6].includes(date.getUTCDay()),
         holidayLabel: day && !day.isWorkingDay ? day.label : null,
-        entry: entry
-          ? {
-              category: entry.category,
-              missionId: entry.missionId,
-              missionNumber: entry.mission?.number ?? null,
-              affairNumber: entry.affair?.number ?? null,
-              comment: entry.comment,
-              status: entry.status,
-              /** D'où vient cette journée : du planning, ou d'une correction. */
-              source: entry.source,
-              validatedBy: entry.validatedBy
-                ? `${entry.validatedBy.lastName.toUpperCase()} ${entry.validatedBy.firstName}`
-                : null,
-              locked: entry.status === 'VALIDATED' || entry.status === 'LOCKED',
-            }
-          : null,
+        /** Première ligne du jour — la seule, sauf journée partagée. */
+        entry: entry ? presentEntry(entry) : null,
+        /** Toutes les lignes du jour : une par intervention quand il y en a plusieurs. */
+        entries: dayEntries.map(presentEntry),
         /** Missions couvrant ce jour — pour corriger vers la bonne. */
         missions,
       };
@@ -428,7 +534,7 @@ export class TimesheetsService {
       }),
       this.prisma.mission.findMany({
         where: {
-          id: { in: days.map((d) => d.missionId).filter((id): id is string => Boolean(id)) },
+          id: { in: [...new Set(days.flatMap(missionsOf))] },
           deletedAt: null,
         },
         select: {
@@ -456,12 +562,13 @@ export class TimesheetsService {
         continue;
       }
 
+      const ids = missionsOf(day);
       const needsMission = MISSION_CATEGORIES.has(day.category);
-      if (needsMission && !day.missionId) {
+      if (needsMission && ids.length === 0) {
         errors.push({ field: day.date, message: 'Cette catégorie demande une mission.' });
         continue;
       }
-      if (!needsMission && day.missionId) {
+      if (!needsMission && ids.length > 0) {
         errors.push({
           field: day.date,
           message: 'Cette catégorie ne se rattache pas à une mission.',
@@ -481,8 +588,8 @@ export class TimesheetsService {
         continue;
       }
 
-      if (day.missionId) {
-        const mission = missionById.get(day.missionId);
+      for (const missionId of ids) {
+        const mission = missionById.get(missionId);
         if (!mission) {
           errors.push({ field: day.date, message: 'Mission introuvable.' });
           continue;
@@ -509,24 +616,33 @@ export class TimesheetsService {
     await this.prisma.$transaction(async (tx) => {
       for (const day of days) {
         const date = new Date(`${day.date}T00:00:00.000Z`);
-        const mission = day.missionId ? missionById.get(day.missionId) : null;
+        const ids = missionsOf(day);
+        const dayCost = await this.dailyCost(employeeId, date);
 
-        const data = {
-          category: day.category,
-          missionId: mission?.id ?? null,
-          affairId: mission?.affairId ?? null,
-          comment: day.comment?.trim() || null,
-          billable: day.category === 'MISSION_BILLABLE' && (mission?.billable ?? false),
-          dailyCostSnapshot: await this.dailyCost(employeeId, date),
-          source: 'MANUAL' as const,
-          status: 'DRAFT' as const,
-        };
+        // La correction remplace la journée entière : autant de lignes que
+        // d'interventions déclarées, à parts égales ; une seule sinon.
+        const targets = ids.length > 0 ? ids.map((id) => missionById.get(id) ?? null) : [null];
+        const slots = splitDay(targets.length, dayCost);
 
-        await tx.timesheetDay.upsert({
-          where: { employeeId_date: { employeeId, date } },
-          update: data,
-          create: { employeeId, date, ...data },
-        });
+        await tx.timesheetDay.deleteMany({ where: { employeeId, date } });
+
+        for (const [index, mission] of targets.entries()) {
+          await tx.timesheetDay.create({
+            data: {
+              employeeId,
+              date,
+              category: day.category,
+              missionId: mission?.id ?? null,
+              affairId: mission?.affairId ?? null,
+              comment: day.comment?.trim() || null,
+              billable: day.category === 'MISSION_BILLABLE' && (mission?.billable ?? false),
+              share: slots[index].share,
+              dailyCostSnapshot: slots[index].cost,
+              source: 'MANUAL',
+              status: 'DRAFT',
+            },
+          });
+        }
       }
     });
 
@@ -571,12 +687,21 @@ export class TimesheetsService {
 
     const { from, to } = monthRange(month);
 
-    const { count } = await this.prisma.timesheetDay.updateMany({
+    // Une journée partagée entre plusieurs interventions compte plusieurs
+    // lignes : on vise les lignes, on annonce des journées.
+    const pendingDays = await this.prisma.timesheetDay.findMany({
+      where: { employeeId, date: { gte: from, lte: to }, status: 'DRAFT' },
+      select: { date: true },
+      distinct: ['date'],
+    });
+
+    const { count: rows } = await this.prisma.timesheetDay.updateMany({
       where: { employeeId, date: { gte: from, lte: to }, status: 'DRAFT' },
       data: { status: 'VALIDATED', validatedById: user.employeeId, validatedAt: new Date() },
     });
+    const count = pendingDays.length;
 
-    if (count === 0) {
+    if (rows === 0) {
       throw new BadRequestException('Aucune journée à viser sur ce mois.');
     }
 
@@ -610,6 +735,7 @@ export class TimesheetsService {
         employeeId: true,
         category: true,
         source: true,
+        share: true,
         employee: {
           select: {
             matricule: true,
@@ -645,9 +771,11 @@ export class TimesheetsService {
         corrected: 0,
       };
 
-      entry.days += 1;
-      if (row.category === 'UNASSIGNED') entry.unassigned += 1;
-      if (row.source === 'MANUAL') entry.corrected += 1;
+      // Une journée partagée ne compte qu'une fois : on additionne les parts.
+      const share = Number(row.share);
+      entry.days = sumShares([entry.days, share]);
+      if (row.category === 'UNASSIGNED') entry.unassigned = sumShares([entry.unassigned, share]);
+      if (row.source === 'MANUAL') entry.corrected = sumShares([entry.corrected, share]);
       byEmployee.set(row.employeeId, entry);
     }
 

@@ -97,7 +97,26 @@ Demande → Planification → Affectation → Confirmation → OM émis → En c
 | En cours → Terminée | Inspecteur | `actualStartDate` et `actualEndDate` renseignés |
 | Terminée → Rapport remis | Système | Rapport `Émis` |
 
-**Contrôles de conflit automatiques** : double affectation · chevauchement de mission · congé/maladie · formation · certification expirée · véhicule déjà réservé.
+**Contrôles de conflit automatiques** : congé/maladie · formation · certification expirée · véhicule déjà réservé.
+
+### Plusieurs interventions le même jour
+
+Un inspecteur enchaîne souvent des interventions courtes dans la même journée — un palan le matin chez un client, une élingue l'après-midi chez un autre. Être déjà affecté à une autre mission ce jour-là **n'est donc pas un refus** : l'affectation passe, avec l'avertissement « Aussi sur la mission … ces jours-là : la journée sera partagée à parts égales entre les interventions ». Le chef de service voit ainsi ce qu'il empile, sans être bloqué.
+
+**Alerte au chef de service.** Celui qui affecte n'est pas toujours le chef de service : un chargé d'affaires peut empiler une intervention sans que le responsable de l'inspecteur le sache. Toute affectation qui crée une journée partagée envoie donc une notification « Journée partagée » au **chef de service de l'inspecteur**, et à celui du **service de la mission** s'il est différent. Elle nomme l'inspecteur, les missions, la date et l'auteur de l'affectation, et mène directement à la mission. L'auteur lui-même n'est pas notifié : il a vu l'avertissement à l'écran.
+
+**Règle de partage, retenue par I2S : à parts égales, sans saisie d'heures.** Deux interventions valent 0,5 journée chacune, trois valent un tiers. La règle s'applique partout où la journée compte :
+
+| Où | Effet |
+|---|---|
+| Pointage | une ligne par intervention, chacune portant sa part de journée (`share`) |
+| Coût | le coût journalier se partage dans la même proportion ; la dernière part absorbe l'arrondi, pour que la somme redonne exactement le coût du jour |
+| Productivité, jours non affectés, rentabilité | tout décompte de jours additionne les parts, jamais le nombre de lignes : une journée à deux interventions compte pour **une** journée |
+| Coût à terminaison | une journée future partagée entre deux missions ne coûte qu'une journée au total |
+| Planning | la case affiche « ×2 » ; le survol liste les interventions et leur part |
+| Correction manuelle | la journée peut être déclarée sur plusieurs missions à la fois ; elle se partage alors de la même façon |
+
+Une journée corrigée à la main, visée, ou déjà portée par un attachement n'est jamais régénérée — toutes ses lignes avec elle. La régénérer la détacherait, et elle pourrait être facturée deux fois.
 
 ---
 
@@ -229,9 +248,29 @@ Seules les journées qui remplissent **les trois conditions** :
 2. **facturables** — une journée d'intervention non facturable (reprise, geste commercial) n'y a pas sa place ;
 3. **non déjà attachées** — le rattachement d'une journée à une ligne d'attachement est ce qui empêche de la facturer deux fois.
 
-Les journées sont regroupées **par mission** : c'est ce que le client reconnaît sur le terrain. Le prix unitaire vient du barème de l'affaire (`AffairRate`, par type de prestation), à défaut de son prix de journée. Sans prix connu, l'attachement est refusé plutôt que créé à zéro.
+Les journées sont regroupées **par mission** : c'est ce que le client reconnaît sur le terrain.
 
-L'écran de préparation montre le détail **avant** de rien figer, et laisse ajuster le prix ligne par ligne.
+### Ce qui se facture : selon le bon de commande
+
+Le bon de commande de chaque affaire fixe **comment** la prestation se paie. Le mode et le prix unitaire se saisissent sur la fiche de l'affaire (« Renseigner le bon de commande »), souvent après l'acceptation de l'offre puisque le BC arrive après elle.
+
+| Mode | Quantité facturée par mission |
+|---|---|
+| **À la vacation** (défaut) | les journées passées, demi-journées comprises — une intervention partagée avec une autre vaut 0,5 |
+| **À l'intervention** | chaque jour où la mission a eu lieu compte 1, même si la journée était partagée |
+| **À l'unité** | le nombre d'équipements contrôlés, compté sur les rapports d'inspection soumis de la période ; s'il n'y en a pas, la quantité se saisit à la main |
+| **Au forfait** | 1 par mission, une seule fois : une mission déjà portée sur un attachement ne se refacture pas |
+
+Le prix vient, dans l'ordre : du barème de la prestation (`AffairRate`, qui peut aussi fixer sa propre unité), du **prix unitaire du BC**, puis — à la vacation seulement — de l'ancien prix de journée de l'affaire.
+
+Chaque ligne d'attachement garde **deux** grandeurs distinctes : le **temps passé** (en journées, pour la productivité) et la **quantité facturée** (dans l'unité du BC). La facture reprend la quantité facturée et son unité.
+
+| Situation | Refus |
+|---|---|
+| À l'unité, aucun équipement compté ni saisi | Indiquez le nombre d'équipements contrôlés sur cette mission |
+| Aucun prix connu pour une ligne à facturer | Prix unitaire manquant : renseignez le bon de commande ou saisissez-le ici |
+
+L'écran de préparation montre le détail **avant** de rien figer, et laisse ajuster le prix et la quantité ligne par ligne.
 
 ---
 

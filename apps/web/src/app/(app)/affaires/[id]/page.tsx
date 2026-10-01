@@ -2,7 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import type { ReportStatus } from '@i2s/contracts';
-import { ApiError, api } from '@/lib/api';
+import { can } from '@i2s/contracts';
+import { ApiError, api, requireSession } from '@/lib/api';
+import {
+  AffairPurchaseOrderForm,
+  BILLING_UNIT_OPTIONS,
+  type BillingUnitValue,
+} from '@/components/affair-po-form';
 import {
   AFFAIR_COMMERCIAL_LABELS,
   AFFAIR_WORKS_LABELS,
@@ -67,6 +73,9 @@ interface AffairDetail {
   poNumber: string | null;
   offerAmountHT: string | null;
   poAmountHT: string | null;
+  /** Mode de facturation prévu au bon de commande. */
+  billingUnit: BillingUnitValue;
+  poUnitPrice: string | null;
   observation: string | null;
   creationDate: string | null;
   client: { name: string; code: string; paymentTerms: number };
@@ -138,8 +147,10 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
 
   let detail: AffairDetail;
+  let session: Awaited<ReturnType<typeof requireSession>>;
   try {
     detail = await api<AffairDetail>(`/affairs/${id}`);
+    session = await requireSession();
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
@@ -280,6 +291,16 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
               <dd className="ref text-[12.5px]">
                 {detail.poNumber ?? '—'}
               </dd>
+              <dt className="text-muted">Facturation (BC)</dt>
+              <dd>
+                {BILLING_UNIT_OPTIONS.find((o) => o.value === detail.billingUnit)?.label ?? '—'}
+                {detail.poUnitPrice !== null && (
+                  <span className="tnum ref ml-2 text-[12.5px] text-muted">
+                    {moneyDh(detail.poUnitPrice)} par{' '}
+                    {BILLING_UNIT_OPTIONS.find((o) => o.value === detail.billingUnit)?.unit}
+                  </span>
+                )}
+              </dd>
               <dt className="text-muted">Date de création</dt>
               <dd>{date(detail.creationDate)}</dd>
               <dt className="text-muted">Délai de paiement</dt>
@@ -291,6 +312,19 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
                 </>
               )}
             </dl>
+            {can(session.permissions as Parameters<typeof can>[0], 'affair', 'UPDATE') && (
+              <div className="mt-3">
+                <AffairPurchaseOrderForm
+                  affairId={detail.id}
+                  initial={{
+                    poNumber: detail.poNumber,
+                    poAmountHT: detail.poAmountHT === null ? null : Number(detail.poAmountHT),
+                    billingUnit: detail.billingUnit,
+                    poUnitPrice: detail.poUnitPrice === null ? null : Number(detail.poUnitPrice),
+                  }}
+                />
+              </div>
+            )}
           </div>
         </Card>
 

@@ -47,6 +47,9 @@ const affairSchema = z.object({
   offerAmountHT: z.coerce.number().min(0).optional().nullable(),
   poAmountHT: z.coerce.number().min(0).optional().nullable(),
   poNumber: z.string().trim().max(80).optional().or(z.literal('')),
+  /** Comment le bon de commande fait payer la prestation. */
+  billingUnit: z.enum(['VACATION', 'INTERVENTION', 'UNIT', 'FIXED']).optional(),
+  poUnitPrice: z.coerce.number().min(0).optional().nullable(),
   commercialStatus: z.enum(COMMERCIAL_STATUSES).optional(),
   worksStatus: z.enum(WORKS_STATUSES).optional(),
   physicalFileOpened: z.boolean().optional(),
@@ -132,8 +135,8 @@ class AffairsController {
       this.prisma.timesheetDay.groupBy({
         by: ['affairId'],
         where: { affairId: { in: ids } },
-        _sum: { dailyCostSnapshot: true },
-        _count: true,
+        // Jours = somme des parts : une journée partagée ne compte qu'une fois.
+        _sum: { dailyCostSnapshot: true, share: true },
       }),
     ]);
 
@@ -141,7 +144,7 @@ class AffairsController {
     const labourBy = new Map(
       labour.map((l) => [
         l.affairId,
-        { cost: Number(l._sum.dailyCostSnapshot ?? 0), days: l._count },
+        { cost: Number(l._sum.dailyCostSnapshot ?? 0), days: Number(l._sum.share ?? 0) },
       ]),
     );
 

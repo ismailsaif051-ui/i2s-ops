@@ -2,7 +2,7 @@ import { Body, Controller, Get, Module, Param, Post, Query, Req } from '@nestjs/
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { BillingService } from './billing.service';
+import { BILLING_UNIT_LABELS, BillingService, type BillingUnit } from './billing.service';
 import { AffairsModule } from '../affairs/affairs.module';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -20,6 +20,8 @@ const attachmentSchema = z.object({
   periodEnd: z.coerce.date(),
   /** Prix unitaire par mission, quand le barème de l'affaire ne suffit pas. */
   rates: z.record(z.string().uuid(), z.coerce.number().positive()).optional(),
+  /** Quantité par mission, quand elle ne se déduit pas — à l'unité surtout. */
+  quantities: z.record(z.string().uuid(), z.coerce.number().min(0)).optional(),
 });
 
 const invoiceSchema = z.object({
@@ -82,6 +84,9 @@ class AttachmentsController {
         designation: l.designation,
         mission: l.mission?.number ?? null,
         days: Number(l.days),
+        unit: l.unit,
+        unitLabel: BILLING_UNIT_LABELS[l.unit as BillingUnit].unit,
+        quantity: Number(l.quantity),
         unitRate: Number(l.unitRate),
         amountHT: Number(l.amountHT),
       })),

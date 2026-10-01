@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../rbac/scope.service';
 import { REPORT_SCOPE, isOnTime } from '../reports/reports.service';
 import type { RequestUser } from '../common/types';
+import { sumShares } from '../timesheets/day-split';
 
 /** Statuts d'attachement qui valorisent une journée comme « facturée ». */
 const BILLED_STATUSES = ['VALIDATED', 'BILLABLE', 'INVOICED'] as const;
@@ -78,6 +79,7 @@ export class AnalyticsService {
       select: {
         employeeId: true,
         category: true,
+        share: true,
         dailyCostSnapshot: true,
         employee: {
           select: {
@@ -122,8 +124,11 @@ export class AnalyticsService {
           billedDays: 0,
         };
 
+      // Une journée partagée entre plusieurs interventions compte une fois :
+      // chaque ligne n'en porte que sa part.
       const category = day.category as TimesheetCategory;
-      entry.counts[category] = (entry.counts[category] ?? 0) + 1;
+      const share = Number(day.share);
+      entry.counts[category] = sumShares([entry.counts[category] ?? 0, share]);
 
       const cost = Number(day.dailyCostSnapshot ?? 0);
       entry.facts.push({ category, dailyCost: cost });
@@ -131,7 +136,7 @@ export class AnalyticsService {
       const billed = day.attachmentLines.some((line) =>
         (BILLED_STATUSES as readonly string[]).includes(line.attachmentSheet.status),
       );
-      if (billed) entry.billedDays += 1;
+      if (billed) entry.billedDays = sumShares([entry.billedDays, share]);
 
       byEmployee.set(day.employeeId, entry);
     }
@@ -330,8 +335,7 @@ export class AnalyticsService {
     const [labour, expenses, invoices, pendingAttachments, missionDays] = await Promise.all([
       this.prisma.timesheetDay.aggregate({
         where: { affairId },
-        _sum: { dailyCostSnapshot: true },
-        _count: true,
+        _sum: { dailyCostSnapshot: true, share: true },
       }),
       this.prisma.expenseLine.aggregate({
         where: { affairId, status: 'ACCEPTED' },
@@ -404,7 +408,7 @@ export class AnalyticsService {
         dailyRate: affair.dailyRate ? Number(affair.dailyRate) : null,
       },
       profitability: result,
-      consumedDays: labour._count,
+      consumedDays: Number(labour._sum.share ?? 0),
       budgetLines: affair.budgetLines.map((b) => ({
         category: b.category,
         planned: Number(b.plannedAmount),
@@ -442,8 +446,7 @@ export class AnalyticsService {
       this.prisma.timesheetDay.groupBy({
         by: ['affairId'],
         where: { affairId: { in: ids } },
-        _sum: { dailyCostSnapshot: true },
-        _count: true,
+        _sum: { dailyCostSnapshot: true, share: true },
       }),
       this.prisma.expenseLine.groupBy({
         by: ['affairId'],
@@ -462,7 +465,10 @@ export class AnalyticsService {
     ]);
 
     const labourBy = new Map(
-      labour.map((l) => [l.affairId, { cost: Number(l._sum.dailyCostSnapshot ?? 0), days: l._count }]),
+      labour.map((l) => [
+        l.affairId,
+        { cost: Number(l._sum.dailyCostSnapshot ?? 0), days: Number(l._sum.share ?? 0) },
+      ]),
     );
     const expenseBy = new Map(expenses.map((e) => [e.affairId, Number(e._sum.amount ?? 0)]));
     const pendingBy = new Map(pending.map((p) => [p.affairId, Number(p._sum.totalHT ?? 0)]));

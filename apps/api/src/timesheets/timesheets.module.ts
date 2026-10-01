@@ -32,6 +32,8 @@ const correctSchema = z.object({
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date attendue au format AAAA-MM-JJ.'),
         category: z.enum(TIMESHEET_CATEGORIES),
         missionId: z.string().uuid().nullable().optional(),
+        // Plusieurs interventions le même jour : la journée se partage.
+        missionIds: z.array(z.string().uuid()).max(10).nullable().optional(),
         comment: z.string().trim().max(500).nullable().optional(),
       }),
     )

@@ -50,7 +50,11 @@ interface AttachmentDetail {
     id: string;
     designation: string;
     mission: string | null;
+    /** Temps passé, en journées. */
     days: number;
+    /** Ce qui est facturé, dans l'unité du bon de commande. */
+    quantity: number;
+    unitLabel: string;
     unitRate: number;
     amountHT: number;
   }>;
@@ -130,7 +134,8 @@ export default async function AttachmentPage({ params }: { params: Promise<{ id:
               <tr>
                 <Th>Prestation</Th>
                 <Th>Mission</Th>
-                <Th align="right">Jours</Th>
+                <Th align="right">Temps passé</Th>
+                <Th align="right">Quantité facturée</Th>
                 <Th align="right">Prix unitaire</Th>
                 <Th align="right">Montant HT</Th>
               </tr>
@@ -141,7 +146,11 @@ export default async function AttachmentPage({ params }: { params: Promise<{ id:
                   <Td>{line.designation}</Td>
                   <Td mono>{line.mission ?? dash}</Td>
                   <Td mono align="right">
-                    {line.days}
+                    {line.days.toLocaleString('fr-FR')} j
+                  </Td>
+                  <Td mono align="right">
+                    {line.quantity.toLocaleString('fr-FR')}{' '}
+                    <span className="text-[12px] text-subtle">{line.unitLabel}</span>
                   </Td>
                   <Td mono align="right">
                     {money(line.unitRate)}
@@ -155,8 +164,9 @@ export default async function AttachmentPage({ params }: { params: Promise<{ id:
                 <Td />
                 <Td />
                 <Td mono align="right">
-                  <span className="font-medium">{days}</span>
+                  <span className="font-medium">{days.toLocaleString('fr-FR')} j</span>
                 </Td>
+                <Td />
                 <Td />
                 <Td mono align="right">
                   <span className="font-medium">{money(sheet.totalHT)}</span>

@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { ScopeService } from '../rbac/scope.service';
 import { AffairsService } from '../affairs/affairs.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { renderMissionOrderPdf } from './mission-order-pdf';
 import type { RequestUser, ScopeDescriptor } from '../common/types';
 
@@ -29,6 +30,8 @@ export interface ConflictReport {
   message: string;
   /** Un conflit bloquant interdit l'affectation ; les autres l'accompagnent. */
   blocking: boolean;
+  /** Journée partagée : l'autre mission de l'inspecteur ces jours-là. */
+  otherMission?: { id: string; number: string };
 }
 
 export interface MissionInput {
@@ -57,6 +60,7 @@ export class MissionsService {
     private readonly numbering: NumberingService,
     private readonly scope: ScopeService,
     private readonly affairs: AffairsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /* ── Lecture ──────────────────────────────────────────────────── */
@@ -204,11 +208,14 @@ export class MissionsService {
   /**
    * Remplace l'équipe d'une mission après contrôle de disponibilité.
    *
-   * Trois refus, tous vérifiés au serveur : personne n'est sur deux missions
-   * le même jour, personne n'est affecté pendant un congé accordé, et personne
-   * n'intervient avec une certification périmée à la date d'intervention.
-   * Ce dernier point n'est pas une commodité : un rapport signé par un
-   * inspecteur non certifié n'est pas opposable.
+   * Deux refus, vérifiés au serveur : personne n'est affecté pendant un congé
+   * accordé, et personne n'intervient avec une certification périmée à la
+   * date d'intervention. Ce dernier point n'est pas une commodité : un rapport
+   * signé par un inspecteur non certifié n'est pas opposable.
+   *
+   * Être déjà sur une autre mission le même jour n'est PAS un refus : un
+   * inspecteur enchaîne souvent plusieurs interventions courtes dans la
+   * journée, qui se partage alors à parts égales. C'est un avertissement.
    */
   async assign(
     user: RequestUser,
@@ -289,7 +296,93 @@ export class MissionsService {
       { user, ...ctx },
     );
 
+    await this.alertSharedDays(user, mission, conflicts);
+
     return { conflicts };
+  }
+
+  /**
+   * Prévient les chefs de service d'une deuxième intervention le même jour.
+   *
+   * Affecter un inspecteur à deux missions le même jour est permis — la
+   * journée se partage à parts égales. Mais celui qui affecte n'est pas
+   * toujours le chef de service : un chargé d'affaires peut empiler une
+   * intervention sans que le responsable de l'inspecteur le sache. Le chef de
+   * service de l'inspecteur est donc prévenu, et celui du service de la
+   * mission s'il est différent. Pas l'auteur de l'affectation : il a vu
+   * l'avertissement à l'écran.
+   */
+  private async alertSharedDays(
+    user: RequestUser,
+    mission: {
+      id: string;
+      number: string;
+      plannedStartDate: Date | null;
+      plannedEndDate: Date | null;
+      departmentId: string | null;
+    },
+    conflicts: ConflictReport[],
+  ) {
+    const shared = conflicts.filter((c) => c.kind === 'DOUBLE_BOOKING' && c.otherMission);
+    if (shared.length === 0) return;
+
+    const employeeIds = [...new Set(shared.map((c) => c.employeeId))];
+    const [employees, missionDepartment, actor] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: { id: { in: employeeIds } },
+        select: {
+          id: true,
+          department: { select: { manager: { select: { id: true, user: { select: { id: true } } } } } },
+        },
+      }),
+      mission.departmentId
+        ? this.prisma.department.findUnique({
+            where: { id: mission.departmentId },
+            select: { manager: { select: { id: true, user: { select: { id: true } } } } },
+          })
+        : Promise.resolve(null),
+      user.employeeId
+        ? this.prisma.employee.findUnique({
+            where: { id: user.employeeId },
+            select: { firstName: true, lastName: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const by = actor ? `${actor.lastName.toUpperCase()} ${actor.firstName}` : 'un utilisateur';
+    const period =
+      mission.plannedStartDate && mission.plannedEndDate
+        ? iso(mission.plannedStartDate) === iso(mission.plannedEndDate)
+          ? `le ${fr(mission.plannedStartDate)}`
+          : `du ${fr(mission.plannedStartDate)} au ${fr(mission.plannedEndDate)}`
+        : 'sur la même période';
+
+    for (const employee of employees) {
+      const links = shared.filter((c) => c.employeeId === employee.id);
+      const name = links[0].employee;
+      const others = [...new Set(links.map((c) => c.otherMission!.number))].join(', ');
+
+      // Chef du service de l'inspecteur, puis chef du service de la mission.
+      const recipients = new Set<string>();
+      for (const manager of [employee.department?.manager, missionDepartment?.manager]) {
+        const userId = manager?.user?.id;
+        if (userId && userId !== user.id) recipients.add(userId);
+      }
+      if (recipients.size === 0) continue;
+
+      await this.notifications.notifyMany([...recipients], {
+        type: 'MISSION_SHARED_DAY',
+        level: 'warning',
+        title: `Deuxième intervention le même jour — ${name}`,
+        body: `${name} vient d’être affecté à la mission ${mission.number} ${period}, alors qu’il est déjà sur ${others}. La journée sera partagée à parts égales entre les interventions. Affectation faite par ${by}.`,
+        link: `/operations/missions/${mission.id}`,
+        payload: {
+          missionId: mission.id,
+          employeeId: employee.id,
+          otherMissions: links.map((c) => c.otherMission),
+        },
+      });
+    }
   }
 
   /* ── Contrôle de disponibilité ────────────────────────────────── */
@@ -331,7 +424,7 @@ export class MissionsService {
             plannedEndDate: { gte: from },
           },
         },
-        include: { mission: { select: { number: true, plannedStartDate: true } } },
+        include: { mission: { select: { id: true, number: true, plannedStartDate: true } } },
       }),
       this.prisma.leaveRequest.findMany({
         where: {
@@ -354,13 +447,19 @@ export class MissionsService {
     const inspectors = new Set(employees.filter((e) => e.isInspector).map((e) => e.id));
     const conflicts: ConflictReport[] = [];
 
+    // Plusieurs interventions le même jour sont normales chez I2S — un palan
+    // le matin, une élingue l'après-midi. Ce n'est donc plus un refus : la
+    // journée se partagera à parts égales entre les missions. Le chef de
+    // service est prévenu, pour ne pas empiler par erreur deux interventions
+    // longues sur les mêmes jours.
     for (const link of overlapping) {
       conflicts.push({
         employeeId: link.employeeId,
         employee: nameOf.get(link.employeeId) ?? link.employeeId,
         kind: 'DOUBLE_BOOKING',
-        message: `Déjà affecté à la mission ${link.mission.number} sur la même période.`,
-        blocking: true,
+        message: `Aussi sur la mission ${link.mission.number} ces jours-là : la journée sera partagée à parts égales entre les interventions.`,
+        blocking: false,
+        otherMission: { id: link.mission.id, number: link.mission.number },
       });
     }
 
@@ -649,4 +748,9 @@ export class MissionsService {
 
 function fr(date: Date): string {
   return date.toLocaleDateString('fr-FR');
+}
+
+/** Date au format AAAA-MM-JJ, pour comparer deux jours. */
+function iso(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }

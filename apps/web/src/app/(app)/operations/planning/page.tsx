@@ -24,6 +24,14 @@ interface Cell {
   clientName: string | null;
   siteName: string | null;
   billable: boolean;
+  /** Toutes les interventions du jour — la journée se partage entre elles. */
+  missions: Array<{
+    missionNumber: string;
+    affairNumber: string;
+    clientName: string;
+    siteName: string | null;
+    share: number;
+  }>;
   conflicts: ConflictKind[];
 }
 
@@ -48,7 +56,8 @@ interface Planning {
 }
 
 const CONFLICT_LABELS: Record<ConflictKind, string> = {
-  DOUBLE_BOOKING: 'Double affectation',
+  // Plus un conflit : plusieurs interventions le même jour sont normales.
+  DOUBLE_BOOKING: 'Plusieurs missions ce jour-là',
   LEAVE_OVERLAP: 'Mission posée sur un congé',
   EXPIRED_CERTIFICATION: 'Certification expirée à cette date',
 };
@@ -191,10 +200,20 @@ export default async function PlanningPage({
 
                     {row.cells.map((cell) => {
                       const style = cellStyle(cell);
+                      const shared = cell.missions.length > 1;
                       const tooltip = [
                         style.label,
-                        cell.missionNumber && `${cell.missionNumber} — ${cell.clientName ?? ''}`,
-                        cell.siteName,
+                        ...(cell.missions.length > 0
+                          ? cell.missions.map(
+                              (m) =>
+                                `${m.missionNumber} — ${m.clientName}${m.siteName ? ` (${m.siteName})` : ''}${
+                                  shared ? ` · ${Math.round(m.share * 100)} % de la journée` : ''
+                                }`,
+                            )
+                          : [
+                              cell.missionNumber && `${cell.missionNumber} — ${cell.clientName ?? ''}`,
+                              cell.siteName,
+                            ]),
                         ...cell.conflicts.map((c) => `⚠ ${CONFLICT_LABELS[c]}`),
                       ]
                         .filter(Boolean)
@@ -210,7 +229,9 @@ export default async function PlanningPage({
                               ? '⚠'
                               : cell.category === 'MISSION_BILLABLE' ||
                                   cell.category === 'MISSION_NON_BILLABLE'
-                                ? (cell.affairNumber?.split('/')[1] ?? '●')
+                                ? shared
+                                  ? `×${cell.missions.length}`
+                                  : (cell.affairNumber?.split('/')[1] ?? '●')
                                 : ''}
                           </span>
                         </td>
@@ -256,7 +277,9 @@ export default async function PlanningPage({
       </div>
 
       <p className="mt-4 max-w-[74ch] text-[13.5px] text-subtle">
-        Le chiffre inscrit dans une case de mission est le numéro d’ordre de l’affaire. Le
+        Le chiffre inscrit dans une case de mission est le numéro d’ordre de l’affaire ; « ×2 »
+        signale deux interventions le même jour, qui se partagent la journée à parts égales
+        (survolez la case pour les voir). Le
         glisser-déposer pour affecter arrive avec l’écran de mission ; pour l’instant la grille est
         en lecture, et sert à repérer les trous et les conflits.
       </p>

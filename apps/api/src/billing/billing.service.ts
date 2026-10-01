@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
 import { AffairsService } from '../affairs/affairs.service';
 import type { RequestUser } from '../common/types';
+import { sumShares } from '../timesheets/day-split';
 
 /** Taux de TVA par défaut au Maroc, ajustable par affaire à la facturation. */
 const DEFAULT_VAT_RATE = 20;
@@ -12,12 +13,75 @@ export interface PreparedLine {
   missionId: string | null;
   missionNumber: string | null;
   designation: string;
+  /** Temps réellement passé, en journées (parts comprises). */
   days: number;
+  /** Unité de facturation prévue au bon de commande. */
+  unit: BillingUnit;
+  /** Ce qui est facturé, dans cette unité. */
+  quantity: number;
+  /** Pourquoi la quantité est nulle ou à confirmer — affiché à l'écran. */
+  quantityNote: string | null;
   /** Prix unitaire retenu, et d'où il vient. */
   unitRate: number | null;
-  rateSource: 'AFFAIR_RATE' | 'AFFAIR_DAILY_RATE' | 'MISSING';
+  rateSource: 'AFFAIR_RATE' | 'PO_UNIT_PRICE' | 'AFFAIR_DAILY_RATE' | 'MISSING';
   amountHT: number;
   timesheetDayIds: string[];
+}
+
+export const BILLING_UNITS = ['VACATION', 'INTERVENTION', 'UNIT', 'FIXED'] as const;
+export type BillingUnit = (typeof BILLING_UNITS)[number];
+
+/** Libellés des unités, tels qu'ils figurent sur l'attachement et la facture. */
+export const BILLING_UNIT_LABELS: Record<BillingUnit, { name: string; unit: string }> = {
+  VACATION: { name: 'À la vacation', unit: 'vacation(s)' },
+  INTERVENTION: { name: 'À l’intervention', unit: 'intervention(s)' },
+  UNIT: { name: 'À l’unité (équipement contrôlé)', unit: 'équipement(s)' },
+  FIXED: { name: 'Au forfait', unit: 'forfait' },
+};
+
+/**
+ * L'unité d'un barème d'affaire, saisie en texte libre à l'origine
+ * (« vacation », « forfait »…), ramenée aux quatre unités connues.
+ */
+export function unitFromRate(raw: string | null | undefined): BillingUnit | null {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (!value) return null;
+  if (value.startsWith('vac') || value.startsWith('jour') || value === 'day') return 'VACATION';
+  if (value.startsWith('interv')) return 'INTERVENTION';
+  if (value.startsWith('unit') || value.startsWith('équip') || value.startsWith('equip')) return 'UNIT';
+  if (value.startsWith('forf') || value === 'fixed') return 'FIXED';
+  return null;
+}
+
+/**
+ * Ce que le client paie pour une mission, selon son bon de commande.
+ *
+ *   - à la vacation     : les journées passées, demi-journées comprises ;
+ *   - à l'intervention  : chaque jour où la mission a eu lieu compte 1 ;
+ *   - à l'unité         : le nombre d'équipements contrôlés ;
+ *   - au forfait        : une fois par mission, jamais deux.
+ */
+export function billedQuantity(
+  unit: BillingUnit,
+  input: { days: number; interventionDays: number; equipments: number; alreadyBilled: boolean },
+): { quantity: number; note: string | null } {
+  switch (unit) {
+    case 'VACATION':
+      return { quantity: input.days, note: null };
+    case 'INTERVENTION':
+      return { quantity: input.interventionDays, note: null };
+    case 'UNIT':
+      return input.equipments > 0
+        ? { quantity: input.equipments, note: null }
+        : {
+            quantity: 0,
+            note: 'Aucun rapport d’inspection enregistré sur la période : indiquez le nombre d’équipements contrôlés.',
+          };
+    case 'FIXED':
+      return input.alreadyBilled
+        ? { quantity: 0, note: 'Forfait déjà porté sur un attachement précédent.' }
+        : { quantity: 1, note: null };
+  }
 }
 
 @Injectable()
@@ -64,46 +128,108 @@ export class BillingService {
       orderBy: { date: 'asc' },
     });
 
-    const rates = await this.prisma.affairRate.findMany({
-      where: { affairId, validFrom: { lte: to } },
-      orderBy: { validFrom: 'desc' },
-    });
-    const fallback = affair.dailyRate === null ? null : Number(affair.dailyRate);
+    const missionIds = [
+      ...new Set(days.map((d) => d.missionId).filter((id): id is string => Boolean(id))),
+    ];
+
+    const [rates, inspections, billedBefore] = await Promise.all([
+      this.prisma.affairRate.findMany({
+        where: { affairId, validFrom: { lte: to } },
+        orderBy: { validFrom: 'desc' },
+      }),
+      // À l'unité : un rapport d'inspection soumis = un équipement contrôlé.
+      this.prisma.inspection.groupBy({
+        by: ['missionId'],
+        where: {
+          missionId: { in: missionIds },
+          date: { gte: from, lte: to },
+          status: { in: ['SUBMITTED', 'ACCEPTED'] },
+        },
+        _count: { _all: true },
+      }),
+      // Au forfait : une mission déjà portée sur un attachement ne se refacture pas.
+      this.prisma.attachmentLine.findMany({
+        where: { missionId: { in: missionIds } },
+        select: { missionId: true },
+        distinct: ['missionId'],
+      }),
+    ]);
+
+    const equipmentsBy = new Map(inspections.map((i) => [i.missionId, i._count._all]));
+    const alreadyBilled = new Set(billedBefore.map((b) => b.missionId));
+    const poUnitPrice = affair.poUnitPrice === null ? null : Number(affair.poUnitPrice);
+    const dailyRate = affair.dailyRate === null ? null : Number(affair.dailyRate);
 
     // Une ligne par mission : c'est ce que le client reconnaît sur le terrain.
-    const byMission = new Map<string, PreparedLine>();
+    const byMission = new Map<string, PreparedLine & { dates: Set<string> }>();
 
     for (const day of days) {
       const key = day.missionId ?? 'sans-mission';
       const serviceType = day.mission?.serviceType ?? null;
+      const rate = serviceType ? (rates.find((r) => r.serviceType === serviceType) ?? null) : null;
 
-      const rate = serviceType
-        ? (rates.find((r) => r.serviceType === serviceType) ?? null)
-        : null;
-      const unitRate = rate ? Number(rate.unitPrice) : fallback;
+      // L'unité suit le barème de la prestation s'il en fixe une, sinon le
+      // bon de commande de l'affaire.
+      const unit: BillingUnit = unitFromRate(rate?.unit) ?? (affair.billingUnit as BillingUnit);
+
+      // Le prix : barème de la prestation, puis prix unitaire du BC, puis —
+      // à la vacation seulement — l'ancien taux journalier de l'affaire.
+      const unitRate = rate
+        ? Number(rate.unitPrice)
+        : poUnitPrice !== null
+          ? poUnitPrice
+          : unit === 'VACATION'
+            ? dailyRate
+            : null;
+      const rateSource: PreparedLine['rateSource'] = rate
+        ? 'AFFAIR_RATE'
+        : poUnitPrice !== null
+          ? 'PO_UNIT_PRICE'
+          : unit === 'VACATION' && dailyRate !== null
+            ? 'AFFAIR_DAILY_RATE'
+            : 'MISSING';
 
       const line =
         byMission.get(key) ??
-        ({
+        {
           missionId: day.missionId,
           missionNumber: day.mission?.number ?? null,
           designation: day.mission
             ? `${day.mission.number} — ${day.mission.objective ?? 'intervention'}`
             : 'Journées rattachées à l’affaire',
           days: 0,
+          unit,
+          quantity: 0,
+          quantityNote: null,
           unitRate,
-          rateSource: rate ? 'AFFAIR_RATE' : fallback !== null ? 'AFFAIR_DAILY_RATE' : 'MISSING',
+          rateSource,
           amountHT: 0,
           timesheetDayIds: [],
-        } satisfies PreparedLine);
+          dates: new Set<string>(),
+        };
 
-      line.days += 1;
+      // Une journée partagée entre plusieurs interventions n'apporte que sa part.
+      line.days = sumShares([line.days, Number(day.share)]);
+      line.dates.add(iso(day.date));
       line.timesheetDayIds.push(day.id);
-      line.amountHT = line.unitRate === null ? 0 : round(line.days * line.unitRate);
       byMission.set(key, line);
     }
 
-    const lines = [...byMission.values()].sort((a, b) =>
+    for (const line of byMission.values()) {
+      const { quantity, note } = billedQuantity(line.unit, {
+        days: line.days,
+        interventionDays: line.dates.size,
+        equipments: line.missionId ? (equipmentsBy.get(line.missionId) ?? 0) : 0,
+        alreadyBilled: line.missionId ? alreadyBilled.has(line.missionId) : false,
+      });
+      line.quantity = quantity;
+      line.quantityNote = note;
+      line.amountHT = line.unitRate === null ? 0 : round(quantity * line.unitRate);
+    }
+
+    const lines: PreparedLine[] = [...byMission.values()]
+      .map(({ dates: _dates, ...line }) => line)
+      .sort((a, b) =>
       (a.missionNumber ?? '').localeCompare(b.missionNumber ?? ''),
     );
 
@@ -133,7 +259,14 @@ export class BillingService {
    */
   async createAttachment(
     user: RequestUser,
-    input: { affairId: string; periodStart: Date; periodEnd: Date; rates?: Record<string, number> },
+    input: {
+      affairId: string;
+      periodStart: Date;
+      periodEnd: Date;
+      rates?: Record<string, number>;
+      /** Quantité saisie à la main, par mission — à l'unité surtout. */
+      quantities?: Record<string, number>;
+    },
     ctx: { ip?: string | null; userAgent?: string | null },
   ) {
     if (input.periodEnd < input.periodStart) {
@@ -148,14 +281,37 @@ export class BillingService {
       );
     }
 
-    // Le prix vient de la saisie, sinon du barème de l'affaire.
+    // Le prix et la quantité viennent de la saisie, sinon du bon de commande.
     const lines = prepared.lines.map((line) => {
-      const override = line.missionId ? input.rates?.[line.missionId] : undefined;
-      const unitRate = override ?? line.unitRate;
-      return { ...line, unitRate, amountHT: unitRate === null ? 0 : round(line.days * unitRate) };
+      const rateOverride = line.missionId ? input.rates?.[line.missionId] : undefined;
+      const quantityOverride = line.missionId ? input.quantities?.[line.missionId] : undefined;
+      const unitRate = rateOverride ?? line.unitRate;
+      const quantity = quantityOverride ?? line.quantity;
+      return {
+        ...line,
+        unitRate,
+        quantity,
+        amountHT: unitRate === null ? 0 : round(quantity * unitRate),
+      };
     });
 
-    const missing = lines.filter((l) => l.unitRate === null || l.unitRate <= 0);
+    // À l'unité, une quantité nulle veut dire qu'on ne sait pas ce qui a été
+    // contrôlé : on ne facture pas zéro équipement par défaut.
+    const noQuantity = lines.filter((l) => l.unit === 'UNIT' && l.quantity <= 0);
+    if (noQuantity.length > 0) {
+      throw new BadRequestException({
+        message: 'Nombre d’équipements contrôlés manquant.',
+        errors: noQuantity.map((l) => ({
+          field: l.missionNumber ?? 'affaire',
+          message: 'Indiquez le nombre d’équipements contrôlés sur cette mission.',
+        })),
+      });
+    }
+
+    // Un forfait déjà facturé porte une quantité nulle, sans prix à réclamer.
+    const missing = lines.filter(
+      (l) => l.quantity > 0 && (l.unitRate === null || l.unitRate <= 0),
+    );
     if (missing.length > 0) {
       throw new BadRequestException({
         message: 'Prix unitaire manquant : renseignez le barème de l’affaire ou saisissez-le ici.',
@@ -191,7 +347,9 @@ export class BillingService {
             missionId: line.missionId,
             designation: line.designation,
             days: line.days,
-            unitRate: line.unitRate!,
+            unit: line.unit,
+            quantity: line.quantity,
+            unitRate: line.unitRate ?? 0,
             amountHT: line.amountHT,
             // Le rattachement des journées est ce qui empêche de les
             // facturer une seconde fois.
@@ -345,8 +503,8 @@ export class BillingService {
 
     const lines = sheets.flatMap((sheet) =>
       sheet.lines.map((line) => ({
-        designation: `${sheet.number} · ${line.designation}`,
-        quantity: Number(line.days),
+        designation: `${sheet.number} · ${line.designation} (${BILLING_UNIT_LABELS[line.unit as BillingUnit].unit})`,
+        quantity: Number(line.quantity),
         unitPrice: Number(line.unitRate),
         amountHT: Number(line.amountHT),
       })),
@@ -572,6 +730,8 @@ export class BillingService {
         companyId: true,
         clientId: true,
         dailyRate: true,
+        billingUnit: true,
+        poUnitPrice: true,
         client: { select: { name: true } },
       },
     });

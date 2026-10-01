@@ -383,8 +383,7 @@ export class ControllingService {
         date: { lt: limit },
         attachmentLines: { none: {} },
       },
-      _count: { _all: true },
-      _sum: { dailyCostSnapshot: true },
+      _sum: { dailyCostSnapshot: true, share: true },
     });
 
     const rows = days
@@ -394,7 +393,7 @@ export class ControllingService {
         return {
           reference: affair?.number ?? '—',
           affair: affair?.number ?? '—',
-          detail: `${d._count._all} journée(s) facturable(s) de plus de ${BILLING_LAG_DAYS} jours, sur aucun attachement — ${affair?.title ?? ''}`,
+          detail: `${formatDays(Number(d._sum.share ?? 0))} journée(s) facturable(s) de plus de ${BILLING_LAG_DAYS} jours, sur aucun attachement — ${affair?.title ?? ''}`,
           // À défaut du prix de vente, le coût donne l'ordre de grandeur perdu.
           amount: round(Number(d._sum.dailyCostSnapshot ?? 0)),
         };
@@ -531,8 +530,7 @@ export class ControllingService {
       where: {
         OR: closed.map((a) => ({ affairId: a.id, date: { gt: a.endDate! } })),
       },
-      _count: { _all: true },
-      _sum: { dailyCostSnapshot: true },
+      _sum: { dailyCostSnapshot: true, share: true },
     });
 
     const rows = days
@@ -542,7 +540,7 @@ export class ControllingService {
         return {
           reference: affair?.number ?? '—',
           affair: affair?.number ?? '—',
-          detail: `${d._count._all} journée(s) pointée(s) après la fin de l’affaire (${iso(affair?.endDate ?? null)})`,
+          detail: `${formatDays(Number(d._sum.share ?? 0))} journée(s) pointée(s) après la fin de l’affaire (${iso(affair?.endDate ?? null)})`,
           amount: round(Number(d._sum.dailyCostSnapshot ?? 0)),
         };
       });
@@ -651,7 +649,10 @@ export class ControllingService {
     });
 
     const employeeIds = [...new Set(missions.flatMap((m) => m.assignments.map((a) => a.employeeId)))];
-    const rates = await this.currentDailyCosts(employeeIds);
+    const [rates, load] = await Promise.all([
+      this.currentDailyCosts(employeeIds),
+      this.missionsPerDay(employeeIds),
+    ]);
 
     const result = new Map<string, Record<CostCategory, number>>();
     const at = (id: string) => {
@@ -660,17 +661,54 @@ export class ControllingService {
     };
 
     for (const m of missions) {
+      if (!m.plannedStartDate || !m.plannedEndDate) continue;
       const days = plannedDays(m.plannedStartDate, m.plannedEndDate);
       if (days <= 0) continue;
 
       const costs = at(m.affairId);
       for (const a of m.assignments) {
-        costs.LABOUR += (rates.get(a.employeeId) ?? 0) * days;
+        const rate = rates.get(a.employeeId) ?? 0;
+        // Un jour partagé avec d'autres missions ne coûte que sa part : deux
+        // interventions le même jour coûtent une journée, pas deux.
+        for (let d = 0; d < days; d += 1) {
+          const key = `${a.employeeId}|${iso(new Date(m.plannedStartDate.getTime() + d * 86_400_000))}`;
+          costs.LABOUR += rate / Math.max(1, load.get(key) ?? 1);
+        }
       }
       costs.VEHICLES += vehicleShare(m);
     }
 
     return result;
+  }
+
+  /**
+   * Nombre de missions prévues par intervenant et par jour, toutes affaires
+   * confondues — pour partager le coût d'une journée entre ses interventions.
+   */
+  private async missionsPerDay(employeeIds: string[]): Promise<Map<string, number>> {
+    if (employeeIds.length === 0) return new Map();
+
+    const assignments = await this.prisma.missionAssignment.findMany({
+      where: {
+        employeeId: { in: employeeIds },
+        mission: { deletedAt: null, status: { in: [...PLANNED_MISSIONS] } },
+      },
+      select: {
+        employeeId: true,
+        mission: { select: { plannedStartDate: true, plannedEndDate: true } },
+      },
+    });
+
+    const load = new Map<string, number>();
+    for (const a of assignments) {
+      const { plannedStartDate: start, plannedEndDate: end } = a.mission;
+      if (!start || !end) continue;
+      for (let t = start.getTime(); t <= end.getTime(); t += 86_400_000) {
+        const key = `${a.employeeId}|${iso(new Date(t))}`;
+        load.set(key, (load.get(key) ?? 0) + 1);
+      }
+    }
+    return load;
   }
 
   /**
@@ -772,6 +810,11 @@ function vehicleShare(mission: {
 function plannedDays(start: Date | null, end: Date | null): number {
   if (!start || !end) return 0;
   return Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+}
+
+/** Un nombre de journées, partagées comprises : « 3 », « 2,5 ». */
+function formatDays(days: number): string {
+  return (Math.round(days * 100) / 100).toLocaleString('fr-FR');
 }
 
 function round(value: number): number {

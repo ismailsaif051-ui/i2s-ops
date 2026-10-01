@@ -3,6 +3,7 @@ import { CATEGORY_LABELS, type TimesheetCategory } from '@i2s/calc';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../rbac/scope.service';
 import type { RequestUser } from '../common/types';
+import { sumShares } from '../timesheets/day-split';
 
 const TIMESHEET_SCOPE = {
   companyPath: 'employee.companyId',
@@ -27,6 +28,19 @@ export interface PlanningCell {
   clientName: string | null;
   siteName: string | null;
   billable: boolean;
+  /**
+   * Toutes les interventions du jour. Un inspecteur peut en enchaîner
+   * plusieurs : la journée se partage alors à parts égales.
+   */
+  missions: Array<{
+    missionId: string;
+    missionNumber: string;
+    affairNumber: string;
+    clientName: string;
+    siteName: string | null;
+    billable: boolean;
+    share: number;
+  }>;
   conflicts: ConflictKind[];
 }
 
@@ -93,6 +107,7 @@ export class PlanningService {
           date: true,
           category: true,
           billable: true,
+          share: true,
           mission: {
             select: {
               id: true,
@@ -161,10 +176,12 @@ export class PlanningService {
 
     /* ── Assemblage de la grille ──────────────────────────────── */
 
-    const dayByEmployee = new Map<string, Map<string, (typeof days)[number]>>();
+    // Une journée peut porter plusieurs lignes : une par intervention.
+    const dayByEmployee = new Map<string, Map<string, Array<(typeof days)[number]>>>();
     for (const d of days) {
-      const map = dayByEmployee.get(d.employeeId) ?? new Map();
-      map.set(toIso(d.date), d);
+      const map = dayByEmployee.get(d.employeeId) ?? new Map<string, Array<(typeof days)[number]>>();
+      const key = toIso(d.date);
+      map.set(key, [...(map.get(key) ?? []), d]);
       dayByEmployee.set(d.employeeId, map);
     }
 
@@ -184,11 +201,16 @@ export class PlanningService {
       let conflictCount = 0;
 
       const cells: PlanningCell[] = columns.map((column) => {
-        const punch = punches.get(column.date);
+        const punchesOfDay: Array<(typeof days)[number]> = (punches.get(column.date) ?? []).sort(
+          (a: (typeof days)[number], b: (typeof days)[number]) =>
+            (a.mission?.number ?? '').localeCompare(b.mission?.number ?? ''),
+        );
+        const punch = punchesOfDay[0];
         const missionsThatDay = bookings.get(column.date);
         const conflicts: ConflictKind[] = [];
 
-        if (missionsThatDay && missionsThatDay.size > 1) conflicts.push('DOUBLE_BOOKING');
+        // Plusieurs missions le même jour ne sont plus un conflit : la journée
+        // se partage. Seuls le congé et la certification périmée en restent un.
 
         const onLeave =
           punch?.category === 'LEAVE' || punch?.category === 'SICK' || punch?.category === 'TRAINING';
@@ -206,10 +228,15 @@ export class PlanningService {
         }
 
         if (conflicts.length > 0) conflictCount += 1;
-        if (punch?.category === 'MISSION_BILLABLE' || punch?.category === 'MISSION_NON_BILLABLE') {
-          workedDays += 1;
+        // Une journée partagée ne compte qu'une fois : on additionne les parts.
+        for (const row of punchesOfDay) {
+          if (row.category === 'MISSION_BILLABLE' || row.category === 'MISSION_NON_BILLABLE') {
+            workedDays = sumShares([workedDays, Number(row.share)]);
+          }
+          if (row.category === 'UNASSIGNED') {
+            unassignedDays = sumShares([unassignedDays, Number(row.share)]);
+          }
         }
-        if (punch?.category === 'UNASSIGNED') unassignedDays += 1;
 
         return {
           date: column.date,
@@ -222,6 +249,17 @@ export class PlanningService {
           clientName: punch?.mission?.affair.client.name ?? null,
           siteName: punch?.mission?.site?.name ?? null,
           billable: punch?.billable ?? false,
+          missions: punchesOfDay
+            .filter((row) => row.mission !== null)
+            .map((row) => ({
+              missionId: row.mission!.id,
+              missionNumber: row.mission!.number,
+              affairNumber: row.mission!.affair.number,
+              clientName: row.mission!.affair.client.name,
+              siteName: row.mission!.site?.name ?? null,
+              billable: row.billable,
+              share: Number(row.share),
+            })),
           conflicts,
         };
       });
@@ -282,6 +320,7 @@ export class PlanningService {
           date: true,
           category: true,
           status: true,
+          share: true,
           dailyCostSnapshot: true,
           mission: { select: { number: true } },
           affair: { select: { number: true } },
@@ -326,12 +365,21 @@ export class PlanningService {
           cost: 0,
         };
 
-      entry.cells.set(toIso(d.date), {
-        category: d.category,
-        status: d.status,
-        ref: d.mission?.number ?? d.affair?.number ?? null,
-      });
-      entry.counts[d.category] = (entry.counts[d.category] ?? 0) + 1;
+      // Journée partagée : la case garde la première intervention et annonce
+      // les suivantes (« MIS-26-0142 +1 »).
+      const key = toIso(d.date);
+      const ref = d.mission?.number ?? d.affair?.number ?? null;
+      const previous = entry.cells.get(key);
+      if (previous) {
+        const [first, extra] = (previous.ref ?? '').split(' +');
+        entry.cells.set(key, {
+          ...previous,
+          ref: `${first} +${(Number(extra) || 0) + 1}`,
+        });
+      } else {
+        entry.cells.set(key, { category: d.category, status: d.status, ref });
+      }
+      entry.counts[d.category] = sumShares([entry.counts[d.category] ?? 0, Number(d.share)]);
       if (d.category === 'UNASSIGNED') entry.cost += Number(d.dailyCostSnapshot ?? 0);
 
       byEmployee.set(d.employeeId, entry);

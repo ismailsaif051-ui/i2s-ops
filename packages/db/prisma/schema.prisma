@@ -529,6 +529,17 @@ model TimesheetDay {
   source     TimesheetSource   @default(PLAN)
   status     TimesheetStatus   @default(DRAFT)
 
+  /// Part de la journée portée par cette ligne.
+  ///
+  /// Un inspecteur peut faire plusieurs interventions dans la même journée :
+  /// la journée compte alors une ligne par mission, et se partage à parts
+  /// égales (deux interventions = 0,5 chacune). Une journée sans mission
+  /// (congé, formation, non affectée) n'a qu'une ligne, à 1. Tout décompte
+  /// de jours additionne cette part — jamais le nombre de lignes.
+  share Decimal @default(1) @db.Decimal(5, 4)
+
+  /// Coût imputé à CETTE ligne : coût journalier figé × part de la journée.
+  /// La somme des lignes d'un jour redonne exactement le coût du jour.
   dailyCostSnapshot Decimal?  @db.Decimal(12, 2)
   validatedById     String?
   validatedAt       DateTime?
@@ -542,7 +553,11 @@ model TimesheetDay {
   affair          Affair?          @relation(fields: [affairId], references: [id])
   attachmentLines AttachmentLine[]
 
-  @@unique([employeeId, date])
+  /// Une ligne par mission et par jour. L'unicité d'une journée SANS mission
+  /// (missionId nul) est tenue par le service de pointage : PostgreSQL ne
+  /// compare pas les valeurs nulles entre elles.
+  @@unique([employeeId, date, missionId])
+  @@index([employeeId, date])
   @@index([date, category])
   @@index([affairId])
   @@map("timesheet_days")
@@ -880,6 +895,12 @@ model Affair {
   contractAmountHT Decimal? @db.Decimal(14, 2)
   budgetAmount     Decimal? @db.Decimal(14, 2)
   dailyRate        Decimal? @db.Decimal(14, 2)
+  /// Comment le bon de commande fait payer la prestation : à la vacation, à
+  /// l'intervention, à l'équipement contrôlé ou au forfait. C'est le client
+  /// qui le fixe, affaire par affaire.
+  billingUnit      BillingUnit @default(VACATION)
+  /// Prix unitaire du bon de commande, dans l'unité ci-dessus.
+  poUnitPrice      Decimal?    @db.Decimal(14, 2)
   budgetMarginRate Decimal? @db.Decimal(5, 2)
 
   creationDate DateTime? @db.Date
@@ -1625,6 +1646,19 @@ model FuelLog {
 //  ATTACHEMENTS, FACTURATION, ENCAISSEMENT
 // ═══════════════════════════════════════════════════════════════
 
+/// Unité de facturation prévue au bon de commande.
+enum BillingUnit {
+  /// À la vacation : la journée d'inspecteur (une demi-journée = 0,5).
+  VACATION
+  /// À l'intervention : chaque journée où la mission est réalisée compte 1,
+  /// qu'elle ait occupé la journée entière ou une partie.
+  INTERVENTION
+  /// À l'unité : chaque équipement contrôlé (un palan, une élingue, une grue).
+  UNIT
+  /// Au forfait : la mission se facture une fois, quel que soit le temps passé.
+  FIXED
+}
+
 enum AttachmentStatus {
   DRAFT
   SUBMITTED
@@ -1667,7 +1701,13 @@ model AttachmentLine {
   missionId         String?
   employeeId        String?
   designation       String
+  /// Temps réellement passé, en journées (parts comprises) — pour la
+  /// productivité et la traçabilité, quel que soit le mode de facturation.
   days              Decimal @db.Decimal(6, 2)
+  /// Ce qui est facturé, dans l'unité du bon de commande : des vacations, des
+  /// interventions, des équipements contrôlés, ou un forfait.
+  unit              BillingUnit @default(VACATION)
+  quantity          Decimal     @default(0) @db.Decimal(10, 2)
   unitRate          Decimal @db.Decimal(14, 2)
   amountHT          Decimal @db.Decimal(14, 2)
 

@@ -142,7 +142,7 @@ async function syncNumberSequences(companyId: string) {
   /** Dernier rang utilisé : le groupe de chiffres le plus à droite du numéro. */
   const lastRank = (numbers: Array<{ number: string }>): number =>
     numbers.reduce((max, row) => {
-      const groups = row.number.match(/d+/g);
+      const groups = row.number.match(/\d+/g);
       const tail = groups?.[groups.length - 1];
       const rank = tail ? Number.parseInt(tail, 10) : 0;
       return Number.isFinite(rank) && rank > max ? rank : max;
@@ -1471,6 +1471,9 @@ async function createAttachments(
         employeeId: m.inspectorId,
         designation: `${m.number} — ${m.billableDays} jour(s) de vacation`,
         days: new Prisma.Decimal(m.billableDays),
+        // Affaires de démonstration facturées à la vacation : quantité = jours.
+        unit: 'VACATION' as const,
+        quantity: new Prisma.Decimal(m.billableDays),
         unitRate: new Prisma.Decimal(affair.dailyRate),
         amountHT: new Prisma.Decimal(m.billableDays * affair.dailyRate),
       }));

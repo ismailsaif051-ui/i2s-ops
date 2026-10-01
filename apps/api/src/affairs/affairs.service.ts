@@ -33,6 +33,10 @@ export interface AffairInput {
   offerAmountHT?: number | null;
   poAmountHT?: number | null;
   poNumber?: string | null;
+  /** Mode de facturation prévu au bon de commande. */
+  billingUnit?: 'VACATION' | 'INTERVENTION' | 'UNIT' | 'FIXED';
+  /** Prix unitaire du bon de commande, dans cette unité. */
+  poUnitPrice?: number | null;
   commercialStatus?: 'GAGNEE' | 'SUIVANT_OP' | 'PERDUE_ANNULEE' | 'DP';
   worksStatus?:
     | 'NON_DEMARRE'
@@ -162,6 +166,8 @@ export class AffairsService {
           offerAmountHT: input.offerAmountHT ?? null,
           poAmountHT: input.poAmountHT ?? null,
           poNumber: input.poNumber?.trim() || null,
+          billingUnit: input.billingUnit ?? 'VACATION',
+          poUnitPrice: input.poUnitPrice ?? null,
           contractAmountHT: this.contractAmount(input),
           commercialStatus: input.commercialStatus ?? 'SUIVANT_OP',
           worksStatus: input.worksStatus ?? 'NON_DEMARRE',
@@ -262,6 +268,8 @@ export class AffairsService {
           ...(input.offerAmountHT !== undefined ? { offerAmountHT: input.offerAmountHT } : {}),
           ...(input.poAmountHT !== undefined ? { poAmountHT: input.poAmountHT } : {}),
           ...(input.poNumber !== undefined ? { poNumber: input.poNumber?.trim() || null } : {}),
+          ...(input.billingUnit !== undefined ? { billingUnit: input.billingUnit } : {}),
+          ...(input.poUnitPrice !== undefined ? { poUnitPrice: input.poUnitPrice } : {}),
           ...(input.poAmountHT !== undefined || input.offerAmountHT !== undefined
             ? { contractAmountHT: this.contractAmount(input, before) }
             : {}),
