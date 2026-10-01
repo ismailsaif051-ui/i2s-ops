@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { CreateEmployeeInput } from '@i2s/contracts';
+import { can, type CreateEmployeeInput } from '@i2s/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../rbac/scope.service';
 import { AuditService } from '../audit/audit.service';
@@ -78,6 +78,8 @@ export class EmployeesService {
     });
 
     const hasMore = rows.length > query.limit;
+    // Le coût journalier dit le salaire : seulement pour qui a le droit de le voir.
+    const costVisible = can(user.permissions, 'daily_cost', 'VIEW');
     const items = (hasMore ? rows.slice(0, query.limit) : rows).map((e) => ({
       id: e.id,
       matricule: e.matricule,
@@ -87,12 +89,12 @@ export class EmployeesService {
       isInspector: e.isInspector,
       status: e.status,
       department: e.department,
-      currentDailyCost: e.dailyCosts[0]
+      currentDailyCost: costVisible && e.dailyCosts[0]
         ? { amount: e.dailyCosts[0].amount.toString(), validFrom: e.dailyCosts[0].validFrom }
         : null,
     }));
 
-    return { items, nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null };
+    return { items, costVisible, nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null };
   }
 
   /**
@@ -110,6 +112,23 @@ export class EmployeesService {
         department: { select: { code: true } },
         dailyCosts: {
           where: { OR: [{ validTo: null }, { validTo: { gte: new Date() } }] },
+          orderBy: { validFrom: 'desc' },
+          take: 1,
+        },
+      },
+    });
+  }
+
+  /** Employés présents de la société, avec leur coût en vigueur — base du modèle de mise à jour. */
+  async costTemplateRows(user: RequestUser) {
+    const today = new Date();
+    return this.prisma.employee.findMany({
+      where: { deletedAt: null, companyId: { in: user.companyIds }, status: { not: 'LEFT' } },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      include: {
+        department: { select: { code: true } },
+        dailyCosts: {
+          where: { validFrom: { lte: today }, OR: [{ validTo: null }, { validTo: { gte: today } }] },
           orderBy: { validFrom: 'desc' },
           take: 1,
         },

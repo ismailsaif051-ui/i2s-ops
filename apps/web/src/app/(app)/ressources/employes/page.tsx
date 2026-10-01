@@ -14,6 +14,7 @@ import {
   Th,
 } from '@/components/ui';
 import { ImportEmployeesForm } from '@/components/import-employees-form';
+import { ImportDailyCostsForm } from '@/components/import-daily-costs-form';
 
 export const metadata: Metadata = { title: 'Employés' };
 
@@ -37,14 +38,15 @@ const STATUS: Record<EmployeeRow['status'], { label: string; tone: 'success' | '
   };
 
 export default async function EmployeesPage() {
-  const [session, { items }] = await Promise.all([
+  const [session, { items, costVisible }] = await Promise.all([
     requireSession(),
-    api<{ items: EmployeeRow[] }>('/employees?limit=200'),
+    api<{ items: EmployeeRow[]; costVisible: boolean }>('/employees?limit=200'),
   ]);
 
   const permissions = session.permissions as Parameters<typeof can>[0];
   const canExport = can(permissions, 'employee', 'EXPORT');
   const canCreate = can(permissions, 'employee', 'CREATE');
+  const canSetCost = can(permissions, 'daily_cost', 'UPDATE');
   const inspectors = items.filter((e) => e.isInspector).length;
   const withoutCost = items.filter((e) => !e.currentDailyCost).length;
 
@@ -53,7 +55,11 @@ export default async function EmployeesPage() {
       <PageHeader
         eyebrow="Ressources"
         title="Employés"
-        description="Le coût journalier est historisé par période de validité : une modification ouvre une nouvelle période et n’écrase jamais l’historique."
+        description={
+          costVisible
+            ? 'Le coût journalier est historisé par période de validité : une modification ouvre une nouvelle période et n’écrase jamais l’historique.'
+            : 'Fiches du personnel de votre périmètre.'
+        }
         action={
           <div className="flex items-center gap-2">
             {canExport && (
@@ -64,6 +70,7 @@ export default async function EmployeesPage() {
                 Exporter Excel
               </a>
             )}
+            {canSetCost && <ImportDailyCostsForm />}
             {canCreate && <ImportEmployeesForm />}
           </div>
         }
@@ -72,16 +79,18 @@ export default async function EmployeesPage() {
       <KpiRow>
         <KpiCard label="Effectif" value={items.length} hint="dans votre périmètre" />
         <KpiCard label="Inspecteurs" value={inspectors} hint="affectables en mission" />
-        <KpiCard
-          label="Sans coût journalier"
-          value={withoutCost}
-          tone={withoutCost > 0 ? 'danger' : undefined}
-          hint={
-            withoutCost > 0
-              ? 'Aucune marge calculable pour ces employés'
-              : 'Tous les coûts sont renseignés'
-          }
-        />
+        {costVisible && (
+          <KpiCard
+            label="Sans coût journalier"
+            value={withoutCost}
+            tone={withoutCost > 0 ? 'danger' : undefined}
+            hint={
+              withoutCost > 0
+                ? 'Aucune marge calculable pour ces employés'
+                : 'Tous les coûts sont renseignés'
+            }
+          />
+        )}
       </KpiRow>
 
       <Card title={`Liste — ${items.length} employé${items.length > 1 ? 's' : ''}`}>
@@ -99,7 +108,7 @@ export default async function EmployeesPage() {
                 <Th>Fonction</Th>
                 <Th>Département</Th>
                 <Th>Rôle terrain</Th>
-                <Th align="right">Coût journalier</Th>
+                {costVisible && <Th align="right">Coût journalier</Th>}
                 <Th>Statut</Th>
               </tr>
             </thead>
@@ -128,19 +137,23 @@ export default async function EmployeesPage() {
                       <span className="text-subtle">Support</span>
                     )}
                   </Td>
-                  <Td align="right" mono>
-                    {employee.currentDailyCost ? (
-                      <>
-                        {Number(employee.currentDailyCost.amount).toLocaleString('fr-MA')} DH
-                        <span className="ml-1.5 text-subtle">
-                          depuis{' '}
-                          {new Date(employee.currentDailyCost.validFrom).toLocaleDateString('fr-FR')}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-danger">à définir</span>
-                    )}
-                  </Td>
+                  {costVisible && (
+                    <Td align="right" mono>
+                      {employee.currentDailyCost ? (
+                        <>
+                          {Number(employee.currentDailyCost.amount).toLocaleString('fr-MA')} DH
+                          <span className="ml-1.5 text-subtle">
+                            depuis{' '}
+                            {new Date(employee.currentDailyCost.validFrom).toLocaleDateString(
+                              'fr-FR',
+                            )}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-danger">à définir</span>
+                      )}
+                    </Td>
+                  )}
                   <Td>
                     <StatusBadge tone={STATUS[employee.status].tone}>
                       {STATUS[employee.status].label}

@@ -2,9 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ApiError, api } from '@/lib/api';
-import { date, moneyDh } from '@/lib/format';
-import { Card, EmptyState, PageHeader, StatusBadge } from '@/components/ui';
+import { date } from '@/lib/format';
+import { Card, PageHeader, StatusBadge } from '@/components/ui';
 import { EmployeeBankForm } from '@/components/employee-bank-form';
+import { DailyCostCard, type DailyCostPeriod } from '@/components/daily-cost-card';
 
 export const metadata: Metadata = { title: 'Employé' };
 
@@ -24,8 +25,10 @@ interface EmployeeDetail {
   status: 'ACTIVE' | 'ON_LEAVE' | 'LEFT';
   department: { id: string; code: string; name: string } | null;
   manager: { id: string; firstName: string; lastName: string } | null;
-  dailyCosts: Array<{ amount: string; validFrom: string; validTo: string | null }>;
-  actions: { update: boolean };
+  dailyCosts: DailyCostPeriod[];
+  /** Faux pour qui n'a pas le droit de voir les coûts : la carte n'apparaît pas. */
+  costVisible: boolean;
+  actions: { update: boolean; setCost: boolean };
 }
 
 const STATUS: Record<EmployeeDetail['status'], { label: string; tone: 'success' | 'warning' | 'neutral' }> =
@@ -93,26 +96,13 @@ export default async function EmployeePage({ params }: { params: Promise<{ id: s
             </div>
           </Card>
 
-          <Card title="Coût journalier">
-            {employee.dailyCosts.length === 0 ? (
-              <EmptyState
-                title="Aucun coût journalier"
-                description="Sans coût journalier, aucune marge n’est calculable pour cet employé sur ses affaires et missions."
-              />
-            ) : (
-              <ul className="divide-y divide-border">
-                {employee.dailyCosts.map((c, i) => (
-                  <li key={i} className="flex flex-wrap items-center gap-3 px-5 py-3">
-                    <span className="ref text-[14px] font-medium">{moneyDh(Number(c.amount))}</span>
-                    <span className="text-[13.5px] text-muted">
-                      depuis {date(c.validFrom)}
-                      {c.validTo ? ` · jusqu’au ${date(c.validTo)}` : ' · en cours'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          {employee.costVisible && (
+            <DailyCostCard
+              employeeId={employee.id}
+              costs={employee.dailyCosts}
+              editable={employee.actions.setCost}
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-5">

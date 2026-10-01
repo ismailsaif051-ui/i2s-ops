@@ -26,6 +26,15 @@ Exemple imposé par le CDC :
 
 Une vacation du 12 février 2026 est valorisée à **850 DH**, même recalculée en octobre. L'historique n'est jamais écrasé ; une modification crée une nouvelle période de validité et une entrée d'audit (ancienne valeur → nouvelle valeur, auteur, motif, date).
 
+### Mise à jour du coût
+
+- **Une par une**, depuis la fiche employé (« Nouveau coût ») : montant, date d'effet, motif obligatoire.
+- **En masse**, depuis la liste des employés (« Mettre à jour les coûts ») : un modèle Excel liste chaque employé avec son coût actuel ; on remplit le nouveau coût et la date d'effet de ceux qui changent. Pour reprendre un historique de paie, une ligne par période. L'import montre d'abord un aperçu ligne par ligne (ancien → nouveau) sans rien écrire ; il ne s'applique que si le fichier ne contient aucune erreur, et alors en entier ou pas du tout.
+
+**Coût antidaté.** L'augmentation décidée en mars avec effet au 1er janvier revalorise les journées déjà pointées depuis le 1er janvier : sans cela, la marge des affaires de janvier à mars resterait calculée sur l'ancien coût. Une journée partagée entre plusieurs interventions se repartage à parts égales. Seules les journées d'un mois clôturé (statut `LOCKED`) gardent leur ancien coût ; l'écran indique combien.
+
+**Confidentialité.** Le coût journalier révèle le salaire. Il n'apparaît — fiche, liste, export Excel, historique — que pour les rôles qui ont le droit « coût journalier » (Direction, RH, Contrôle de gestion et son assistante). Un chef de département voit les fiches de son équipe, sans leur coût.
+
 ---
 
 ## 2. Temps & productivité
