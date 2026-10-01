@@ -31,13 +31,59 @@ function run(label, command, args, env = process.env) {
   console.log(`✔ ${label} (${Math.round((Date.now() - started) / 1000)} s)`);
 }
 
+/**
+ * Met le schéma à jour sans jamais accepter de perte de données.
+ *
+ * Prisma refuse par prudence toute modification qu'il classe « avec perte
+ * possible ». Une seule catégorie est acceptée ici : l'ajout d'une règle
+ * d'unicité. Elle ne supprime rien — elle passe, ou elle échoue s'il existe
+ * des doublons, et l'API ne démarre pas. Toute autre alerte (suppression de
+ * colonne, de table, changement de type) arrête le démarrage : c'est à une
+ * personne de décider.
+ */
+function pushSchema(environment) {
+  console.log('\n▶ Schéma de la base');
+  const started = Date.now();
+  const args = ['prisma', 'db', 'push', '--schema', SCHEMA, '--skip-generate'];
+  const first = spawnSync('npx', args, {
+    env: environment,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  const output = `${first.stdout ?? ''}${first.stderr ?? ''}`;
+
+  if (first.status === 0) {
+    process.stdout.write(output);
+    console.log(`✔ Schéma de la base (${Math.round((Date.now() - started) / 1000)} s)`);
+    return;
+  }
+
+  const warnings = output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('•'));
+  const onlyUniqueAdded =
+    output.includes('data loss') &&
+    warnings.length > 0 &&
+    warnings.every((line) => line.startsWith('• A unique constraint covering'));
+
+  if (!onlyUniqueAdded) {
+    process.stdout.write(output);
+    console.error(`✖ Schéma de la base — échec (code ${first.status}). L'API ne démarre pas.`);
+    process.exit(first.status ?? 1);
+  }
+
+  console.log(`• Ajout de règle(s) d’unicité, sans suppression de données :\n  ${warnings.join('\n  ')}`);
+  run('Schéma de la base (règles d’unicité)', 'npx', [...args, '--accept-data-loss'], environment);
+}
+
 // Un seul mot de passe à saisir sur Render : il sert aux comptes de
 // démonstration et, à défaut d'un mot de passe dédié, au compte administrateur
 // (qui devra de toute façon le changer à sa première connexion).
 const env = { ...process.env };
 if (!env.SEED_ADMIN_PASSWORD && env.DEMO_PASSWORD) env.SEED_ADMIN_PASSWORD = env.DEMO_PASSWORD;
 
-run('Schéma de la base', 'npx', ['prisma', 'db', 'push', '--schema', SCHEMA, '--skip-generate'], env);
+pushSchema(env);
 run('Référentiels et compte administrateur', 'npx', ['tsx', 'packages/db/prisma/seed.ts'], env);
 
 if (env.LOAD_DEMO === 'true') {
