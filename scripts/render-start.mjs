@@ -16,6 +16,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
+import { realignSequences } from './realign-sequences.mjs';
 
 const SCHEMA = 'packages/db/prisma/schema.prisma';
 
@@ -48,6 +49,22 @@ if (env.LOAD_DEMO === 'true') {
     run('Jeu de démonstration (première fois seulement)', 'npx', ['tsx', 'packages/db/prisma/seed-demo.ts'], env);
   } else {
     console.log(`\n• Jeu de démonstration non rechargé : la base contient déjà ${affairs} affaire(s).`);
+  }
+}
+
+// Des compteurs en retard sur les numéros existants feraient échouer toute
+// création. Un compteur ne recule jamais : cette étape est sans risque.
+{
+  console.log('\n▶ Compteurs de numérotation');
+  const prisma = new PrismaClient();
+  try {
+    const changes = await realignSequences(prisma);
+    console.log(changes.length > 0 ? `✔ Recalés : ${changes.join(' · ')}` : '✔ Déjà à jour');
+  } catch (error) {
+    // Un échec ici ne doit pas empêcher l'API de démarrer.
+    console.error(`• Recalage des compteurs impossible : ${error.message}`);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
