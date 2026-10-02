@@ -26,15 +26,17 @@ describe('contrôle de gestion', () => {
     }
   });
 
-  it('dit d’où vient le réel de chaque poste, ou qu’il n’en a pas', () => {
+  it('dit d’où vient le réel de chaque poste', () => {
     // Un poste sans source affiché à zéro passerait pour une économie de
     // 100 % : c'est faux, et cela pousserait à la mauvaise décision.
     expect(COST_SOURCES.LABOUR).toContain('coût figé');
     expect(COST_SOURCES.EXPENSES).toContain('acceptées');
-    expect(COST_SOURCES.VEHICLES).toContain('prorata');
+    expect(COST_SOURCES.VEHICLES).toContain('jours ouvrés');
 
-    expect(COST_SOURCES.SUBCONTRACTING).toBeNull();
-    expect(COST_SOURCES.OTHER).toBeNull();
+    // Depuis octobre 2026, sous-traitance et autres coûts se saisissent sur
+    // l'affaire : ils ont une source, et entrent dans la marge.
+    expect(COST_SOURCES.SUBCONTRACTING).toContain('saisis');
+    expect(COST_SOURCES.OTHER).toContain('saisis');
   });
 
   it('garde au moins un poste alimenté', () => {

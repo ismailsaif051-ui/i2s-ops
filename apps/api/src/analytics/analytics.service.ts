@@ -7,8 +7,9 @@ import {
   nonBillableSiteCost,
   onTimeRate,
   openBalance,
+  marginAtCompletion,
   profitability,
-  vehicleShare,
+  revenueAtCompletion,
   CATEGORY_LABELS,
   type CategoryCounts,
   type TimesheetCategory,
@@ -20,6 +21,7 @@ import { ScopeService } from '../rbac/scope.service';
 import { REPORT_SCOPE, isOnTime } from '../reports/reports.service';
 import type { RequestUser } from '../common/types';
 import { sumShares } from '../timesheets/day-split';
+import { AffairCostsService, totalCosts, zeroCosts } from '../costs/affair-costs.service';
 
 /** Statuts d'attachement qui valorisent une journée comme « facturée ». */
 const BILLED_STATUSES = ['VALIDATED', 'BILLABLE', 'INVOICED'] as const;
@@ -61,6 +63,7 @@ export class AnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scope: ScopeService,
+    private readonly costs: AffairCostsService,
   ) {}
 
   /* ── Productivité ────────────────────────────────────────────── */
@@ -321,6 +324,99 @@ export class AnalyticsService {
 
   /* ── Rentabilité d'une affaire ───────────────────────────────── */
 
+  /**
+   * Revenus, coûts et marges d'un ensemble d'affaires — le même calcul pour
+   * la fiche et pour la liste, afin qu'une marge ne dépende jamais de
+   * l'écran où on la lit. Les coûts viennent du service commun
+   * (`AffairCostsService`), partagé avec le contrôle de gestion.
+   */
+  private async profitabilityOf(
+    affairs: Array<{
+      id: string;
+      contractAmountHT: unknown;
+      poAmountHT: unknown;
+      offerAmountHT: unknown;
+      budgetMarginRate: unknown;
+    }>,
+  ) {
+    const ids = affairs.map((a) => a.id);
+    const [actuals, committed, days, invoices, pending] = await Promise.all([
+      this.costs.actual(ids),
+      this.costs.committed(ids),
+      this.prisma.timesheetDay.groupBy({
+        by: ['affairId'],
+        where: { affairId: { in: ids } },
+        _sum: { share: true },
+      }),
+      this.prisma.invoice.findMany({
+        where: { affairId: { in: ids }, status: { not: 'CANCELLED' } },
+        select: { affairId: true, totalHT: true, payments: { select: { amount: true } } },
+      }),
+      this.prisma.attachmentSheet.groupBy({
+        by: ['affairId'],
+        where: { affairId: { in: ids }, status: { in: ['VALIDATED', 'BILLABLE'] } },
+        _sum: { totalHT: true },
+      }),
+    ]);
+
+    const daysBy = new Map(days.map((d) => [d.affairId, Number(d._sum.share ?? 0)]));
+    const pendingBy = new Map(pending.map((p) => [p.affairId, Number(p._sum.totalHT ?? 0)]));
+    const moneyBy = new Map<string, { invoiced: number; collected: number }>();
+    for (const inv of invoices) {
+      if (!inv.affairId) continue;
+      const entry = moneyBy.get(inv.affairId) ?? { invoiced: 0, collected: 0 };
+      entry.invoiced += Number(inv.totalHT);
+      entry.collected += inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+      moneyBy.set(inv.affairId, entry);
+    }
+
+    return new Map(
+      affairs.map((affair) => {
+        const money = moneyBy.get(affair.id) ?? { invoiced: 0, collected: 0 };
+        const actual = actuals.get(affair.id) ?? zeroCosts();
+        const rest = committed.get(affair.id) ?? zeroCosts();
+
+        const result = profitability(
+          {
+            contractAmount: Number(affair.contractAmountHT ?? 0),
+            invoiced: money.invoiced,
+            collected: money.collected,
+            pendingAttachments: pendingBy.get(affair.id) ?? 0,
+          },
+          {
+            labour: actual.LABOUR,
+            expenses: actual.EXPENSES,
+            vehicles: actual.VEHICLES,
+            subcontracting: actual.SUBCONTRACTING,
+            other: actual.OTHER,
+          },
+          affair.budgetMarginRate === null ? null : Number(affair.budgetMarginRate),
+        );
+
+        // Montant du marché (bon de commande, sinon contrat, sinon offre), mais
+        // jamais moins que le déjà facturé + attaché — la même règle que le
+        // contrôle de gestion.
+        const revenue = revenueAtCompletion(
+          Number(affair.poAmountHT ?? affair.contractAmountHT ?? affair.offerAmountHT ?? 0),
+          money.invoiced,
+          pendingBy.get(affair.id) ?? 0,
+        );
+        const atCompletion = marginAtCompletion(revenue, totalCosts(actual), totalCosts(rest));
+
+        return [
+          affair.id,
+          {
+            ...result,
+            /** Coûts engagés, pas encore dépensés (missions à venir, commandes fournisseurs). */
+            committedCosts: { ...rest, total: totalCosts(rest) },
+            atCompletion,
+            consumedDays: daysBy.get(affair.id) ?? 0,
+          },
+        ] as const;
+      }),
+    );
+  }
+
   async affairProfitability(user: RequestUser, affairId: string) {
     const scopeWhere = this.scope.buildWhere(user, 'controlling', 'VIEW', AFFAIR_SCOPE);
 
@@ -335,49 +431,9 @@ export class AnalyticsService {
     });
     if (!affair) return null;
 
-    const [labour, expenses, invoices, pendingAttachments, vehicleCosts] = await Promise.all([
-      this.prisma.timesheetDay.aggregate({
-        where: { affairId },
-        _sum: { dailyCostSnapshot: true, share: true },
-      }),
-      this.prisma.expenseLine.aggregate({
-        where: { affairId, status: 'ACCEPTED' },
-        _sum: { amount: true },
-      }),
-      this.prisma.invoice.findMany({
-        where: { affairId, status: { not: 'CANCELLED' } },
-        select: { totalHT: true, totalTTC: true, status: true, payments: { select: { amount: true } } },
-      }),
-      this.prisma.attachmentSheet.aggregate({
-        where: { affairId, status: { in: ['VALIDATED', 'BILLABLE'] } },
-        _sum: { totalHT: true },
-      }),
-      this.vehicleCostByAffair([affairId]),
-    ]);
-
-    const invoiced = invoices.reduce((s, i) => s + Number(i.totalHT), 0);
-    const collected = invoices.reduce(
-      (s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0),
-      0,
-    );
-
-    const result = profitability(
-      {
-        contractAmount: Number(affair.contractAmountHT ?? 0),
-        invoiced,
-        collected,
-        pendingAttachments: Number(pendingAttachments._sum.totalHT ?? 0),
-      },
-      {
-        labour: Number(labour._sum.dailyCostSnapshot ?? 0),
-        expenses: Number(expenses._sum.amount ?? 0),
-        vehicles: vehicleCosts.get(affairId) ?? 0,
-        // Pas encore de source de données : affiché à zéro plutôt qu'estimé.
-        subcontracting: 0,
-        other: 0,
-      },
-      affair.budgetMarginRate === null ? null : Number(affair.budgetMarginRate),
-    );
+    const { consumedDays, committedCosts, atCompletion, ...result } = (
+      await this.profitabilityOf([affair])
+    ).get(affair.id)!;
 
     return {
       affair: {
@@ -395,7 +451,9 @@ export class AnalyticsService {
         dailyRate: affair.dailyRate ? Number(affair.dailyRate) : null,
       },
       profitability: result,
-      consumedDays: Number(labour._sum.share ?? 0),
+      committedCosts,
+      atCompletion,
+      consumedDays,
       budgetLines: affair.budgetLines.map((b) => ({
         category: b.category,
         planned: Number(b.plannedAmount),
@@ -403,71 +461,7 @@ export class AnalyticsService {
     };
   }
 
-  /**
-   * Quote-part véhicule de chaque affaire — un seul calcul pour la fiche et
-   * pour la liste de rentabilité.
-   *
-   * Loyer mensuel ÷ 22 × jours OUVRÉS de chaque mission avec véhicule. Les
-   * jours ouvrés viennent du calendrier de la société (jours fériés
-   * marocains) ; une date absente du calendrier compte du lundi au vendredi.
-   * Une mission annulée ou reportée n'a pas utilisé le véhicule.
-   */
-  private async vehicleCostByAffair(affairIds: string[]): Promise<Map<string, number>> {
-    const costs = new Map<string, number>();
-    if (affairIds.length === 0) return costs;
-
-    const missions = await this.prisma.mission.findMany({
-      where: {
-        affairId: { in: affairIds },
-        vehicleId: { not: null },
-        status: { notIn: ['CANCELLED', 'POSTPONED'] },
-        plannedStartDate: { not: null },
-        plannedEndDate: { not: null },
-      },
-      select: {
-        affairId: true,
-        plannedStartDate: true,
-        plannedEndDate: true,
-        affair: { select: { companyId: true } },
-        vehicle: { select: { monthlyFee: true } },
-      },
-    });
-    const withFee = missions.filter((m) => Number(m.vehicle?.monthlyFee ?? 0) > 0);
-    if (withFee.length === 0) return costs;
-
-    const from = new Date(Math.min(...withFee.map((m) => m.plannedStartDate!.getTime())));
-    const to = new Date(Math.max(...withFee.map((m) => m.plannedEndDate!.getTime())));
-    const calendar = await this.prisma.workCalendarDay.findMany({
-      where: {
-        companyId: { in: [...new Set(withFee.map((m) => m.affair.companyId))] },
-        date: { gte: from, lte: to },
-      },
-      select: { companyId: true, date: true, isWorkingDay: true },
-    });
-    const known = new Map(calendar.map((c) => [`${c.companyId}|${isoDay(c.date)}`, c.isWorkingDay]));
-
-    for (const mission of withFee) {
-      let workingDays = 0;
-      for (
-        let day = mission.plannedStartDate!.getTime();
-        day <= mission.plannedEndDate!.getTime();
-        day += 86_400_000
-      ) {
-        const date = new Date(day);
-        const listed = known.get(`${mission.affair.companyId}|${isoDay(date)}`);
-        const weekday = date.getUTCDay();
-        if (listed ?? (weekday >= 1 && weekday <= 5)) workingDays += 1;
-      }
-      const share = vehicleShare(Number(mission.vehicle!.monthlyFee), workingDays);
-      costs.set(mission.affairId, Math.round(((costs.get(mission.affairId) ?? 0) + share) * 100) / 100);
-    }
-    return costs;
-  }
-
-  /**
-   * Rentabilité de toutes les affaires du périmètre, en quatre requêtes
-   * agrégées plutôt qu'une par affaire.
-   */
+  /** Rentabilité de toutes les affaires gagnées du périmètre. */
   async profitabilityList(user: RequestUser) {
     const scopeWhere = this.scope.buildWhere(user, 'controlling', 'VIEW', AFFAIR_SCOPE);
 
@@ -480,6 +474,8 @@ export class AnalyticsService {
         status: true,
         worksStatus: true,
         contractAmountHT: true,
+        poAmountHT: true,
+        offerAmountHT: true,
         budgetMarginRate: true,
         client: { select: { name: true } },
         department: { select: { code: true } },
@@ -487,84 +483,18 @@ export class AnalyticsService {
       orderBy: { number: 'desc' },
     });
 
-    const ids = affairs.map((a) => a.id);
-    if (ids.length === 0) return { items: [], totals: null };
+    if (affairs.length === 0) return { items: [], totals: null };
+    const figures = await this.profitabilityOf(affairs);
 
-    const [labour, expenses, invoices, pending, vehicleCosts] = await Promise.all([
-      this.prisma.timesheetDay.groupBy({
-        by: ['affairId'],
-        where: { affairId: { in: ids } },
-        _sum: { dailyCostSnapshot: true, share: true },
-      }),
-      this.prisma.expenseLine.groupBy({
-        by: ['affairId'],
-        where: { affairId: { in: ids }, status: 'ACCEPTED' },
-        _sum: { amount: true },
-      }),
-      this.prisma.invoice.findMany({
-        where: { affairId: { in: ids }, status: { not: 'CANCELLED' } },
-        select: { affairId: true, totalHT: true, payments: { select: { amount: true } } },
-      }),
-      this.prisma.attachmentSheet.groupBy({
-        by: ['affairId'],
-        where: { affairId: { in: ids }, status: { in: ['VALIDATED', 'BILLABLE'] } },
-        _sum: { totalHT: true },
-      }),
-      // Le même calcul que la fiche affaire : sans lui, la liste affichait une
-      // marge plus haute que la fiche pour toute affaire avec véhicule.
-      this.vehicleCostByAffair(ids),
-    ]);
-
-    const labourBy = new Map(
-      labour.map((l) => [
-        l.affairId,
-        { cost: Number(l._sum.dailyCostSnapshot ?? 0), days: Number(l._sum.share ?? 0) },
-      ]),
-    );
-    const expenseBy = new Map(expenses.map((e) => [e.affairId, Number(e._sum.amount ?? 0)]));
-    const pendingBy = new Map(pending.map((p) => [p.affairId, Number(p._sum.totalHT ?? 0)]));
-
-    const invoicedBy = new Map<string, { invoiced: number; collected: number }>();
-    for (const inv of invoices) {
-      if (!inv.affairId) continue;
-      const entry = invoicedBy.get(inv.affairId) ?? { invoiced: 0, collected: 0 };
-      entry.invoiced += Number(inv.totalHT);
-      entry.collected += inv.payments.reduce((s, p) => s + Number(p.amount), 0);
-      invoicedBy.set(inv.affairId, entry);
-    }
-
-    const items = affairs.map((affair) => {
-      const money = invoicedBy.get(affair.id) ?? { invoiced: 0, collected: 0 };
-      const labourInfo = labourBy.get(affair.id) ?? { cost: 0, days: 0 };
-
-      const result = profitability(
-        {
-          contractAmount: Number(affair.contractAmountHT ?? 0),
-          invoiced: money.invoiced,
-          collected: money.collected,
-          pendingAttachments: pendingBy.get(affair.id) ?? 0,
-        },
-        {
-          labour: labourInfo.cost,
-          expenses: expenseBy.get(affair.id) ?? 0,
-          vehicles: vehicleCosts.get(affair.id) ?? 0,
-          subcontracting: 0,
-          other: 0,
-        },
-        affair.budgetMarginRate === null ? null : Number(affair.budgetMarginRate),
-      );
-
-      return {
-        id: affair.id,
-        number: affair.number,
-        title: affair.title,
-        client: affair.client.name,
-        department: affair.department?.code ?? null,
-        worksStatus: affair.worksStatus,
-        consumedDays: labourInfo.days,
-        ...result,
-      };
-    });
+    const items = affairs.map((affair) => ({
+      id: affair.id,
+      number: affair.number,
+      title: affair.title,
+      client: affair.client.name,
+      department: affair.department?.code ?? null,
+      worksStatus: affair.worksStatus,
+      ...figures.get(affair.id)!,
+    }));
 
     const withRevenue = items.filter((i) => i.revenues.invoiced > 0);
     const totalInvoiced = withRevenue.reduce((s, i) => s + i.revenues.invoiced, 0);
@@ -580,9 +510,11 @@ export class AnalyticsService {
         marginRate:
           totalInvoiced > 0
             ? Math.round(((totalInvoiced - totalCosts) / totalInvoiced) * 1000) / 10
-            : 0,
+            : null,
         atRisk: items.filter((i) => i.atRisk).length,
         loss: items.filter((i) => i.grossMargin < 0).length,
+        /** Affaires sans facture : marge non calculable, la marge à terminaison prend le relais. */
+        notInvoiced: items.length - withRevenue.length,
       },
     };
   }
@@ -888,6 +820,3 @@ function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 86_400_000);
 }
 
-function isoDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}

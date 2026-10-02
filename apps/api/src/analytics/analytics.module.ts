@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { AnalyticsService } from './analytics.service';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { CostsModule } from '../costs/costs.module';
 import type { RequestUser } from '../common/types';
 
 const periodSchema = z.object({
@@ -68,6 +69,7 @@ class AnalyticsController {
 }
 
 @Module({
+  imports: [CostsModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
   exports: [AnalyticsService],

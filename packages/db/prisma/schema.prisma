@@ -932,6 +932,7 @@ model Affair {
   /// Une affaire peut mobiliser plusieurs services (« CND-CTC-EILM » au registre).
   services        AffairDepartment[]
   budgetLines     AffairBudgetLine[]
+  costs           AffairCost[]
   rates           AffairRate[]
   projects        Project[]
   missions        Mission[]
@@ -974,6 +975,45 @@ model AffairBudgetLine {
 
   @@unique([affairId, category])
   @@map("affair_budget_lines")
+}
+
+/// Coût d'affaire saisi à la main : sous-traitance et autres coûts directs
+/// (location de matériel, analyses en laboratoire…). Aucune autre source ne
+/// les porte ; sans eux, une affaire sous-traitée paraissait plus rentable
+/// qu'elle ne l'est.
+model AffairCost {
+  id        String             @id @default(uuid(7))
+  affairId  String
+  category  AffairCostCategory
+  /// Engagé : commande passée, pèse sur le coût à terminaison.
+  /// Réel : facture fournisseur reçue, entre dans la marge.
+  status    AffairCostStatus   @default(COMMITTED)
+  label     String
+  supplier  String?
+  /// N° de bon de commande ou de facture du fournisseur.
+  reference String?
+  amountHT  Decimal            @db.Decimal(14, 2)
+  date      DateTime           @db.Date
+
+  createdAt   DateTime  @default(now())
+  createdById String?
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  affair Affair @relation(fields: [affairId], references: [id], onDelete: Cascade)
+
+  @@index([affairId])
+  @@map("affair_costs")
+}
+
+enum AffairCostCategory {
+  SUBCONTRACTING
+  OTHER
+}
+
+enum AffairCostStatus {
+  COMMITTED
+  ACTUAL
 }
 
 model AffairRate {

@@ -5,6 +5,7 @@ import type { ReportStatus } from '@i2s/contracts';
 import { can } from '@i2s/contracts';
 import { ApiError, api, requireSession } from '@/lib/api';
 import { AffairPurchaseOrderForm } from '@/components/affair-po-form';
+import { AffairCostsCard, type AffairCostList } from '@/components/affair-costs-card';
 import { BILLING_UNIT_OPTIONS, type BillingUnitValue } from '@/lib/billing-units';
 import {
   AFFAIR_COMMERCIAL_LABELS,
@@ -47,12 +48,17 @@ interface Profitability {
     revenues: { contractAmount: number; invoiced: number; collected: number; pendingAttachments: number };
     costs: { labour: number; expenses: number; vehicles: number; subcontracting: number; other: number; total: number };
     grossMargin: number;
-    marginRate: number;
+    /** `null` tant que rien n'est facturé. */
+    marginRate: number | null;
     budgetMarginRate: number | null;
     marginGapPoints: number | null;
     atRisk: boolean;
     remainingToInvoice: number;
   };
+  /** Missions à venir et commandes fournisseurs, pas encore dépensées. */
+  committedCosts: { labour: number; expenses: number; vehicles: number; subcontracting: number; other: number; total: number };
+  /** Ce que l'affaire laissera si rien ne change : marché − (réel + engagé). */
+  atCompletion: { revenue: number; costs: number; margin: number; rate: number | null };
   consumedDays: number;
   budgetLines: Array<{ category: string; planned: number }>;
 }
@@ -157,6 +163,7 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
     () => null,
   );
   const p = analytics?.profitability;
+  const costLines = await api<AffairCostList>(`/affairs/${id}/costs`).catch(() => null);
 
   const budgetByCategory = new Map(
     (analytics?.budgetLines ?? []).map((b) => [b.category, b.planned]),
@@ -168,6 +175,15 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
     SUBCONTRACTING: p?.costs.subcontracting ?? 0,
     OTHER: p?.costs.other ?? 0,
   };
+  const committed = analytics?.committedCosts;
+  const committedByCategory: Record<string, number> = {
+    LABOUR: committed?.labour ?? 0,
+    EXPENSES: committed?.expenses ?? 0,
+    VEHICLES: committed?.vehicles ?? 0,
+    SUBCONTRACTING: committed?.subcontracting ?? 0,
+    OTHER: committed?.other ?? 0,
+  };
+  const end = analytics?.atCompletion;
 
   const pendingReports = detail.reports.filter((r) =>
     ['SUBMITTED', 'UNDER_CHECK', 'CORRECTION'].includes(r.status),
@@ -225,9 +241,23 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
             { k: 'Coûts', v: compactDh(p.costs.total), d: `${analytics?.consumedDays ?? 0} jours pointés` },
             {
               k: 'Marge',
-              v: percent(p.marginRate),
-              d: p.budgetMarginRate === null ? 'pas de budget' : `budget ${percent(p.budgetMarginRate, 0)}`,
+              v: p.marginRate === null ? 'n. c.' : percent(p.marginRate),
+              d:
+                p.marginRate === null
+                  ? 'non calculable : rien de facturé'
+                  : p.budgetMarginRate === null
+                    ? 'pas de budget'
+                    : `budget ${percent(p.budgetMarginRate, 0)}`,
               warn: p.atRisk,
+            },
+            {
+              k: 'Marge à terminaison',
+              v: !end || end.rate === null ? '—' : percent(end.rate),
+              d:
+                end && end.revenue > 0
+                  ? `${compactDh(end.margin)} sur ${compactDh(end.revenue)}`
+                  : 'montant du marché inconnu',
+              warn: end !== undefined && end.margin < 0,
             },
             { k: 'Reste à facturer', v: compactDh(p.remainingToInvoice), d: 'hors attachements en cours' },
           ].map((cell) => (
@@ -252,7 +282,7 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
         <NextActionBanner
           tone="danger"
           title={`Alerte rentabilité — écart de marge ${points(p.marginGapPoints)}`}
-          detail={`Marge budgétée ${percent(p.budgetMarginRate ?? 0, 0)}, marge réelle ${percent(p.marginRate)}. Analyser les frais de mission et vérifier que les jours d’attente chantier ont bien été portés à un attachement.`}
+          detail={`Marge budgétée ${percent(p.budgetMarginRate ?? 0, 0)}, marge réelle ${percent(p.marginRate ?? 0)}. Analyser les frais de mission et vérifier que les jours d’attente chantier ont bien été portés à un attachement.`}
         />
       )}
 
@@ -333,19 +363,22 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
                   <Th>Poste</Th>
                   <Th align="right">Budget</Th>
                   <Th align="right">Réel</Th>
-                  <Th align="right">Écart</Th>
+                  <Th align="right">Engagé</Th>
+                  <Th align="right">Écart à terminaison</Th>
                 </tr>
               </thead>
               <tbody>
                 {Object.keys(BUDGET_LABELS).map((category) => {
                   const planned = budgetByCategory.get(category) ?? 0;
                   const actual = actualByCategory[category] ?? 0;
-                  const gap = planned - actual;
+                  const engaged = committedByCategory[category] ?? 0;
+                  const gap = planned - actual - engaged;
                   return (
                     <tr key={category}>
                       <Td>{BUDGET_LABELS[category]}</Td>
                       <Td align="right" mono>{moneyDh(planned)}</Td>
                       <Td align="right" mono>{moneyDh(actual)}</Td>
+                      <Td align="right" mono>{moneyDh(engaged)}</Td>
                       <Td align="right" mono>
                         <span className={gap < 0 ? 'font-semibold text-danger' : 'text-success'}>
                           {gap >= 0 ? '+' : ''}
@@ -358,12 +391,19 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
               </tbody>
             </DataTable>
             <p className="px-4 py-2.5 text-[12px] text-subtle">
-              Sous-traitance et autres coûts sont à zéro tant qu’aucune source de données ne les
-              alimente — ils ne sont pas estimés.
+              Engagé : missions à venir valorisées au coût journalier du jour, et commandes
+              fournisseurs dont la facture n’est pas encore reçue. L’écart compare le budget au coût à
+              terminaison (réel + engagé).
             </p>
           </Card>
         )}
       </div>
+
+      {costLines && (
+        <div className="mt-5">
+          <AffairCostsCard affairId={detail.id} data={costLines} />
+        </div>
+      )}
 
       <div className="mt-5">
         <Card

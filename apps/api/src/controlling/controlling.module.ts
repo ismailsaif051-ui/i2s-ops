@@ -1,6 +1,7 @@
 import { Controller, Get, Module } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ControllingService } from './controlling.service';
+import { CostsModule } from '../costs/costs.module';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import type { RequestUser } from '../common/types';
 
@@ -25,6 +26,7 @@ class ControllingController {
 }
 
 @Module({
+  imports: [CostsModule],
   controllers: [ControllingController],
   providers: [ControllingService],
   exports: [ControllingService],

@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { revenueAtCompletion } from '@i2s/calc';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  AffairCostsService,
+  COST_CATEGORIES,
+  COST_LABELS,
+  COST_SOURCES,
+  zeroCosts,
+  type CostCategory,
+} from '../costs/affair-costs.service';
 import { ScopeService } from '../rbac/scope.service';
 import type { RequestUser } from '../common/types';
 
@@ -19,54 +28,9 @@ const OPEN_AFFAIRS = ['IN_PROGRESS', 'SUSPENDED'] as const;
 /** Missions dont le travail est fait, donc dont le coût doit exister. */
 const DONE_MISSIONS = ['COMPLETED', 'REPORTED', 'CLOSED'] as const;
 
-/** Missions encore à faire : elles pèsent sur le coût à terminaison. */
-const PLANNED_MISSIONS = [
-  'REQUESTED',
-  'PLANNED',
-  'ASSIGNED',
-  'CONFIRMED',
-  'ORDER_ISSUED',
-  'IN_PROGRESS',
-] as const;
-
-/**
- * Les postes de coût du budget d'affaire.
- *
- * Ce sont les catégories de `AffairBudgetLine` : les nommer ici garantit que
- * le prévu et le réel se comparent poste à poste, et qu'aucun poste réel ne
- * tombe hors du tableau.
- */
-export const COST_CATEGORIES = [
-  'LABOUR',
-  'EXPENSES',
-  'VEHICLES',
-  'SUBCONTRACTING',
-  'OTHER',
-] as const;
-export type CostCategory = (typeof COST_CATEGORIES)[number];
-
-export const COST_LABELS: Record<CostCategory, string> = {
-  LABOUR: 'Main-d’œuvre',
-  EXPENSES: 'Frais de mission',
-  VEHICLES: 'Véhicules',
-  SUBCONTRACTING: 'Sous-traitance',
-  OTHER: 'Autres',
-};
-
-/**
- * D'où vient le réel de chaque poste.
- *
- * Deux postes n'ont pas encore de source : les afficher à zéro sans le dire
- * les ferait passer pour une économie de 100 %, ce qui est faux et pousserait
- * à la mauvaise décision. L'écran le signale au lieu de laisser croire.
- */
-export const COST_SOURCES: Record<CostCategory, string | null> = {
-  LABOUR: 'Journées pointées, au coût figé du jour de l’intervention',
-  EXPENSES: 'Lignes de notes de frais acceptées et imputées à l’affaire',
-  VEHICLES: 'Forfait mensuel du véhicule, au prorata des jours de mission',
-  SUBCONTRACTING: null,
-  OTHER: null,
-};
+// Postes, libellés et sources des coûts : un seul endroit, partagé avec la
+// rentabilité (costs/affair-costs.service.ts).
+export { COST_CATEGORIES, COST_LABELS, COST_SOURCES, type CostCategory };
 
 /**
  * Écart au-delà duquel un poste mérite qu'on s'y arrête.
@@ -100,6 +64,7 @@ export class ControllingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scope: ScopeService,
+    private readonly costs: AffairCostsService,
   ) {}
 
   /* ── Budget contre réel ───────────────────────────────────────── */
@@ -152,15 +117,29 @@ export class ControllingService {
     }
 
     const ids = affairs.map((a) => a.id);
-    const actuals = await this.actualCosts(ids);
-    const committed = await this.committedCosts(ids);
+    const [actuals, committed, invoiced, pending] = await Promise.all([
+      this.costs.actual(ids),
+      this.costs.committed(ids),
+      this.prisma.invoice.groupBy({
+        by: ['affairId'],
+        where: { affairId: { in: ids }, status: { not: 'CANCELLED' } },
+        _sum: { totalHT: true },
+      }),
+      this.prisma.attachmentSheet.groupBy({
+        by: ['affairId'],
+        where: { affairId: { in: ids }, status: { in: ['VALIDATED', 'BILLABLE'] } },
+        _sum: { totalHT: true },
+      }),
+    ]);
+    const invoicedBy = new Map(invoiced.map((i) => [i.affairId, Number(i._sum.totalHT ?? 0)]));
+    const pendingBy = new Map(pending.map((p) => [p.affairId, Number(p._sum.totalHT ?? 0)]));
 
     const items = affairs.map((affair) => {
       const planned = new Map<string, number>(
         affair.budgetLines.map((b) => [b.category, Number(b.plannedAmount)]),
       );
-      const actual = actuals.get(affair.id) ?? this.zeroCosts();
-      const rest = committed.get(affair.id) ?? this.zeroCosts();
+      const actual = actuals.get(affair.id) ?? zeroCosts();
+      const rest = committed.get(affair.id) ?? zeroCosts();
 
       const lines = COST_CATEGORIES.map((category) => {
         const p = planned.get(category) ?? 0;
@@ -187,9 +166,12 @@ export class ControllingService {
       const atCompletionTotal = tracked.reduce((s, l) => s + l.atCompletion, 0);
 
       // Le montant du marché suit le registre : bon de commande s'il existe,
-      // sinon le contrat, sinon l'offre.
-      const revenue = Number(
-        affair.poAmountHT ?? affair.contractAmountHT ?? affair.offerAmountHT ?? 0,
+      // sinon le contrat, sinon l'offre — mais jamais moins que le déjà
+      // facturé + attaché (BC à la vacation dépassé, BC cadre).
+      const revenue = revenueAtCompletion(
+        Number(affair.poAmountHT ?? affair.contractAmountHT ?? affair.offerAmountHT ?? 0),
+        invoicedBy.get(affair.id) ?? 0,
+        pendingBy.get(affair.id) ?? 0,
       );
 
       return {
@@ -579,172 +561,7 @@ export class ControllingService {
     );
   }
 
-  /* ── Calcul des coûts ─────────────────────────────────────────── */
-
-  /** Ce qui a réellement été dépensé, par affaire et par poste. */
-  private async actualCosts(affairIds: string[]): Promise<Map<string, Record<CostCategory, number>>> {
-    const [labour, expenses, missions] = await Promise.all([
-      this.prisma.timesheetDay.groupBy({
-        by: ['affairId'],
-        where: { affairId: { in: affairIds } },
-        _sum: { dailyCostSnapshot: true },
-      }),
-      this.prisma.expenseLine.groupBy({
-        by: ['affairId'],
-        where: { affairId: { in: affairIds }, status: 'ACCEPTED' },
-        _sum: { amount: true },
-      }),
-      this.prisma.mission.findMany({
-        where: { affairId: { in: affairIds }, vehicleId: { not: null } },
-        select: {
-          affairId: true,
-          status: true,
-          plannedStartDate: true,
-          plannedEndDate: true,
-          vehicle: { select: { monthlyFee: true } },
-        },
-      }),
-    ]);
-
-    const result = new Map<string, Record<CostCategory, number>>();
-    const at = (id: string) => {
-      if (!result.has(id)) result.set(id, this.zeroCosts());
-      return result.get(id)!;
-    };
-
-    for (const row of labour) {
-      if (row.affairId) at(row.affairId).LABOUR += Number(row._sum.dailyCostSnapshot ?? 0);
-    }
-    for (const row of expenses) {
-      if (row.affairId) at(row.affairId).EXPENSES += Number(row._sum.amount ?? 0);
-    }
-    // Le véhicule n'est un coût réel que sur les missions déjà faites.
-    for (const m of missions) {
-      if (!DONE_MISSIONS.includes(m.status as (typeof DONE_MISSIONS)[number])) continue;
-      at(m.affairId).VEHICLES += vehicleShare(m);
-    }
-
-    return result;
-  }
-
-  /**
-   * Ce qui reste à dépenser : les missions planifiées, pas encore faites.
-   *
-   * C'est la différence entre un consommé, qui ne dit rien de la suite, et un
-   * coût à terminaison, qui dit si l'affaire tiendra.
-   */
-  private async committedCosts(
-    affairIds: string[],
-  ): Promise<Map<string, Record<CostCategory, number>>> {
-    const missions = await this.prisma.mission.findMany({
-      where: { affairId: { in: affairIds }, status: { in: [...PLANNED_MISSIONS] } },
-      select: {
-        affairId: true,
-        status: true,
-        plannedStartDate: true,
-        plannedEndDate: true,
-        vehicle: { select: { monthlyFee: true } },
-        assignments: { select: { employeeId: true } },
-      },
-    });
-
-    const employeeIds = [...new Set(missions.flatMap((m) => m.assignments.map((a) => a.employeeId)))];
-    const [rates, load] = await Promise.all([
-      this.currentDailyCosts(employeeIds),
-      this.missionsPerDay(employeeIds),
-    ]);
-
-    const result = new Map<string, Record<CostCategory, number>>();
-    const at = (id: string) => {
-      if (!result.has(id)) result.set(id, this.zeroCosts());
-      return result.get(id)!;
-    };
-
-    for (const m of missions) {
-      if (!m.plannedStartDate || !m.plannedEndDate) continue;
-      const days = plannedDays(m.plannedStartDate, m.plannedEndDate);
-      if (days <= 0) continue;
-
-      const costs = at(m.affairId);
-      for (const a of m.assignments) {
-        const rate = rates.get(a.employeeId) ?? 0;
-        // Un jour partagé avec d'autres missions ne coûte que sa part : deux
-        // interventions le même jour coûtent une journée, pas deux.
-        for (let d = 0; d < days; d += 1) {
-          const key = `${a.employeeId}|${iso(new Date(m.plannedStartDate.getTime() + d * 86_400_000))}`;
-          costs.LABOUR += rate / Math.max(1, load.get(key) ?? 1);
-        }
-      }
-      costs.VEHICLES += vehicleShare(m);
-    }
-
-    return result;
-  }
-
-  /**
-   * Nombre de missions prévues par intervenant et par jour, toutes affaires
-   * confondues — pour partager le coût d'une journée entre ses interventions.
-   */
-  private async missionsPerDay(employeeIds: string[]): Promise<Map<string, number>> {
-    if (employeeIds.length === 0) return new Map();
-
-    const assignments = await this.prisma.missionAssignment.findMany({
-      where: {
-        employeeId: { in: employeeIds },
-        mission: { deletedAt: null, status: { in: [...PLANNED_MISSIONS] } },
-      },
-      select: {
-        employeeId: true,
-        mission: { select: { plannedStartDate: true, plannedEndDate: true } },
-      },
-    });
-
-    const load = new Map<string, number>();
-    for (const a of assignments) {
-      const { plannedStartDate: start, plannedEndDate: end } = a.mission;
-      if (!start || !end) continue;
-      for (let t = start.getTime(); t <= end.getTime(); t += 86_400_000) {
-        const key = `${a.employeeId}|${iso(new Date(t))}`;
-        load.set(key, (load.get(key) ?? 0) + 1);
-      }
-    }
-    return load;
-  }
-
-  /**
-   * Le coût journalier en vigueur aujourd'hui, par intervenant.
-   *
-   * Le coût est historisé : ce qui est déjà pointé porte son propre coût figé
-   * (`dailyCostSnapshot`), et ce qui reste à faire se valorise au tarif du
-   * jour — celui qui s'appliquera quand la mission sera exécutée.
-   */
-  private async currentDailyCosts(employeeIds: string[]): Promise<Map<string, number>> {
-    if (employeeIds.length === 0) return new Map();
-
-    const today = new Date();
-    const costs = await this.prisma.employeeDailyCost.findMany({
-      where: {
-        employeeId: { in: employeeIds },
-        validFrom: { lte: today },
-        OR: [{ validTo: null }, { validTo: { gte: today } }],
-      },
-      orderBy: { validFrom: 'desc' },
-      select: { employeeId: true, amount: true },
-    });
-
-    const map = new Map<string, number>();
-    for (const c of costs) {
-      // Le premier vu est le plus récent : les suivants sont d'anciens barèmes.
-      if (!map.has(c.employeeId)) map.set(c.employeeId, Number(c.amount));
-    }
-    return map;
-  }
-
   /* ── Utilitaires ──────────────────────────────────────────────── */
-
-  private zeroCosts(): Record<CostCategory, number> {
-    return { LABOUR: 0, EXPENSES: 0, VEHICLES: 0, SUBCONTRACTING: 0, OTHER: 0 };
-  }
 
   private emptyTotals() {
     return {
@@ -796,22 +613,6 @@ const CLOSED_CHECK: AnomalySeverity = {
 };
 
 /** Quote-part véhicule : forfait mensuel réparti au prorata des jours d'usage. */
-function vehicleShare(mission: {
-  plannedStartDate: Date | null;
-  plannedEndDate: Date | null;
-  vehicle: { monthlyFee: unknown } | null;
-}): number {
-  const fee = Number(mission.vehicle?.monthlyFee ?? 0);
-  const days = plannedDays(mission.plannedStartDate, mission.plannedEndDate);
-  if (!fee || days <= 0) return 0;
-  return (fee / 22) * days;
-}
-
-function plannedDays(start: Date | null, end: Date | null): number {
-  if (!start || !end) return 0;
-  return Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
-}
-
 /** Un nombre de journées, partagées comprises : « 3 », « 2,5 ». */
 function formatDays(days: number): string {
   return (Math.round(days * 100) / 100).toLocaleString('fr-FR');

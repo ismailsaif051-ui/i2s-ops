@@ -134,7 +134,12 @@ export interface Profitability {
   revenues: Revenues;
   costs: Costs & { total: number };
   grossMargin: number;
-  marginRate: number;
+  /**
+   * `null` tant que rien n'est facturé : rapporter une marge à un chiffre
+   * d'affaires nul n'a pas de sens, et afficher « 0 % » laissait croire à
+   * une affaire à l'équilibre alors que les coûts courent.
+   */
+  marginRate: number | null;
   budgetMarginRate: number | null;
   /** Écart en points de pourcentage entre le réel et le budget. */
   marginGapPoints: number | null;
@@ -154,10 +159,10 @@ export function profitability(
     costs.labour + costs.expenses + costs.vehicles + costs.subcontracting + costs.other,
   );
   const grossMargin = round2(revenues.invoiced - total);
-  const marginRate = revenues.invoiced > 0 ? round1((grossMargin / revenues.invoiced) * 100) : 0;
+  const marginRate = revenues.invoiced > 0 ? round1((grossMargin / revenues.invoiced) * 100) : null;
 
   const marginGapPoints =
-    budgetMarginRate === null ? null : round1(marginRate - budgetMarginRate);
+    budgetMarginRate === null || marginRate === null ? null : round1(marginRate - budgetMarginRate);
 
   return {
     revenues,
@@ -171,6 +176,42 @@ export function profitability(
       revenues.contractAmount - revenues.invoiced - revenues.pendingAttachments,
     ),
   };
+}
+
+export interface MarginAtCompletion {
+  /** Montant du marché : bon de commande, sinon contrat, sinon offre. */
+  revenue: number;
+  /** Coût à terminaison : réel + engagé. */
+  costs: number;
+  margin: number;
+  /** `null` sans montant de marché connu. */
+  rate: number | null;
+}
+
+/**
+ * Chiffre d'affaires à terminaison : le montant du marché, sauf si l'affaire
+ * a déjà facturé (ou attaché) davantage — fréquent avec un bon de commande à
+ * la vacation ou un BC cadre. Comparer tous les coûts au seul marché ferait
+ * alors paraître déficitaire une affaire qui gagne de l'argent.
+ */
+export function revenueAtCompletion(market: number, invoiced: number, pendingAttachments: number): number {
+  return round2(Math.max(market, invoiced + pendingAttachments));
+}
+
+/**
+ * Marge à terminaison — ce que l'affaire laissera si rien ne change.
+ *
+ * Elle répond quand la marge réelle ne le peut pas encore : avant la
+ * première facture, c'est le seul chiffre qui dit si l'affaire tiendra.
+ */
+export function marginAtCompletion(
+  revenue: number,
+  actualCosts: number,
+  committedCosts: number,
+): MarginAtCompletion {
+  const costs = round2(actualCosts + committedCosts);
+  const margin = round2(revenue - costs);
+  return { revenue: round2(revenue), costs, margin, rate: revenue > 0 ? round1((margin / revenue) * 100) : null };
 }
 
 /** Jours ouvrés retenus par mois pour répartir le loyer d'un véhicule. */

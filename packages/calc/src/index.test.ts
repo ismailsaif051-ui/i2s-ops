@@ -3,6 +3,8 @@ import {
   MARGIN_ALERT_POINTS,
   assignmentRate,
   breakdown,
+  marginAtCompletion,
+  revenueAtCompletion,
   dso,
   idleCost,
   netProductivity,
@@ -131,14 +133,35 @@ describe('rentabilité', () => {
     expect(result.remainingToInvoice).toBe(120000);
   });
 
-  it('renvoie un taux nul plutôt que NaN sans chiffre d’affaires facturé', () => {
+  it('dit « non calculable » plutôt que 0 % sans chiffre d’affaires facturé', () => {
+    // 0 % laissait croire à une affaire à l'équilibre alors que les coûts courent.
     const result = profitability(
       { contractAmount: 100000, invoiced: 0, collected: 0, pendingAttachments: 0 },
       { labour: 5000, expenses: 0, vehicles: 0, subcontracting: 0, other: 0 },
       20,
     );
-    expect(result.marginRate).toBe(0);
-    expect(Number.isNaN(result.marginRate)).toBe(false);
+    expect(result.marginRate).toBeNull();
+    expect(result.grossMargin).toBe(-5000);
+    expect(result.marginGapPoints).toBeNull();
+    expect(result.atRisk).toBe(false);
+  });
+});
+
+describe('marge à terminaison', () => {
+  it('additionne le réel et l’engagé', () => {
+    const m = marginAtCompletion(100_000, 40_000, 25_000);
+    expect(m).toEqual({ revenue: 100_000, costs: 65_000, margin: 35_000, rate: 35 });
+  });
+
+  it('ne compte jamais moins que ce qui est déjà facturé ou attaché', () => {
+    expect(revenueAtCompletion(100_000, 40_000, 10_000)).toBe(100_000);
+    // BC à la vacation dépassé : le facturé fait foi.
+    expect(revenueAtCompletion(274_350, 371_250, 0)).toBe(371_250);
+    expect(revenueAtCompletion(0, 5_000, 2_000)).toBe(7_000);
+  });
+
+  it('sans montant de marché, le taux n’est pas calculable', () => {
+    expect(marginAtCompletion(0, 1_000, 0).rate).toBeNull();
   });
 });
 
