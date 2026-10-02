@@ -56,7 +56,7 @@ export default async function PaymentBatchPage({ params }: { params: Promise<{ i
               href={`/api/virements/${batch.id}/pdf`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-10 items-center rounded-[10px] bg-accent px-4 text-[14px] font-medium text-white shadow-sm transition-colors hover:bg-accent-hover"
+              className="inline-flex h-10 items-center rounded-[10px] bg-accent px-4 text-[14px] font-medium text-on-fill shadow-sm transition-colors hover:bg-accent-hover"
             >
               Ouvrir le PDF
             </a>

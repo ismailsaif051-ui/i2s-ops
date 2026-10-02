@@ -42,7 +42,7 @@ interface TimesheetGrid {
 
 /** Une lettre par nature de journée — lisible même sur une colonne de 24 px. */
 const MARK: Record<string, { letter: string; className: string }> = {
-  MISSION_BILLABLE: { letter: 'F', className: 'bg-accent text-white' },
+  MISSION_BILLABLE: { letter: 'F', className: 'bg-accent text-on-fill' },
   MISSION_NON_BILLABLE: { letter: 'N', className: 'bg-accent-soft text-accent' },
   SITE_WAITING: { letter: 'A', className: 'bg-warning-soft text-warning' },
   WEATHER: { letter: 'I', className: 'bg-warning-soft text-warning' },
@@ -240,7 +240,7 @@ export default async function TimesheetPage({
 
       <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-[13.5px] text-muted">
         {[
-          { letter: 'F', className: 'bg-accent text-white', label: 'Mission facturable' },
+          { letter: 'F', className: 'bg-accent text-on-fill', label: 'Mission facturable' },
           { letter: 'N', className: 'bg-accent-soft text-accent', label: 'Mission non facturable' },
           { letter: 'A', className: 'bg-warning-soft text-warning', label: 'Attente ou intempérie' },
           { letter: 'Fo', className: 'bg-info-soft text-info', label: 'Formation' },

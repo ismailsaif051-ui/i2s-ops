@@ -116,8 +116,114 @@
   --shadow-raised: 0 2px 4px rgb(32 35 34 / 0.06), 0 12px 28px rgb(32 35 34 / 0.1);
   --shadow-menu: 0 8px 24px rgb(32 35 34 / 0.14);
 
+  /* Texte posé sur un aplat coloré (bouton, pastille) : blanc ici, sombre en
+     mode sombre où les aplats s'éclaircissent. */
+  --on-fill: #ffffff;
+  --rail-hover: #e7e9e4;
+
   --font-title: 'Archivo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
   --font-body: 'Archivo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+}
+
+/*
+ * MODE SOMBRE — trois états, comme le réglage du profil :
+ *   Système : rien sur <html>, le système décide (prefers-color-scheme) ;
+ *   Clair   : data-theme="light" l'emporte sur un système sombre ;
+ *   Sombre  : data-theme="dark" l'emporte sur un système clair.
+ * Seules les variables changent : composants et pages n'ont rien à savoir.
+ * Les neutres gardent la teinte gris-vert de Clarté ; les couleurs d'action
+ * et d'état s'éclaircissent pour rester lisibles (AA) sur fond sombre.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #131514;
+    --surface: #1b1e1c;
+    --surface-2: #232725;
+    --surface-3: #2e332f;
+    --border: #2c312e;
+    --border-strong: #3d433f;
+    --text: #e8ebe8;
+    --text-muted: #aab1ac;
+    --text-subtle: #8f9792;
+    --brand: #e8643f;
+    --accent: #f0916f;
+    --accent-hover: #f6aa8d;
+    --accent-soft: #3a2219;
+    --accent-border: #6a3626;
+    --secondary: #7fb393;
+    --secondary-soft: #1d2c23;
+    --primary: #e8ebe8;
+    --primary-hover: #ffffff;
+    --primary-soft: #2a2f2c;
+    --success: #7fb393;
+    --success-soft: #1d2c23;
+    --warning: #e0b05a;
+    --warning-soft: #33280f;
+    --danger: #f08a7e;
+    --danger-soft: #3a1d19;
+    --info: #aab1ac;
+    --info-soft: #2a2f2c;
+    --neutral: #8f9792;
+    --neutral-soft: #232725;
+    --rail: #171a18;
+    --rail-border: #2c312e;
+    --rail-text: #c6ccc7;
+    --rail-text-strong: #f0f2f0;
+    --rail-muted: #8f9792;
+    --rail-active-bg: #3a2219;
+    --rail-hover: #222624;
+    --rail-shadow: 5px 0 12px -6px rgb(0 0 0 / 60%);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.35), 0 12px 28px rgb(0 0 0 / 0.45);
+    --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.5);
+    --on-fill: #151716;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #131514;
+  --surface: #1b1e1c;
+  --surface-2: #232725;
+  --surface-3: #2e332f;
+  --border: #2c312e;
+  --border-strong: #3d433f;
+  --text: #e8ebe8;
+  --text-muted: #aab1ac;
+  --text-subtle: #8f9792;
+  --brand: #e8643f;
+  --accent: #f0916f;
+  --accent-hover: #f6aa8d;
+  --accent-soft: #3a2219;
+  --accent-border: #6a3626;
+  --secondary: #7fb393;
+  --secondary-soft: #1d2c23;
+  --primary: #e8ebe8;
+  --primary-hover: #ffffff;
+  --primary-soft: #2a2f2c;
+  --success: #7fb393;
+  --success-soft: #1d2c23;
+  --warning: #e0b05a;
+  --warning-soft: #33280f;
+  --danger: #f08a7e;
+  --danger-soft: #3a1d19;
+  --info: #aab1ac;
+  --info-soft: #2a2f2c;
+  --neutral: #8f9792;
+  --neutral-soft: #232725;
+  --rail: #171a18;
+  --rail-border: #2c312e;
+  --rail-text: #c6ccc7;
+  --rail-text-strong: #f0f2f0;
+  --rail-muted: #8f9792;
+  --rail-active-bg: #3a2219;
+  --rail-hover: #222624;
+  --rail-shadow: 5px 0 12px -6px rgb(0 0 0 / 60%);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.35), 0 12px 28px rgb(0 0 0 / 0.45);
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.5);
+  --on-fill: #151716;
 }
 
 @theme inline {
@@ -155,6 +261,8 @@
   --color-rail-text: var(--rail-text);
   --color-rail-muted: var(--rail-muted);
   --color-rail-active: var(--rail-active-bg);
+  --color-rail-hover: var(--rail-hover);
+  --color-on-fill: var(--on-fill);
 
   /* Rayons et ombres ne sont PAS remappés ici : `--shadow-card: var(--shadow-card)`
      serait une auto-référence circulaire, et Tailwind rejetterait tout le bloc
@@ -218,6 +326,25 @@ h4,
   height: 0.62em;
   border-top: 0.2em solid var(--brand);
   border-right: 0.2em solid var(--brand);
+}
+
+/* Logo : version sombre sur fond clair, version claire sur fond sombre. */
+.only-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .only-light {
+    display: none;
+  }
+  :root:not([data-theme='light']) .only-dark {
+    display: block;
+  }
+}
+:root[data-theme='dark'] .only-light {
+  display: none;
+}
+:root[data-theme='dark'] .only-dark {
+  display: block;
 }
 
 :focus-visible {

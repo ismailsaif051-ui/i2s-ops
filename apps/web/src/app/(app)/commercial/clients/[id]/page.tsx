@@ -86,7 +86,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
             </StatusBadge>
             <Link
               href={`/affaires/nouvelle?client=${client.id}`}
-              className="inline-flex h-10 items-center rounded-[10px] bg-accent px-4 text-[14px] font-medium text-white shadow-sm transition-colors hover:bg-accent-hover"
+              className="inline-flex h-10 items-center rounded-[10px] bg-accent px-4 text-[14px] font-medium text-on-fill shadow-sm transition-colors hover:bg-accent-hover"
             >
               Ouvrir une affaire
             </Link>

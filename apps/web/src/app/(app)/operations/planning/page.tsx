@@ -76,7 +76,7 @@ function cellStyle(cell: Cell): { className: string; label: string } {
 
   switch (cell.category) {
     case 'MISSION_BILLABLE':
-      return { className: 'bg-accent text-white', label: 'Mission facturable' };
+      return { className: 'bg-accent text-on-fill', label: 'Mission facturable' };
     case 'MISSION_NON_BILLABLE':
       return { className: 'bg-accent-soft text-accent', label: 'Mission non facturable' };
     case 'SITE_WAITING':

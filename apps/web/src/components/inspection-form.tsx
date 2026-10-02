@@ -754,10 +754,10 @@ function ChecklistRenderer({
                         className={`h-8 w-10 rounded-[6px] border text-[13px] font-medium transition-colors ${
                           current === verdict
                             ? verdict === 'NC'
-                              ? 'border-danger bg-danger text-white'
+                              ? 'border-danger bg-danger text-on-fill'
                               : verdict === 'C'
-                                ? 'border-success bg-success text-white'
-                                : 'border-neutral bg-neutral text-white'
+                                ? 'border-success bg-success text-on-fill'
+                                : 'border-neutral bg-neutral text-on-fill'
                             : 'border-border-strong bg-surface text-subtle hover:bg-surface-2'
                         }`}
                       >
@@ -841,8 +841,8 @@ function CriteriaRenderer({
                     className={`rounded-[6px] border px-2.5 py-1 text-[13px] transition-colors disabled:opacity-50 ${
                       state.conform === option.v
                         ? option.v
-                          ? 'border-success bg-success text-white'
-                          : 'border-danger bg-danger text-white'
+                          ? 'border-success bg-success text-on-fill'
+                          : 'border-danger bg-danger text-on-fill'
                         : 'border-border-strong bg-surface text-subtle hover:bg-surface-2'
                     }`}
                   >

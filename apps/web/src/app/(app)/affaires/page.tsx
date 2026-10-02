@@ -311,7 +311,7 @@ export default async function AffairsPage({
             </label>
             <button
               type="submit"
-              className="inline-flex h-9 items-center rounded-[8px] bg-accent px-4 text-[13.5px] font-medium text-white hover:bg-accent-hover"
+              className="inline-flex h-9 items-center rounded-[8px] bg-accent px-4 text-[13.5px] font-medium text-on-fill hover:bg-accent-hover"
             >
               Filtrer
             </button>

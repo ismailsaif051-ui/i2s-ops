@@ -50,17 +50,16 @@ export default function LoginPage() {
       {/* Volet d'identité — reprend le positionnement de la charte I2S TESTING */}
       <section className="hidden flex-col justify-between bg-rail p-12 text-[var(--rail-text)] lg:flex">
         <div>
-          <p className="flex items-baseline gap-2 text-[26px] font-semibold text-white">
-            I2S-System
-            <span className="h-2 w-2 rounded-[2px] bg-accent" aria-hidden="true" />
-          </p>
+          <img src="/brand/logo-i2s-testing.png" alt="I2S TESTING — Safer. Better. Further." width={260} height={69} className="only-light h-auto w-[260px]" />
+          <img src="/brand/logo-i2s-testing-light.png" alt="I2S TESTING — Safer. Better. Further." width={260} height={69} className="only-dark h-auto w-[260px]" />
+          <p className="mt-6 text-[20px] font-semibold text-[var(--rail-text-strong)]">I2S-System</p>
           <p className="mt-1.5 text-[12px] text-[var(--rail-muted)]">
             Inspection · Testing · Engineering · Compliance
           </p>
         </div>
 
         <div className="max-w-[46ch]">
-          <p className="text-[27px] font-semibold uppercase leading-tight text-white">
+          <p className="text-[27px] font-semibold uppercase leading-tight text-[var(--rail-text-strong)]">
             La fiabilité de vos installations,
             <br />
             la sécurité de vos opérations.

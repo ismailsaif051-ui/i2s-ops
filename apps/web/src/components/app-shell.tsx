@@ -16,6 +16,7 @@ import {
   IconKey,
   IconLogout,
   IconMenu,
+  IconMoon,
   IconOperations,
   IconOverview,
   IconProductivity,
@@ -23,7 +24,9 @@ import {
   IconQuality,
   IconResources,
   IconSettings,
+  IconSun,
 } from '@/components/icons';
+import { useTheme, type ThemeChoice } from '@/components/theme';
 
 /**
  * Rubriques dépliées, par utilisateur et par navigateur — une préférence
@@ -83,6 +86,7 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const menuButton = useRef<HTMLButtonElement>(null);
+  const theme = useTheme();
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -192,14 +196,16 @@ export function AppShell({
   const entryState = (active: boolean) =>
     active
       ? 'bg-rail-active font-medium text-accent before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-brand'
-      : 'text-rail-text hover:bg-[#e7e9e4] hover:text-[var(--rail-text-strong)]';
+      : 'text-rail-text hover:bg-rail-hover hover:text-[var(--rail-text-strong)]';
 
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-6 pb-5 pt-6">
         <Link href="/cockpit" className="block" aria-label="I2S TESTING — Vue d’ensemble">
           {/* Logo officiel, fichier haute définition, ratio conservé. */}
-          <img src="/brand/logo-i2s-testing.png" alt="I2S TESTING — Safer. Better. Further." width={224} height={59} className="h-auto w-[200px] lg:w-[224px]" />
+          <img src="/brand/logo-i2s-testing.png" alt="I2S TESTING — Safer. Better. Further." width={224} height={59} className="only-light h-auto w-[200px] lg:w-[224px]" />
+          {/* Version claire du logo officiel, pour le menu en mode sombre. */}
+          <img src="/brand/logo-i2s-testing-light.png" alt="I2S TESTING — Safer. Better. Further." width={224} height={59} className="only-dark h-auto w-[200px] lg:w-[224px]" />
         </Link>
         <button
           type="button"
@@ -207,7 +213,7 @@ export function AppShell({
             setOpen(false);
             menuButton.current?.focus();
           }}
-          className="rounded-[8px] p-2 text-rail-text hover:bg-[#e7e9e4] lg:hidden"
+          className="rounded-[8px] p-2 text-rail-text hover:bg-rail-hover lg:hidden"
           aria-label="Fermer le menu"
         >
           <IconClose />
@@ -274,7 +280,7 @@ export function AppShell({
                     aria-expanded={isOpen}
                     aria-controls={`nav-${group.key}`}
                     className={`${entryBase} w-full ${
-                      holdsActive && !isOpen ? entryState(true) : `${holdsActive ? 'font-medium text-[var(--rail-text-strong)]' : 'text-rail-text'} hover:bg-[#e7e9e4]`
+                      holdsActive && !isOpen ? entryState(true) : `${holdsActive ? 'font-medium text-[var(--rail-text-strong)]' : 'text-rail-text'} hover:bg-rail-hover`
                     }`}
                   >
                     <Icon className="shrink-0" />
@@ -295,7 +301,7 @@ export function AppShell({
                           className={`block rounded-[8px] px-3 py-2 text-[14px] transition-colors duration-150 ${
                             active
                               ? 'bg-rail-active font-medium text-accent'
-                              : 'text-rail-text hover:bg-[#e7e9e4] hover:text-[var(--rail-text-strong)]'
+                              : 'text-rail-text hover:bg-rail-hover hover:text-[var(--rail-text-strong)]'
                           }`}
                         >
                           {item.label}
@@ -323,7 +329,7 @@ export function AppShell({
                     onClick={() => toggle('admin', holdsActive)}
                     aria-expanded={isOpen}
                     aria-controls="nav-admin"
-                    className={`${entryBase} w-full ${holdsActive && !isOpen ? entryState(true) : 'text-rail-text hover:bg-[#e7e9e4]'}`}
+                    className={`${entryBase} w-full ${holdsActive && !isOpen ? entryState(true) : 'text-rail-text hover:bg-rail-hover'}`}
                   >
                     <IconSettings className="shrink-0" />
                     <span className="flex-1 text-left">Paramètres</span>
@@ -338,7 +344,7 @@ export function AppShell({
                           href={item.href}
                           aria-current={active ? 'page' : undefined}
                           className={`block rounded-[8px] px-3 py-2 text-[14px] transition-colors duration-150 ${
-                            active ? 'bg-rail-active font-medium text-accent' : 'text-rail-text hover:bg-[#e7e9e4]'
+                            active ? 'bg-rail-active font-medium text-accent' : 'text-rail-text hover:bg-rail-hover'
                           }`}
                         >
                           {item.label}
@@ -358,7 +364,7 @@ export function AppShell({
             onClick={() => setProfileOpen((v) => !v)}
             aria-expanded={profileOpen}
             aria-haspopup="menu"
-            className="flex w-full items-center gap-3 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[#e7e9e4]"
+            className="flex w-full items-center gap-3 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-rail-hover"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[13px] font-semibold text-text" aria-hidden="true">
               {initials}
@@ -376,6 +382,29 @@ export function AppShell({
                 {primaryRole ? (ROLE_LABELS[primaryRole] ?? primaryRole) : '—'}
                 {session.employee?.departmentCode ? ` · ${session.employee.departmentCode}` : ''}
               </p>
+              <div className="border-b border-border px-4 py-3">
+                <p className="mb-2 text-[12.5px] text-muted">Apparence</p>
+                <div role="radiogroup" aria-label="Apparence" className="grid grid-cols-3 gap-1 rounded-[8px] bg-surface-2 p-1">
+                  {([
+                    ['system', 'Système'],
+                    ['light', 'Clair'],
+                    ['dark', 'Sombre'],
+                  ] as Array<[ThemeChoice, string]>).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={theme.choice === value}
+                      onClick={() => theme.set(value)}
+                      className={`rounded-[6px] px-2 py-1.5 text-[13px] transition-colors ${
+                        theme.choice === value ? 'bg-surface font-medium text-text shadow-[var(--shadow-card)]' : 'text-muted hover:text-text'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Link role="menuitem" href="/changer-mot-de-passe" className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] hover:bg-surface-2">
                 <IconKey size={18} /> Changer le mot de passe
               </Link>
@@ -439,6 +468,15 @@ export function AppShell({
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={theme.toggle}
+              className="rounded-[8px] p-2.5 text-text transition-colors hover:bg-surface-2"
+              aria-label={theme.isDark ? 'Passer en mode clair' : 'Passer en mode sombre'}
+              title={theme.isDark ? 'Mode clair' : 'Mode sombre'}
+            >
+              {theme.isDark ? <IconSun /> : <IconMoon />}
+            </button>
             <Link
               href="/notifications"
               className="relative rounded-[8px] p-2.5 text-text transition-colors hover:bg-surface-2"
@@ -446,7 +484,7 @@ export function AppShell({
             >
               <IconBell />
               {unreadCount > 0 && (
-                <span className="tnum absolute right-1 top-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
+                <span className="tnum absolute right-1 top-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold text-on-fill">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}

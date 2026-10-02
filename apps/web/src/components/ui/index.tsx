@@ -13,11 +13,11 @@ import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react
 type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'ghost' | 'danger';
 
 const BUTTON_STYLES: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-white hover:bg-primary-hover border-transparent shadow-sm',
-  accent: 'bg-accent text-white hover:bg-accent-hover border-transparent shadow-sm',
+  primary: 'bg-primary text-on-fill hover:bg-primary-hover border-transparent shadow-sm',
+  accent: 'bg-accent text-on-fill hover:bg-accent-hover border-transparent shadow-sm',
   secondary: 'bg-surface text-text border-border-strong hover:bg-surface-2',
   ghost: 'bg-transparent text-muted border-transparent hover:bg-surface-2 hover:text-text',
-  danger: 'bg-danger text-white border-transparent hover:opacity-90',
+  danger: 'bg-danger text-on-fill border-transparent hover:opacity-90',
 };
 
 export function Button({
