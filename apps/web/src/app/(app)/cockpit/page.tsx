@@ -185,7 +185,6 @@ export default async function CockpitPage() {
               <KpiCard
                 label="Facturé (année)"
                 value={compactDh(data.invoicedYtd)}
-                trend={data.invoicedTrend ?? undefined}
                 href="/finance/factures"
               />
             )}
@@ -193,7 +192,6 @@ export default async function CockpitPage() {
               <KpiCard
                 label="Encaissé (année)"
                 value={compactDh(data.collectedYtd)}
-                trend={data.collectedTrend ?? undefined}
                 href="/finance/encaissements"
               />
             )}
