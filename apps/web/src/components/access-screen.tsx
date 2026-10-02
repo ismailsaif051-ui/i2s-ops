@@ -22,7 +22,7 @@ export function AccessScreen({
         href="/cockpit"
         className="inline-flex h-10 items-center rounded-[10px] border border-border-strong bg-surface px-4 text-[14px] font-medium transition-colors hover:bg-surface-2"
       >
-        Retour au Dashboard
+        Retour à la vue d’ensemble
       </Link>
     </div>
   );

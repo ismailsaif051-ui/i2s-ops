@@ -83,7 +83,7 @@ export function Card({
 }) {
   return (
     <section
-      className={`overflow-hidden rounded-[14px] border border-border bg-surface shadow-[var(--shadow-card)] ${className}`}
+      className={`overflow-hidden rounded-[10px] border border-border bg-surface shadow-[var(--shadow-card)] ${className}`}
     >
       {(title || action) && (
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
@@ -112,9 +112,9 @@ export function PageHeader({
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div>
         {eyebrow && (
-          <p className="mb-1.5 text-[13px] font-medium text-accent">{eyebrow}</p>
+          <p className="mb-2 text-[13px] text-muted">{eyebrow}</p>
         )}
-        <h1 className="text-[30px] font-semibold leading-tight tracking-[-0.02em]">{title}</h1>
+        <h1 className="text-[32px] font-bold leading-[1.2] tracking-[-0.02em]">{title}</h1>
         {description && (
           <p className="mt-2 max-w-[70ch] text-[15px] leading-relaxed text-muted">{description}</p>
         )}
@@ -179,12 +179,12 @@ export function KpiCard({
       <div className="flex items-start justify-between gap-2">
         {/* Hauteur fixe : un libellé sur deux lignes ne décale pas le chiffre
             par rapport aux cartes voisines. */}
-        <p className="flex min-h-[2.6em] items-start text-[13.5px] leading-snug text-muted">
+        <p className="flex min-h-[2.6em] items-start text-[14px] leading-snug text-muted">
           {label}
         </p>
         {trend && <Sparkline points={trend} tone={tone} />}
       </div>
-      <p className={`title tnum mt-1 text-[32px] font-semibold leading-none tracking-[-0.02em] ${valueTone}`}>
+      <p className={`title tnum mt-1 text-[24px] sm:text-[34px] font-semibold leading-[1.15] tracking-[-0.02em] ${valueTone}`}>
         {value}
         {unit && <span className="ml-1.5 text-[15px] font-medium text-subtle">{unit}</span>}
       </p>
@@ -192,12 +192,11 @@ export function KpiCard({
     </>
   );
 
-  const base =
-    'block rounded-[14px] border border-border bg-surface px-5 py-4 shadow-[var(--shadow-card)] transition-shadow';
+  const base = 'block bg-surface px-4 py-4 sm:px-6 sm:py-5 transition-colors';
 
   // Un indicateur cliquable ouvre son détail — exigence du CDC (module 01).
   return href ? (
-    <a href={href} className={`${base} hover:shadow-[var(--shadow-raised)]`}>
+    <a href={href} className={`${base} hover:bg-surface-2`}>
       {body}
     </a>
   ) : (
@@ -205,10 +204,15 @@ export function KpiCard({
   );
 }
 
-/** Bande d'indicateurs : cartes séparées, pas de cellules étirées sur du vide. */
+/**
+ * Bandeau d'indicateurs (modèle Clarté) : une seule surface blanche, divisée
+ * en colonnes par de fines lignes. Chaque cellule trace sa ligne droite et
+ * basse ; celles du bord sont coupées par le cadre. Une ligne incomplète
+ * reste blanche, et les lignes suivent le retour à la ligne sur écran étroit.
+ */
 export function KpiRow({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-7 grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(210px,1fr))]">
+    <div className="mb-6 grid overflow-hidden rounded-[10px] border border-border bg-surface shadow-[var(--shadow-card)] [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] sm:[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))] [&>*]:shadow-[1px_0_0_0_var(--border),0_1px_0_0_var(--border)]">
       {children}
     </div>
   );
@@ -305,7 +309,7 @@ export function NextActionBanner({
   };
 
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-4 rounded-[14px] border border-border bg-surface px-5 py-4 shadow-[var(--shadow-card)]">
+    <div className="mb-6 flex flex-wrap items-center gap-4 rounded-[10px] border border-border bg-surface px-5 py-4 shadow-[var(--shadow-card)]">
       <span
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[16px] font-semibold ${styles[tone]}`}
         aria-hidden="true"

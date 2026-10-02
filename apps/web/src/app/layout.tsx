@@ -13,21 +13,18 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#f4f2ed',
+  themeColor: '#f7f7f5',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Polices de la charte : Poppins pour les titres, Barlow pour les
-            textes, les chiffres et les références. */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap"
-        />
+        {/* Police Archivo servie par l'application (public/fonts) : pas de
+            dépendance à Google, et la graisse 600 est disponible dès le
+            premier affichage. */}
+        <link rel="preload" href="/fonts/Archivo-400.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/Archivo-600.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
       </head>
       <body>{children}</body>
     </html>

@@ -1,6 +1,32 @@
 # 07 — Design System « I2S OPS »
 
-> **Source normative : I2S-TESTING — CHARTE GRAPHIQUE, Édition 2026, version 1.0.**
+> **Modèle en vigueur depuis le 2 octobre 2026 : « Clarté V2 »** — spécification
+> `DESIGN-I2S-CLARTE.md` validée par I2S TESTING (maquette de référence
+> `01-clarte-v2.png`). Implémentation : `apps/web/src/app/globals.css` (palette,
+> police), `apps/web/src/components/app-shell.tsx` (menu, en-tête, pied de page),
+> `apps/web/src/components/icons.tsx` (pictogrammes), `apps/web/src/app/(app)/cockpit/page.tsx`
+> (Vue d’ensemble).
+>
+> | | Clarté V2 |
+> |---|---|
+> | Police | **Archivo** 400 · 500 · 600 · 700, servie par l’application (`public/fonts`) |
+> | Fond / menu / surface | `#F7F7F5` / `#F1F2EF` / `#FFFFFF` |
+> | Texte / secondaire | `#202322` / `#626B65` |
+> | Bordures / séparateur du menu | `#E3E6E1` / `#D3D8D1` (+ ombre légère vers le contenu) |
+> | Orange de marque (graphiques, repères) | `#D74F2C` |
+> | Orange d’action (liens, sélection, boutons) | `#A83C20` — contraste AA sur blanc |
+> | Sélection | fond `#F9E7E0`, repère orange à gauche |
+> | Vert (encaissements, qualité) | `#426B53` |
+> | Alerte / attente | `#B42318` / `#8A5700` |
+> | Cartes | blanches, bordure 1 px, angle 10 px ; bandeau d’indicateurs = une seule surface divisée par des lignes |
+> | Menu | PILOTAGE (Vue d’ensemble, Productivité, Rentabilité, Qualité) · ACTIVITÉ (Commercial, Affaires, Opérations, Finance, Ressources, Documents) · Paramètres · profil |
+>
+> Les sections ci-dessous décrivent la première charte applicative (Poppins / Barlow,
+> fond sable) ; elles restent comme historique. **En cas de divergence, Clarté V2 prime.**
+
+---
+
+> **Source de la première version : I2S-TESTING — CHARTE GRAPHIQUE, Édition 2026, version 1.0.**
 > Les valeurs ci-dessous sont reportées telles quelles. Toute divergence est signalée
 > comme une adaptation assumée, avec sa justification.
 

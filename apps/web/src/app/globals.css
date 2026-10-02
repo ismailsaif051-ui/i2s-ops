@@ -1,99 +1,123 @@
 @import 'tailwindcss';
 
 /*
- * Design System I2S-System
- * Source : I2S-TESTING — CHARTE GRAPHIQUE, Édition 2026, version 1.0.
+ * Design System I2S-System — modèle « Clarté V2 »
+ * Source : DESIGN-I2S-CLARTE.md, version 1.0 du 2 octobre 2026, validée par
+ * I2S TESTING. Elle remplace la première charte applicative (Poppins/Barlow,
+ * fond sable).
  *
- * PALETTE OFFICIELLE (reportée telle quelle) :
- *   Orange Signal     #D14E27   accent           Pantone 173 C
- *   Vert Contrôle     #6E8F76   secondaire       Pantone 5555 C
- *   Noir Industriel   #1A1B18   dominante        Pantone Black 6 C
- *   Gris Acier        #4A4F52   texte courant    Cool Gray 11 C
- *   Sable Technique   #F4F2ED   fonds clairs     Warm Gray 1 C
- *   Blanc             #FFFFFF   réserve
+ * PALETTE
+ *   Fond général        #F7F7F5   zone de travail
+ *   Fond du menu        #F1F2EF   colonne de navigation
+ *   Surface             #FFFFFF   en-tête, cartes, tableaux
+ *   Texte               #202322
+ *   Texte secondaire    #626B65
+ *   Bordures            #E3E6E1   cartes, lignes de tableau
+ *   Séparateur du menu  #D3D8D1
+ *   Orange de marque    #D74F2C   graphiques, repères
+ *   Orange d'action     #A83C20   liens, sélection, boutons pleins (contraste AA)
+ *   Fond de sélection   #F9E7E0
+ *   Vert                #426B53   encaissements, qualité
+ *   Alerte              #B42318
+ *   Attente             #8A5700
  *
- * TYPOGRAPHIE : Poppins pour les titres, Barlow pour les textes.
- * Substitut bureautique : Arial. Jamais Calibri, Aptos ni Times New Roman.
+ * TYPOGRAPHIE : Archivo (400, 500, 600, 700), fichiers servis par
+ * l'application — aucune dépendance à un service extérieur.
  *
- * ADAPTATION ASSUMÉE — la charte prescrit 55 % de Noir Industriel sur « un
- * support complet », ce qui donnerait une application sombre. Le produit est
- * utilisé huit heures par jour et le mode clair a été demandé : le Noir
- * Industriel reste dominant, mais par le TEXTE et non par les aplats. Les
- * fonds sont en Sable Technique et Blanc.
- *
- * EXTENSION ASSUMÉE — la charte interdit toute autre teinte, mais elle couvre
- * l'imprimé et le marketing, pas les états d'une application. Quatre couleurs
- * d'état sont ajoutées, tenues dans le registre chaud de la marque :
- * succès = Vert Contrôle (couleur de charte), avertissement = ocre,
- * erreur = brique profonde, information = Gris Acier.
- *
- * RÈGLE — l'Orange Signal est réservé à l'INTERACTIF (bouton principal, entrée
- * de menu active, focus, lien). Il ne porte jamais d'état : sans quoi un bouton
- * se lirait comme une alerte.
+ * RÈGLE — l'orange signale l'interactif (action, sélection, lien) et les
+ * repères de marque ; le vert, la qualité et l'argent encaissé. Les états
+ * (alerte, attente) ont leurs propres couleurs et toujours un libellé.
  */
+
+@font-face {
+  font-family: 'Archivo';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Archivo-400.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Archivo-500.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Archivo-600.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Archivo-700.ttf') format('truetype');
+}
 
 :root {
   color-scheme: light;
 
-  /* ── Couleurs de charte ─────────────────────────────────────── */
-  --orange-signal: #d14e27;
-  --vert-controle: #6e8f76;
-  --noir-industriel: #1a1b18;
-  --gris-acier: #4a4f52;
-  --sable-technique: #f4f2ed;
-
   /* ── Fonds et texte ─────────────────────────────────────────── */
-  --bg: #f4f2ed;
+  --bg: #f7f7f5;
   --surface: #ffffff;
-  --surface-2: #edeae3;
-  --surface-3: #e2ded5;
-  --border: #e0dcd3;
-  --border-strong: #c4bfb4;
-  --text: #1a1b18;
-  --text-muted: #4a4f52;
-  --text-subtle: #7d8285;
+  --surface-2: #f1f2ef;
+  --surface-3: #e3e6e1;
+  --border: #e3e6e1;
+  --border-strong: #d3d8d1;
+  --text: #202322;
+  --text-muted: #626b65;
+  /* Plus clair que le secondaire, mais toujours ≥ 4,5:1 sur blanc. */
+  --text-subtle: #6b736e;
 
   /* ── Marque ─────────────────────────────────────────────────── */
-  --accent: #d14e27;
-  --accent-hover: #b13f1d;
-  --accent-soft: #faeae4;
-  --accent-border: #eec3b3;
+  --brand: #d74f2c;
+  --accent: #a83c20;
+  --accent-hover: #8f3219;
+  --accent-soft: #f9e7e0;
+  --accent-border: #efc6b8;
 
-  --secondary: #6e8f76;
-  --secondary-soft: #e9efea;
+  --secondary: #426b53;
+  --secondary-soft: #eaf1eb;
 
-  --primary: #1a1b18;
+  --primary: #202322;
   --primary-hover: #000000;
-  --primary-soft: #eceae5;
+  --primary-soft: #eceeea;
 
-  /* ── États (extension applicative) ──────────────────────────── */
-  --success: #4f7358;
-  --success-soft: #e9efea;
-  --warning: #96701c;
-  --warning-soft: #f7f0dd;
-  --danger: #8c2f1e;
-  --danger-soft: #f6e6e1;
-  --info: #4a4f52;
-  --info-soft: #eceae5;
-  --neutral: #7d8285;
-  --neutral-soft: #edeae3;
+  /* ── États ──────────────────────────────────────────────────── */
+  --success: #426b53;
+  --success-soft: #eaf1eb;
+  --warning: #8a5700;
+  --warning-soft: #f8efdc;
+  --danger: #b42318;
+  --danger-soft: #fbeae8;
+  --info: #626b65;
+  --info-soft: #eceeea;
+  --neutral: #6b736e;
+  --neutral-soft: #f1f2ef;
 
-  /* ── Navigation ─────────────────────────────────────────────── */
-  --rail: #ffffff;
-  --rail-border: #e0dcd3;
-  --rail-text: #4a4f52;
-  --rail-text-strong: #1a1b18;
-  --rail-muted: #8a8f8c;
-  --rail-active-bg: #faeae4;
+  /* ── Navigation : menu clair, séparé par une bordure et une ombre ── */
+  --rail: #f1f2ef;
+  --rail-border: #d3d8d1;
+  --rail-text: #3d4440;
+  --rail-text-strong: #202322;
+  --rail-muted: #6b736e;
+  --rail-active-bg: #f9e7e0;
+  --rail-shadow: 5px 0 12px -6px rgb(32 35 34 / 20%);
+  --rail-width: 280px;
 
   --radius-control: 8px;
-  --radius-card: 12px;
-  --shadow-card: 0 1px 2px rgb(26 27 24 / 0.05), 0 4px 12px rgb(26 27 24 / 0.05);
-  --shadow-raised: 0 2px 4px rgb(26 27 24 / 0.06), 0 12px 28px rgb(26 27 24 / 0.1);
-  --shadow-menu: 0 8px 24px rgb(26 27 24 / 0.14);
+  --radius-card: 10px;
+  /* Cartes blanches à bordure fine : l'ombre reste à peine perceptible. */
+  --shadow-card: 0 1px 2px rgb(32 35 34 / 0.04);
+  --shadow-raised: 0 2px 4px rgb(32 35 34 / 0.06), 0 12px 28px rgb(32 35 34 / 0.1);
+  --shadow-menu: 0 8px 24px rgb(32 35 34 / 0.14);
 
-  --font-title: 'Poppins', 'Barlow', Arial, sans-serif;
-  --font-body: 'Barlow', Arial, Helvetica, sans-serif;
+  --font-title: 'Archivo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  --font-body: 'Archivo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
 }
 
 @theme inline {
@@ -106,6 +130,7 @@
   --color-text: var(--text);
   --color-muted: var(--text-muted);
   --color-subtle: var(--text-subtle);
+  --color-brand: var(--brand);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
@@ -138,7 +163,6 @@
 
   --font-sans: var(--font-body);
   --font-title: var(--font-title);
-  /* Plus de chasse fixe : chiffres et références en Barlow (choix I2S, oct. 2026). */
   --font-mono: var(--font-body);
 }
 
@@ -157,12 +181,11 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* Titres en Poppins — « Écrire les titres en Poppins, les textes en Barlow ». */
 h1,
 h2,
 h3,
@@ -170,6 +193,7 @@ h4,
 .title {
   font-family: var(--font-title);
   letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 /* Montants, mesures et durées : alignement en colonne. */
@@ -177,11 +201,7 @@ h4,
   font-variant-numeric: tabular-nums;
 }
 
-/*
- * Identifiants métier, montants et quantités — en Barlow comme le texte
- * (choix I2S : plus de police « machine à écrire »). Les chiffres de largeur
- * égale gardent les colonnes de montants alignées.
- */
+/* Identifiants métier, montants et quantités : chiffres de largeur égale. */
 .ref {
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums lining-nums;
@@ -196,8 +216,8 @@ h4,
   display: inline-block;
   width: 0.62em;
   height: 0.62em;
-  border-top: 0.2em solid var(--accent);
-  border-right: 0.2em solid var(--accent);
+  border-top: 0.2em solid var(--brand);
+  border-right: 0.2em solid var(--brand);
 }
 
 :focus-visible {

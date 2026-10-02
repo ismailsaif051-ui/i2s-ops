@@ -1,29 +1,10 @@
-import { Fragment } from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ROLE_LABELS, can, type RoleCode } from '@i2s/contracts';
-import { api, requireSession } from '@/lib/api';
+import { api } from '@/lib/api';
 import { compactDh, money, percent } from '@/lib/format';
-import {
-  Card,
-  KpiCard,
-  KpiRow,
-  NextActionBanner,
-  PageHeader,
-  StatusBadge,
-} from '@/components/ui';
+import { Card, KpiCard, KpiRow, NextActionBanner, PageHeader } from '@/components/ui';
 
-const WEEKDAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-
-function loadCellTone(category: string | null, conflicts: string[]): string {
-  if (conflicts.length > 0) return 'bg-danger-soft ring-1 ring-inset ring-danger';
-  if (category === 'MISSION_BILLABLE' || category === 'MISSION_NON_BILLABLE') return 'bg-accent';
-  if (category === 'LEAVE' || category === 'SICK' || category === 'TRAINING') return 'bg-neutral-soft';
-  if (category === 'UNASSIGNED') return 'border border-dashed border-border-strong';
-  return 'bg-surface-2';
-}
-
-export const metadata: Metadata = { title: 'Dashboard' };
+export const metadata: Metadata = { title: 'Vue d’ensemble' };
 
 interface Dashboard {
   period: { label: string };
@@ -43,328 +24,279 @@ interface Dashboard {
   openNonConformities: number;
   invoicedYtd: number | null;
   collectedYtd: number | null;
-  invoicedTrend: number[] | null;
-  collectedTrend: number[] | null;
   reportOnTimeRate: number;
   reportsIssued: number;
 }
 
-interface WeekPlanningCell {
-  date: string;
-  isWorkingDay: boolean;
-  category: string | null;
-  conflicts: string[];
-}
-interface WeekPlanningRow {
-  employeeId: string;
-  name: string;
-  department: { code: string } | null;
-  cells: WeekPlanningCell[];
-  loadRate: number;
-}
-interface WeekPlanning {
-  period: { from: string; to: string };
-  columns: Array<{ date: string; isWorkingDay: boolean }>;
-  rows: WeekPlanningRow[];
+type Priority = 'high' | 'check' | 'validate' | 'follow';
+
+/** Priorité affichée : une pastille ET un libellé — jamais la couleur seule. */
+const PRIORITY: Record<Priority, { label: string; dot: string; text: string }> = {
+  high: { label: 'Haute', dot: 'bg-danger', text: 'font-semibold text-danger' },
+  check: { label: 'À vérifier', dot: 'bg-warning', text: 'text-text' },
+  validate: { label: 'À valider', dot: 'bg-warning', text: 'text-text' },
+  follow: { label: 'À suivre', dot: 'bg-warning', text: 'text-text' },
+};
+
+interface Todo {
+  priority: Priority;
+  subject: string;
+  volume: string;
+  action: string;
+  href: string;
 }
 
-export default async function CockpitPage() {
-  const session = await requireSession();
-  const permissions = session.permissions as Parameters<typeof can>[0];
+function ArrowRight() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
 
-  const [data, weekPlanning] = await Promise.all([
-    api<Dashboard>('/analytics/dashboard').catch(() => null),
-    api<WeekPlanning>('/planning').catch(() => null),
-  ]);
+/** Barre horizontale proportionnelle à une valeur — la longueur se calcule, elle ne se dessine pas à l'œil. */
+function Bar({ value, max, color, label }: { value: number; max: number; color: string; label: string }) {
+  const width = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className="h-3 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={label}>
+      <div className={`h-full rounded-full ${color}`} style={{ width: `${width}%` }} />
+    </div>
+  );
+}
 
-  const alerts: Array<{ tone: 'danger' | 'warning'; title: string; detail: string; href: string }> = [];
-  if (data) {
-    if (data.overdueInvoices !== null && data.overdueInvoices > 0) {
-      alerts.push({
-        tone: 'danger',
-        title: `${data.overdueInvoices} facture(s) échue(s) — ${compactDh(data.overdueAmount)}`,
-        detail: 'Une relance a été générée. Le recouvrement pèse directement sur la trésorerie.',
-        href: '/finance/encaissements',
-      });
-    }
-    if (data.expiredDevices > 0) {
-      alerts.push({
-        tone: 'danger',
-        title: `${data.expiredDevices} instrument(s) de mesure hors étalonnage`,
-        detail: 'Ces appareils ne peuvent plus servir à émettre un rapport valide.',
-        href: '/operations/parc-mesure',
-      });
-    }
-    if (data.unassignedDays !== null && data.unassignedDays > 0) {
-      alerts.push({
-        tone: 'warning',
-        title: `${data.unassignedDays} jours non affectés — ${compactDh(data.idleCost)}`,
-        detail: 'Capacité disponible immédiatement, payée mais non employée.',
-        href: '/pilotage/jours-non-affectes',
-      });
-    }
-    if (data.pendingReports > 0) {
-      alerts.push({
-        tone: 'warning',
-        title: `${data.pendingReports} rapport(s) en attente de vérification`,
-        detail: 'Le délai de remise court : objectif qualité de 21 jours ouvrés.',
-        href: '/operations/rapports',
-      });
-    }
-    if (data.pendingExpenses > 0) {
-      alerts.push({
-        tone: 'warning',
-        title: `${data.pendingExpenses} note(s) de frais en attente de visa`,
-        detail: 'Le règlement intervient le 15 du mois pour les notes validées à temps.',
-        href: '/finance/notes-de-frais',
-      });
-    }
-    if (data.expiringCertifications > 0) {
-      alerts.push({
-        tone: 'warning',
-        title: `${data.expiringCertifications} certification(s) expirent sous 60 jours`,
-        detail: 'Un inspecteur non certifié à la date ne peut pas être affecté à la méthode concernée.',
-        href: '/ressources/employes',
-      });
-    }
+export default async function OverviewPage() {
+  const data = await api<Dashboard>('/analytics/dashboard').catch(() => null);
+
+  if (!data) {
+    return (
+      <>
+        <PageHeader title="Vue d’ensemble" description="Les indicateurs essentiels pour décider et agir." />
+        <NextActionBanner
+          tone="info"
+          title="Indicateurs indisponibles"
+          detail="Votre profil n’a pas accès aux tableaux de bord, ou le service ne répond pas. Rechargez la page dans un instant."
+        />
+      </>
+    );
   }
+
+  const canSeeBilling = data.invoicedYtd !== null && data.collectedYtd !== null;
+
+  // À traiter : ce qui demande une action, dans l'ordre de priorité. Une ligne
+  // n'apparaît que si elle a un volume ; chaque action ouvre la liste
+  // correspondante — rien ne part chez un client depuis ce tableau.
+  const todos: Todo[] = [];
+  if (data.overdueInvoices !== null && data.overdueInvoices > 0) {
+    todos.push({
+      priority: 'high',
+      subject: 'Factures échues',
+      volume: `${data.overdueInvoices} · ${compactDh(data.overdueAmount)}`,
+      action: 'Relancer',
+      href: '/finance/encaissements',
+    });
+  }
+  if (data.expiredDevices > 0) {
+    todos.push({
+      priority: 'high',
+      subject: 'Instruments hors étalonnage',
+      volume: String(data.expiredDevices),
+      action: 'Ouvrir',
+      href: '/operations/parc-mesure',
+    });
+  }
+  if (data.pendingReports > 0) {
+    todos.push({ priority: 'check', subject: 'Rapports à vérifier', volume: String(data.pendingReports), action: 'Consulter', href: '/operations/rapports' });
+  }
+  if (data.pendingExpenses > 0) {
+    todos.push({ priority: 'validate', subject: 'Frais en attente', volume: String(data.pendingExpenses), action: 'Valider', href: '/finance/notes-de-frais' });
+  }
+  if (data.openNonConformities > 0) {
+    todos.push({ priority: 'follow', subject: 'Non-conformités ouvertes', volume: String(data.openNonConformities), action: 'Examiner', href: '/operations/non-conformites' });
+  }
+  if (data.expiringCertifications > 0) {
+    todos.push({ priority: 'follow', subject: 'Certifications expirant sous 60 jours', volume: String(data.expiringCertifications), action: 'Planifier', href: '/ressources/habilitations' });
+  }
+
+  const scale = canSeeBilling ? Math.max(data.invoicedYtd!, data.collectedYtd!) : 0;
+  const year = data.period.label.split(' ').pop();
 
   return (
     <>
       <PageHeader
-        eyebrow={data?.period.label ?? 'Dashboard'}
-        title={`Bonjour ${session.employee?.firstName ?? session.email}`}
-        description={
-          session.roles.length > 0
-            ? `${session.roles.map((r) => ROLE_LABELS[r.code as RoleCode] ?? r.code).join(' · ')}${
-                session.employee?.departmentCode ? ` — ${session.employee.departmentCode}` : ''
-              }`
-            : undefined
+        title="Vue d’ensemble"
+        description="Les indicateurs essentiels pour décider et agir."
+        action={
+          <p className="rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13.5px] text-muted">
+            Période : <span className="font-medium capitalize text-text">{data.period.label}</span>
+            <span className="text-subtle"> · cumuls depuis janvier {year}</span>
+          </p>
         }
       />
 
-      {alerts.length > 0 && (
-        <NextActionBanner
-          tone={alerts[0].tone}
-          title={`Que dois-je faire ? — ${alerts[0].title}`}
-          detail={alerts[0].detail}
-          action={
-            <Link
-              href={alerts[0].href}
-              className="rounded-[8px] border border-border-strong bg-surface px-3.5 py-2 text-[13px] font-medium hover:bg-surface-2"
-            >
-              Ouvrir
-            </Link>
-          }
-        />
-      )}
+      <KpiRow>
+        <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
+        <KpiCard label="Missions en cours" value={data.missionsInProgress} href="/operations/missions" />
+        {data.invoicedYtd !== null && (
+          <KpiCard label="Facturé · année" value={compactDh(data.invoicedYtd)} href="/finance/factures" />
+        )}
+        {data.collectedYtd !== null && (
+          <KpiCard label="Encaissé · année" value={compactDh(data.collectedYtd)} href="/finance/encaissements" />
+        )}
+      </KpiRow>
 
-      {data ? (
-        <>
-          <KpiRow>
-            <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
-            <KpiCard label="Missions en cours" value={data.missionsInProgress} href="/operations/missions" />
-            {data.unassignedDays !== null && (
-              <KpiCard
-                label="Jours non affectés"
-                value={data.unassignedDays}
-                tone={data.unassignedDays > 0 ? 'danger' : undefined}
-                href="/pilotage/jours-non-affectes"
-              />
-            )}
-            {data.idleCost !== null && (
-              <KpiCard
-                label="Coût d'inactivité"
-                value={money(data.idleCost)}
-                unit="DH"
-                tone={data.idleCost > 0 ? 'danger' : undefined}
-                href="/pilotage/jours-non-affectes"
-              />
-            )}
-            {data.invoicedYtd !== null && (
-              <KpiCard
-                label="Facturé (année)"
-                value={compactDh(data.invoicedYtd)}
-                href="/finance/factures"
-              />
-            )}
-            {data.collectedYtd !== null && (
-              <KpiCard
-                label="Encaissé (année)"
-                value={compactDh(data.collectedYtd)}
-                href="/finance/encaissements"
-              />
-            )}
-          </KpiRow>
-
-          <KpiRow>
-            <KpiCard
-              label="Rapports à vérifier"
-              value={data.pendingReports}
-              tone={data.pendingReports > 0 ? 'warning' : undefined}
-              href="/operations/rapports"
-            />
-            <KpiCard
-              label="Remise dans le délai"
-              value={percent(data.reportOnTimeRate, 0)}
-              tone={data.reportOnTimeRate >= 90 ? 'success' : data.reportOnTimeRate >= 75 ? 'warning' : 'danger'}
-              hint={`${data.reportsIssued} rapports émis`}
-              href="/operations/rapports"
-            />
-            <KpiCard
-              label="Frais à valider"
-              value={data.pendingExpenses}
-              tone={data.pendingExpenses > 0 ? 'warning' : undefined}
-              href="/finance/notes-de-frais"
-            />
-            {data.overdueInvoices !== null && (
-              <KpiCard
-                label="Factures échues"
-                value={data.overdueInvoices}
-                tone={data.overdueInvoices > 0 ? 'danger' : undefined}
-                hint={compactDh(data.overdueAmount)}
-                href="/finance/encaissements"
-              />
-            )}
-            <KpiCard
-              label="Non-conformités ouvertes"
-              value={data.openNonConformities}
-              tone={data.openNonConformities > 0 ? 'warning' : undefined}
-              href="/operations/non-conformites"
-            />
-            <KpiCard
-              label="Instruments périmés"
-              value={data.expiredDevices}
-              tone={data.expiredDevices > 0 ? 'danger' : undefined}
-              href="/operations/parc-mesure"
-            />
-          </KpiRow>
-
-          {alerts.length > 0 && (
-            <Card title={`Alertes — ${alerts.length}`}>
-              <ul className="divide-y divide-border">
-                {alerts.map((alert) => (
-                  <li key={alert.title} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                    <StatusBadge tone={alert.tone}>
-                      {alert.tone === 'danger' ? 'Critique' : 'À traiter'}
-                    </StatusBadge>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13.5px] font-medium">{alert.title}</p>
-                      <p className="mt-0.5 text-[12.5px] text-muted">{alert.detail}</p>
+      <div className={`mb-5 grid gap-5 ${canSeeBilling ? 'xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : ''}`}>
+        <Card>
+          <div className="px-6 pb-2 pt-5">
+            <h2 className="text-[20px] font-semibold leading-tight">À traiter</h2>
+            <p className="mt-1 text-[14px] text-muted">Les actions qui demandent votre attention.</p>
+          </div>
+          {todos.length === 0 ? (
+            <p className="px-6 pb-6 pt-3 text-[14.5px] text-muted">Rien à traiter pour le moment.</p>
+          ) : (
+            <>
+              {/* Tableau sur écran large… */}
+              <table className="hidden w-full text-[14.5px] md:table">
+                <thead>
+                  <tr className="text-left text-[13.5px] text-muted">
+                    <th className="px-6 pb-2.5 pt-2 font-normal">Priorité</th>
+                    <th className="px-3 pb-2.5 pt-2 font-normal">Sujet</th>
+                    <th className="px-3 pb-2.5 pt-2 font-normal">Volume</th>
+                    <th className="px-6 pb-2.5 pt-2 font-normal">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todos.map((todo) => (
+                    <tr key={todo.subject} className="h-[52px] border-t border-border">
+                      <td className="px-6">
+                        <span className={`inline-flex items-center gap-2.5 ${PRIORITY[todo.priority].text}`}>
+                          <span className={`h-2 w-2 rounded-full ${PRIORITY[todo.priority].dot}`} aria-hidden="true" />
+                          {PRIORITY[todo.priority].label}
+                        </span>
+                      </td>
+                      <td className="px-3">{todo.subject}</td>
+                      <td className="tnum px-3">{todo.volume}</td>
+                      <td className="px-6">
+                        <Link href={todo.href} className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline">
+                          {todo.action}
+                          <span className="sr-only"> — {todo.subject}</span>
+                          <ArrowRight />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* …blocs compacts sur mobile. */}
+              <ul className="divide-y divide-border border-t border-border md:hidden">
+                {todos.map((todo) => (
+                  <li key={todo.subject} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                    <div className="min-w-0">
+                      <p className="font-medium">{todo.subject}</p>
+                      <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">
+                        <span className={`h-2 w-2 rounded-full ${PRIORITY[todo.priority].dot}`} aria-hidden="true" />
+                        {PRIORITY[todo.priority].label} · <span className="tnum">{todo.volume}</span>
+                      </p>
                     </div>
-                    <Link
-                      href={alert.href}
-                      className="rounded-[6px] border border-border-strong bg-surface px-3 py-1.5 text-[12.5px] hover:bg-surface-2"
-                    >
-                      Ouvrir
+                    <Link href={todo.href} className="inline-flex shrink-0 items-center gap-1.5 text-[14px] font-medium text-accent">
+                      {todo.action}
+                      <span className="sr-only"> — {todo.subject}</span>
+                      <ArrowRight />
                     </Link>
                   </li>
                 ))}
               </ul>
-            </Card>
+            </>
           )}
-        </>
-      ) : (
-        <NextActionBanner
-          tone="info"
-          title="Indicateurs indisponibles"
-          detail="Votre profil n’a pas accès aux tableaux de bord, ou aucune donnée n’a encore été enregistrée."
-        />
-      )}
-
-      {weekPlanning && weekPlanning.rows.length > 0 && (
-        <Card
-          title="Charge inspecteurs de la semaine"
-          action={
-            <Link href="/operations/planning" className="text-[13px] font-medium text-accent hover:underline">
-              Planning complet
-            </Link>
-          }
-          className="mb-5"
-        >
-          <div className="overflow-x-auto px-5 py-4">
-            <div
-              className="grid items-center gap-x-3 gap-y-2.5"
-              style={{ gridTemplateColumns: `120px repeat(${weekPlanning.columns.length}, 24px)` }}
-            >
-              <span />
-              {weekPlanning.columns.map((col) => (
-                <span key={col.date} className="text-center text-[11px] font-medium text-subtle">
-                  {WEEKDAY_LABELS[new Date(col.date).getUTCDay() === 0 ? 6 : new Date(col.date).getUTCDay() - 1]}
-                </span>
-              ))}
-              {weekPlanning.rows.slice(0, 8).map((row) => (
-                <Fragment key={row.employeeId}>
-                  <span className="truncate text-[13px] font-medium">{row.name}</span>
-                  {row.cells.map((cell) => (
-                    <span
-                      key={cell.date}
-                      title={cell.conflicts.length > 0 ? 'Conflit détecté' : undefined}
-                      className={`h-5 w-5 justify-self-center rounded-[4px] ${
-                        cell.isWorkingDay ? loadCellTone(cell.category, cell.conflicts) : 'bg-transparent'
-                      }`}
-                    />
-                  ))}
-                </Fragment>
-              ))}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-subtle">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-accent" /> Mission</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-neutral-soft" /> Congé / formation</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] border border-dashed border-border-strong" /> Non affecté</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-danger-soft ring-1 ring-inset ring-danger" /> Conflit</span>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Card title="Votre habilitation">
-          <div className="px-4 py-3.5">
-            <dl className="grid grid-cols-[130px_1fr] gap-y-2 text-[13.5px]">
-              <dt className="text-muted">Identifiant</dt>
-              <dd className="ref text-[12.5px]">{session.email}</dd>
-              <dt className="text-muted">Matricule</dt>
-              <dd className="ref text-[12.5px]">
-                {session.employee?.matricule ?? '—'}
-              </dd>
-              <dt className="text-muted">Fonction</dt>
-              <dd>{session.employee?.position ?? '—'}</dd>
-              <dt className="text-muted">Société</dt>
-              <dd>{session.companies.map((c) => c.name).join(', ') || '—'}</dd>
-              <dt className="text-muted">Droits effectifs</dt>
-              <dd>{session.permissions.length} autorisations</dd>
-            </dl>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {session.roles.map((role) => (
-                <StatusBadge key={`${role.code}-${role.departmentId ?? 'all'}`} tone="primary">
-                  {ROLE_LABELS[role.code as RoleCode] ?? role.code}
-                </StatusBadge>
-              ))}
-            </div>
-          </div>
         </Card>
 
-        <Card title="Accès rapides">
-          <ul className="divide-y divide-border text-[13.5px]">
-            {[
-              { href: '/affaires', label: 'Affaires', hint: 'portefeuille et rentabilité', resource: 'affair' as const },
-              { href: '/operations/missions', label: 'Missions', hint: 'planification et ordres de mission', resource: 'mission' as const },
-              { href: '/pilotage/productivite', label: 'Productivité', hint: 'taux d’occupation par inspecteur', resource: 'timesheet' as const },
-              { href: '/finance/notes-de-frais', label: 'Notes de frais', hint: 'circuit de visa', resource: 'expense_report' as const },
-              { href: '/operations/parc-mesure', label: 'Parc de mesure', hint: 'étalonnages et blocages', resource: 'measuring_device' as const },
-            ]
-              .filter((item) => can(permissions, item.resource, 'VIEW'))
-              .map((item) => (
-                <li key={item.href} className="px-4 py-2.5">
-                  <Link href={item.href} className="text-primary hover:underline">
-                    {item.label}
-                  </Link>
-                  <span className="text-subtle"> — {item.hint}</span>
-                </li>
-              ))}
-          </ul>
+        {canSeeBilling && (
+          <Card>
+            <div className="px-6 pb-6 pt-5">
+              <h2 className="text-[20px] font-semibold leading-tight">Encaissements annuels</h2>
+              <p className="mt-1 text-[14px] text-muted">Montants cumulés depuis janvier, hors taxes facturés et règlements reçus.</p>
+
+              <div className="mt-6 grid gap-5">
+                {[
+                  { label: 'Facturé', value: data.invoicedYtd!, color: 'bg-brand' },
+                  { label: 'Encaissé', value: data.collectedYtd!, color: 'bg-secondary' },
+                ].map((row) => (
+                  <div key={row.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-6 gap-y-2">
+                    <p className="text-[15px] font-medium">{row.label}</p>
+                    <p className="tnum row-span-2 self-center text-[17px] font-semibold">{compactDh(row.value)}</p>
+                    <Bar value={row.value} max={scale} color={row.color} label={`${row.label} : ${money(row.value)} DH`} />
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-6 border-t border-border pt-4 text-[13.5px] text-muted">
+                Encaissé ={' '}
+                <span className="tnum font-medium text-text">
+                  {data.invoicedYtd! > 0 ? percent((data.collectedYtd! / data.invoicedYtd!) * 100, 0) : '—'}
+                </span>{' '}
+                du facturé. Les factures échues sont suivies à part, dans « À traiter ».
+              </p>
+            </div>
+          </Card>
+        )}
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <Link href="/pilotage/qualite" className="block px-6 pb-6 pt-5 transition-colors hover:bg-surface-2/50">
+            <h2 className="text-[20px] font-semibold leading-tight">Qualité de service</h2>
+            <p className="mt-1 text-[14px] text-muted">Rapports remis dans le délai, depuis janvier.</p>
+            {data.reportsIssued > 0 ? (
+              <>
+                <p className="tnum mt-4 text-[36px] font-semibold leading-none text-secondary">
+                  {percent(data.reportOnTimeRate, 0)}
+                </p>
+                <div className="mt-4">
+                  <Bar
+                    value={data.reportOnTimeRate}
+                    max={100}
+                    color="bg-secondary"
+                    label={`${percent(data.reportOnTimeRate, 0)} des rapports remis dans le délai`}
+                  />
+                </div>
+                <p className="mt-3 text-[13.5px] text-muted">
+                  <span className="tnum">{data.reportsIssued}</span> rapports émis
+                </p>
+              </>
+            ) : (
+              <p className="mt-4 text-[14.5px] text-muted">— Aucun rapport remis cette année : le taux n’est pas encore calculable.</p>
+            )}
+          </Link>
         </Card>
+
+        {data.unassignedDays !== null && data.idleCost !== null && (
+          <Card>
+            <div className="px-6 pb-6 pt-5">
+              <h2 className="text-[20px] font-semibold leading-tight">Disponibilité des équipes</h2>
+              <p className="mt-1 text-[14px] text-muted">Période : {data.period.label}.</p>
+              <div className="mt-4 grid grid-cols-2">
+                <Link href="/pilotage/jours-non-affectes" className="pr-5 hover:opacity-80">
+                  <p className="text-[14px] text-muted">Jours non affectés</p>
+                  <p className={`tnum mt-2 text-[36px] font-semibold leading-none ${data.unassignedDays > 0 ? 'text-danger' : ''}`}>
+                    {data.unassignedDays}
+                  </p>
+                  <p className="mt-3 text-[13.5px] text-muted">
+                    {data.unassignedDays === 0 ? 'Aucun jour non affecté.' : 'Capacité payée mais non employée.'}
+                  </p>
+                </Link>
+                <Link href="/pilotage/jours-non-affectes" className="border-l border-border pl-5 hover:opacity-80">
+                  <p className="text-[14px] text-muted">Coût d’inactivité</p>
+                  <p className={`tnum mt-2 text-[36px] font-semibold leading-none ${data.idleCost > 0 ? 'text-danger' : ''}`}>
+                    {money(data.idleCost)}
+                    <span className="ml-1.5 text-[18px] font-medium">DH</span>
+                  </p>
+                  <p className="mt-3 text-[13.5px] text-muted">
+                    {data.idleCost === 0 ? 'Aucun coût d’inactivité.' : 'Coût journalier des jours non affectés.'}
+                  </p>
+                </Link>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
     </>
   );
