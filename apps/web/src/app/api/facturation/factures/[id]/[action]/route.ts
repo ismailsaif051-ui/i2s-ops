@@ -4,6 +4,7 @@ import { relay } from '@/lib/relay';
 const ROUTES: Record<string, string> = {
   emettre: 'issue',
   reglements: 'payments',
+  avoirs: 'credit-notes',
 };
 
 export async function POST(

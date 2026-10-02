@@ -117,7 +117,7 @@ export class ControllingService {
     }
 
     const ids = affairs.map((a) => a.id);
-    const [actuals, committed, invoiced, pending] = await Promise.all([
+    const [actuals, committed, invoiced, pending, credited] = await Promise.all([
       this.costs.actual(ids),
       this.costs.committed(ids),
       this.prisma.invoice.groupBy({
@@ -130,8 +130,17 @@ export class ControllingService {
         where: { affairId: { in: ids }, status: { in: ['VALIDATED', 'BILLABLE'] } },
         _sum: { totalHT: true },
       }),
+      this.prisma.creditNote.findMany({
+        where: { invoice: { affairId: { in: ids }, status: { not: 'CANCELLED' } } },
+        select: { amount: true, invoice: { select: { affairId: true } } },
+      }),
     ]);
+    // Facturé net des avoirs.
     const invoicedBy = new Map(invoiced.map((i) => [i.affairId, Number(i._sum.totalHT ?? 0)]));
+    for (const note of credited) {
+      const affairId = note.invoice.affairId;
+      if (affairId) invoicedBy.set(affairId, (invoicedBy.get(affairId) ?? 0) - Number(note.amount));
+    }
     const pendingBy = new Map(pending.map((p) => [p.affairId, Number(p._sum.totalHT ?? 0)]));
 
     const items = affairs.map((affair) => {

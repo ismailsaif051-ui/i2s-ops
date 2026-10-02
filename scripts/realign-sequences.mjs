@@ -25,6 +25,7 @@ const PATTERNS = {
   INVOICE: 'F-{YY}-{SEQ}',
   NON_CONFORMITY: 'NC-{YY}-{SEQ}',
   OFFER: 'OFF-{YY}-{SEQ}',
+  CREDIT_NOTE: 'AV-{YY}-{SEQ}',
 };
 
 /** Table qui porte les numéros de chaque compteur. */
@@ -37,6 +38,7 @@ const TABLES = {
   INVOICE: 'invoice',
   NON_CONFORMITY: 'nonConformity',
   OFFER: 'offer',
+  CREDIT_NOTE: 'creditNote',
 };
 
 /**

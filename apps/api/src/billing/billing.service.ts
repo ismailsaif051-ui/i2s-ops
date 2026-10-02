@@ -635,7 +635,10 @@ export class BillingService {
       throw new BadRequestException('Le montant d’un règlement est strictement positif.');
     }
 
-    const paid = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    // Un avoir réduit ce que le client doit, au même titre qu'un règlement.
+    const paid =
+      invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0) +
+      invoice.creditNotes.reduce((sum, c) => sum + Number(c.amountTTC), 0);
     const total = Number(invoice.totalTTC);
     const outcome = settle(total, paid, input.amount);
 
@@ -689,6 +692,85 @@ export class BillingService {
     return payment;
   }
 
+  /* ── Avoir ────────────────────────────────────────────────────── */
+
+  /**
+   * Émet un avoir sur une facture.
+   *
+   * Une facture émise ne se modifie jamais : une erreur de quantité, un geste
+   * commercial ou une annulation se corrigent par un avoir, numéroté à part,
+   * au même taux de TVA que la facture. Il réduit le chiffre d'affaires de
+   * l'affaire et ce que le client doit.
+   */
+  async createCreditNote(
+    user: RequestUser,
+    invoiceId: string,
+    input: { amountHT: number; reason: string; issueDate?: Date },
+    ctx: { ip?: string | null; userAgent?: string | null },
+  ) {
+    const invoice = await this.invoice(user, invoiceId);
+
+    if (invoice.status === 'DRAFT') {
+      throw new BadRequestException('Une facture en brouillon se corrige directement : elle n’a pas besoin d’avoir.');
+    }
+    if (invoice.status === 'CANCELLED') {
+      throw new BadRequestException('Cette facture est annulée.');
+    }
+
+    const vatRate = Number(invoice.vatRate);
+    const outcome = creditOutcome({
+      totalHT: Number(invoice.totalHT),
+      totalTTC: Number(invoice.totalTTC),
+      vatRate,
+      creditedHT: invoice.creditNotes.reduce((s, c) => s + Number(c.amount), 0),
+      creditedTTC: invoice.creditNotes.reduce((s, c) => s + Number(c.amountTTC), 0),
+      paid: invoice.payments.reduce((s, p) => s + Number(p.amount), 0),
+      amountHT: input.amountHT,
+    });
+    if (!outcome.accepted) throw new BadRequestException(outcome.reason);
+
+    const creditNote = await this.prisma.$transaction(async (tx) => {
+      const number = await this.numbering.next(invoice.companyId, 'CREDIT_NOTE', {}, tx);
+      const created = await tx.creditNote.create({
+        data: {
+          invoiceId,
+          number,
+          amount: round(input.amountHT),
+          vatRate,
+          amountTTC: outcome.amountTTC,
+          reason: input.reason,
+          issueDate: input.issueDate ?? new Date(),
+          createdById: user.id,
+        },
+      });
+      // Plus rien à payer : la facture est soldée.
+      if (outcome.remaining <= 0) {
+        await tx.invoice.update({ where: { id: invoiceId }, data: { status: 'PAID' } });
+      }
+      return created;
+    });
+
+    await this.audit.record(
+      {
+        entity: 'credit_note',
+        entityId: creditNote.id,
+        action: 'CREATE',
+        after: {
+          number: creditNote.number,
+          invoice: invoice.number,
+          amountHT: round(input.amountHT),
+          amountTTC: outcome.amountTTC,
+          remaining: outcome.remaining,
+        },
+        reason: input.reason,
+        companyId: invoice.companyId,
+      },
+      { user, ...ctx },
+    );
+
+    return { ...creditNote, remaining: outcome.remaining };
+  }
+
   /* ── Lectures internes ────────────────────────────────────────── */
 
   async attachment(user: RequestUser, id: string) {
@@ -717,6 +799,7 @@ export class BillingService {
         affair: { select: { id: true, number: true, title: true } },
         lines: { orderBy: { position: 'asc' } },
         payments: { orderBy: { date: 'asc' } },
+        creditNotes: { orderBy: { issueDate: 'asc' } },
         attachments: {
           include: { attachmentSheet: { select: { id: true, number: true, totalHT: true } } },
         },
@@ -746,6 +829,52 @@ export class BillingService {
     if (!affair) throw new NotFoundException('Affaire introuvable ou hors de votre périmètre.');
     return affair;
   }
+}
+
+/* ── Avoir ────────────────────────────────────────────────────────── */
+
+/**
+ * Ce qu'un avoir peut couvrir.
+ *
+ * - Jamais plus que le hors-taxes de la facture non encore crédité.
+ * - Jamais plus que ce que le client doit encore : au-delà, l'avoir
+ *   créerait un trop-perçu à lui rembourser, et l'application ne gère pas
+ *   encore les remboursements.
+ */
+export function creditOutcome(input: {
+  totalHT: number;
+  totalTTC: number;
+  vatRate: number;
+  creditedHT: number;
+  creditedTTC: number;
+  paid: number;
+  amountHT: number;
+}): { accepted: true; amountTTC: number; remaining: number } | { accepted: false; reason: string } {
+  if (!(input.amountHT > 0)) {
+    return { accepted: false, reason: 'Le montant d’un avoir est strictement positif.' };
+  }
+  const creditableHT = round(input.totalHT - input.creditedHT);
+  if (input.amountHT > creditableHT + 0.005) {
+    return {
+      accepted: false,
+      reason: `L’avoir dépasse le montant restant de la facture (${creditableHT.toFixed(2)} DH HT déjà crédités compris).`,
+    };
+  }
+  // Dernier avoir qui solde le HT : il reprend exactement le TTC restant, pour
+  // ne laisser aucun centime d'arrondi de TVA.
+  const amountTTC =
+    Math.abs(input.amountHT - creditableHT) < 0.005
+      ? round(input.totalTTC - input.creditedTTC)
+      : round(input.amountHT * (1 + input.vatRate / 100));
+  const open = round(input.totalTTC - input.paid - input.creditedTTC);
+  if (amountTTC > open + 0.01) {
+    return {
+      accepted: false,
+      reason: `L’avoir (${amountTTC.toFixed(2)} DH TTC) dépasse ce que le client doit encore (${open.toFixed(2)} DH). Le remboursement d’un client déjà réglé n’est pas encore pris en charge.`,
+    };
+  }
+  const remaining = round(open - amountTTC);
+  return { accepted: true, amountTTC, remaining: remaining > 0.01 ? remaining : 0 };
 }
 
 /* ── Solde ────────────────────────────────────────────────────────── */

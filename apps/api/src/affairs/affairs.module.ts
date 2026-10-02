@@ -17,6 +17,8 @@ import { z } from 'zod';
 import { paginationSchema, type PaginationInput } from '@i2s/contracts';
 import { AffairsService } from './affairs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AffairCostsService, totalCosts, zeroCosts } from '../costs/affair-costs.service';
+import { CostsModule } from '../costs/costs.module';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { buildXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx';
@@ -68,6 +70,7 @@ class AffairsController {
   constructor(
     private readonly affairs: AffairsService,
     private readonly prisma: PrismaService,
+    private readonly costs: AffairCostsService,
   ) {}
 
   @Get()
@@ -126,34 +129,41 @@ class AffairsController {
 
     // Chiffres consolidés en une requête par métrique plutôt qu'une par ligne.
     const ids = page.map((a) => a.id);
-    const [invoiced, labour] = await Promise.all([
+    const [invoiced, credited, days, actuals] = await Promise.all([
       this.prisma.invoice.groupBy({
         by: ['affairId'],
         where: { affairId: { in: ids }, status: { not: 'CANCELLED' } },
         _sum: { totalHT: true },
       }),
+      this.prisma.creditNote.findMany({
+        where: { invoice: { affairId: { in: ids }, status: { not: 'CANCELLED' } } },
+        select: { amount: true, invoice: { select: { affairId: true } } },
+      }),
       this.prisma.timesheetDay.groupBy({
         by: ['affairId'],
         where: { affairId: { in: ids } },
         // Jours = somme des parts : une journée partagée ne compte qu'une fois.
-        _sum: { dailyCostSnapshot: true, share: true },
+        _sum: { share: true },
       }),
+      // Les coûts réels du service commun : la marge de la liste est la même
+      // que sur la fiche et en rentabilité.
+      this.costs.actual(ids),
     ]);
 
+    // Facturé net des avoirs.
     const invoicedBy = new Map(invoiced.map((i) => [i.affairId, Number(i._sum.totalHT ?? 0)]));
-    const labourBy = new Map(
-      labour.map((l) => [
-        l.affairId,
-        { cost: Number(l._sum.dailyCostSnapshot ?? 0), days: Number(l._sum.share ?? 0) },
-      ]),
-    );
+    for (const note of credited) {
+      const affairId = note.invoice.affairId;
+      if (affairId) invoicedBy.set(affairId, (invoicedBy.get(affairId) ?? 0) - Number(note.amount));
+    }
+    const daysBy = new Map(days.map((d) => [d.affairId, Number(d._sum.share ?? 0)]));
 
     const items = page.map((a) => {
       const invoicedAmount = invoicedBy.get(a.id) ?? 0;
-      const labourInfo = labourBy.get(a.id) ?? { cost: 0, days: 0 };
+      const costTotal = totalCosts(actuals.get(a.id) ?? zeroCosts());
       const marginRate =
         invoicedAmount > 0
-          ? Math.round(((invoicedAmount - labourInfo.cost) / invoicedAmount) * 1000) / 10
+          ? Math.round(((invoicedAmount - costTotal) / invoicedAmount) * 1000) / 10
           : null;
       const budgetRate = a.budgetMarginRate === null ? null : Number(a.budgetMarginRate);
 
@@ -173,9 +183,9 @@ class AffairsController {
           ? `${a.accountManager.lastName.toUpperCase()} ${a.accountManager.firstName}`
           : null,
         contractAmount: a.contractAmountHT ? Number(a.contractAmountHT) : null,
-        invoiced: invoicedAmount,
-        consumedDays: labourInfo.days,
-        /** Marge indicative avant frais et véhicules — le détail est sur la fiche. */
+        invoiced: Math.round(invoicedAmount * 100) / 100,
+        consumedDays: daysBy.get(a.id) ?? 0,
+        /** Marge réelle, même calcul que la fiche ; `null` tant que rien n'est facturé. */
         marginRate,
         budgetMarginRate: budgetRate,
         counts: a._count,
@@ -384,6 +394,7 @@ class AffairsController {
 }
 
 @Module({
+  imports: [CostsModule],
   controllers: [AffairsController],
   providers: [AffairsService],
   exports: [AffairsService],

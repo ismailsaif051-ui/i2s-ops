@@ -350,7 +350,12 @@ export class AnalyticsService {
       }),
       this.prisma.invoice.findMany({
         where: { affairId: { in: ids }, status: { not: 'CANCELLED' } },
-        select: { affairId: true, totalHT: true, payments: { select: { amount: true } } },
+        select: {
+          affairId: true,
+          totalHT: true,
+          payments: { select: { amount: true } },
+          creditNotes: { select: { amount: true } },
+        },
       }),
       this.prisma.attachmentSheet.groupBy({
         by: ['affairId'],
@@ -365,7 +370,8 @@ export class AnalyticsService {
     for (const inv of invoices) {
       if (!inv.affairId) continue;
       const entry = moneyBy.get(inv.affairId) ?? { invoiced: 0, collected: 0 };
-      entry.invoiced += Number(inv.totalHT);
+      // Un avoir retire du chiffre d'affaires ce que la facture avait compté.
+      entry.invoiced += Number(inv.totalHT) - inv.creditNotes.reduce((s, c) => s + Number(c.amount), 0);
       entry.collected += inv.payments.reduce((s, p) => s + Number(p.amount), 0);
       moneyBy.set(inv.affairId, entry);
     }
@@ -580,7 +586,12 @@ export class AnalyticsService {
               dueDate: { lt: new Date() },
               ...invoiceWhere,
             },
-            select: { dueDate: true, totalTTC: true, payments: { select: { amount: true } } },
+            select: {
+              dueDate: true,
+              totalTTC: true,
+              payments: { select: { amount: true } },
+              creditNotes: { select: { amountTTC: true } },
+            },
           })
         : Promise.resolve(null),
       this.prisma.certification.count({
@@ -597,9 +608,11 @@ export class AnalyticsService {
       ? overdueInvoices
           .map((i) => ({
             dueDate: i.dueDate,
+            // Règlements et avoirs déduits.
             balance: openBalance(
               Number(i.totalTTC),
-              i.payments.reduce((s, p) => s + Number(p.amount), 0),
+              i.payments.reduce((s, p) => s + Number(p.amount), 0) +
+                i.creditNotes.reduce((s, c) => s + Number(c.amountTTC), 0),
             ),
           }))
           .filter((i) => isOverdue(i.dueDate, i.balance, today))
@@ -614,10 +627,14 @@ export class AnalyticsService {
             totalHT: true,
             issueDate: true,
             payments: { select: { amount: true, date: true } },
+            creditNotes: { select: { amount: true, issueDate: true } },
           },
         })
       : [];
-    const invoiced = invoices.reduce((s, i) => s + Number(i.totalHT), 0);
+    const invoiced = invoices.reduce(
+      (s, i) => s + Number(i.totalHT) - i.creditNotes.reduce((c, n) => c + Number(n.amount), 0),
+      0,
+    );
     const collected = invoices.reduce(
       (s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0),
       0,
@@ -632,6 +649,11 @@ export class AnalyticsService {
     for (const inv of invoices) {
       const m = inv.issueDate.getUTCMonth();
       if (m < monthCount) invoicedTrend[m] += Number(inv.totalHT);
+      // L'avoir se retire au mois où il est émis.
+      for (const note of inv.creditNotes) {
+        const cm = note.issueDate.getUTCMonth();
+        if (cm < monthCount) invoicedTrend[cm] -= Number(note.amount);
+      }
       for (const pay of inv.payments) {
         const pm = pay.date.getUTCMonth();
         if (pm < monthCount) collectedTrend[pm] += Number(pay.amount);

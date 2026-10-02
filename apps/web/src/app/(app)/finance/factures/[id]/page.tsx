@@ -14,6 +14,7 @@ import {
   type Tone,
 } from '@/components/ui';
 import { InvoiceActions } from '@/components/billing-actions';
+import { CreditNotesCard, type CreditNote } from '@/components/credit-notes-card';
 
 export const metadata: Metadata = { title: 'Facture' };
 
@@ -55,6 +56,9 @@ interface InvoiceDetail {
   vatRate: number;
   totalTTC: number;
   paid: number;
+  /** Total TTC des avoirs. */
+  credited: number;
+  creditableHT: number;
   remaining: number;
   overdue: boolean;
   notes: string | null;
@@ -75,7 +79,8 @@ interface InvoiceDetail {
     bankReference: string | null;
   }>;
   attachments: Array<{ id: string; number: string; totalHT: number }>;
-  actions: { issue: boolean; pay: boolean };
+  creditNotes: CreditNote[];
+  actions: { issue: boolean; pay: boolean; creditNote: boolean };
 }
 
 function Line({ label, children }: { label: string; children: React.ReactNode }) {
@@ -129,6 +134,11 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <Line label="Total TTC">
             <span className="font-medium">{money(invoice.totalTTC)}</span>
           </Line>
+          {invoice.credited > 0 && (
+            <Line label="Avoirs">
+              <span className="text-danger">− {money(invoice.credited)}</span>
+            </Line>
+          )}
           <Line label="Reste dû">
             <span className={invoice.remaining > 0 ? 'font-medium text-danger' : ''}>
               {money(invoice.remaining)}
@@ -187,6 +197,15 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           invoiceId={invoice.id}
           actions={invoice.actions}
           remaining={invoice.remaining}
+        />
+
+        <CreditNotesCard
+          invoiceId={invoice.id}
+          creditNotes={invoice.creditNotes}
+          canCreate={invoice.actions.creditNote}
+          creditableHT={invoice.creditableHT}
+          remaining={invoice.remaining}
+          vatRate={invoice.vatRate}
         />
 
         <Card title={`Règlements — ${money(invoice.paid)} encaissés`}>

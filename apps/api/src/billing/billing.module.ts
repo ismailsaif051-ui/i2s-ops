@@ -40,6 +40,16 @@ const paymentSchema = z.object({
   bankReference: z.string().trim().max(80).optional().nullable(),
 });
 
+const creditNoteSchema = z.object({
+  // « 1 250,50 » tel qu'on le tape : espaces et virgule acceptés.
+  amountHT: z.preprocess(
+    (v) => (typeof v === 'string' ? v.replace(/[\s  ]/g, '').replace(',', '.') : v),
+    z.coerce.number().positive('Le montant de l’avoir doit être positif.'),
+  ),
+  reason: z.string().trim().min(3, 'Indiquez le motif de l’avoir.').max(500),
+  issueDate: z.coerce.date().optional(),
+});
+
 function ctx(req: Request) {
   return { ip: req.ip ?? null, userAgent: req.headers['user-agent'] ?? null };
 }
@@ -136,7 +146,11 @@ class InvoicesController {
     const invoice = await this.billing.invoice(user, id);
 
     const paid = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const credited = invoice.creditNotes.reduce((sum, c) => sum + Number(c.amountTTC), 0);
+    const creditedHT = invoice.creditNotes.reduce((sum, c) => sum + Number(c.amount), 0);
     const total = Number(invoice.totalTTC);
+    // Ce que le client doit encore : règlements ET avoirs déduits.
+    const remaining = Math.round((total - paid - credited) * 100) / 100;
 
     const canIssue = user.permissions.some(
       (p) => p.resource === 'invoice' && p.action === 'APPROVE',
@@ -155,11 +169,14 @@ class InvoicesController {
       vatRate: Number(invoice.vatRate),
       totalTTC: total,
       paid: Math.round(paid * 100) / 100,
-      remaining: Math.round((total - paid) * 100) / 100,
+      credited: Math.round(credited * 100) / 100,
+      /** Hors taxes encore créditable par un avoir. */
+      creditableHT: Math.round((Number(invoice.totalHT) - creditedHT) * 100) / 100,
+      remaining,
       /** En retard : échue et pas soldée. */
       overdue:
         !['DRAFT', 'CANCELLED', 'PAID'].includes(invoice.status) &&
-        isOverdue(invoice.dueDate, total - paid > 0.01 ? total - paid : 0, new Date()),
+        isOverdue(invoice.dueDate, remaining > 0.01 ? remaining : 0, new Date()),
       notes: invoice.notes,
       client: invoice.client,
       affair: invoice.affair,
@@ -177,6 +194,14 @@ class InvoicesController {
         method: p.method,
         bankReference: p.bankReference,
       })),
+      creditNotes: invoice.creditNotes.map((c) => ({
+        id: c.id,
+        number: c.number,
+        issueDate: c.issueDate,
+        amountHT: Number(c.amount),
+        amountTTC: Number(c.amountTTC),
+        reason: c.reason,
+      })),
       attachments: invoice.attachments.map((a) => ({
         id: a.attachmentSheet.id,
         number: a.attachmentSheet.number,
@@ -187,7 +212,10 @@ class InvoicesController {
         pay:
           canPay &&
           ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(invoice.status) &&
-          total - paid > 0.01,
+          remaining > 0.01,
+        // Même droit que l'émission : un avoir est une pièce comptable.
+        creditNote:
+          canIssue && !['DRAFT', 'CANCELLED'].includes(invoice.status) && remaining > 0.01,
       },
     };
   }
@@ -217,6 +245,17 @@ class InvoicesController {
     @Req() req: Request,
   ) {
     return this.billing.addPayment(user, id, body, ctx(req));
+  }
+
+  @Post(':id/credit-notes')
+  @RequirePermission('invoice', 'APPROVE')
+  creditNote(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(creditNoteSchema)) body: z.infer<typeof creditNoteSchema>,
+    @Req() req: Request,
+  ) {
+    return this.billing.createCreditNote(user, id, body, ctx(req));
   }
 }
 

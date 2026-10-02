@@ -1827,15 +1827,22 @@ model InvoiceLine {
   @@map("invoice_lines")
 }
 
+/// Avoir : annule tout ou partie d'une facture émise. Une facture émise ne se
+/// modifie jamais — on la corrige par un avoir, qui a son propre numéro.
 model CreditNote {
   id        String   @id @default(uuid(7))
   invoiceId String
   number    String   @unique
+  /// Montant hors taxes de l'avoir.
   amount    Decimal  @db.Decimal(14, 2)
+  /// Taux de TVA de la facture d'origine, repris tel quel.
+  vatRate   Decimal  @default(20) @db.Decimal(5, 2)
+  amountTTC Decimal  @default(0) @db.Decimal(14, 2)
   reason    String
   issueDate DateTime @db.Date
 
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  createdById String?
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 

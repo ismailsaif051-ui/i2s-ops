@@ -35,6 +35,7 @@ class FinanceController {
         client: { select: { name: true } },
         affair: { select: { id: true, number: true, title: true } },
         payments: { select: { amount: true, date: true } },
+        creditNotes: { select: { amountTTC: true } },
         attachments: { select: { attachmentSheetId: true } },
       },
     });
@@ -44,9 +45,10 @@ class FinanceController {
     return {
       items: rows.map((invoice) => {
         const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0);
+        const credited = invoice.creditNotes.reduce((s, c) => s + Number(c.amountTTC), 0);
         const totalTTC = Number(invoice.totalTTC);
         const overdueDays =
-          paid < totalTTC && invoice.dueDate < today
+          paid + credited < totalTTC - 0.01 && invoice.dueDate < today
             ? Math.floor((today.getTime() - invoice.dueDate.getTime()) / 86_400_000)
             : 0;
 
@@ -60,7 +62,8 @@ class FinanceController {
           totalHT: Number(invoice.totalHT),
           totalTTC,
           paid,
-          balance: Math.round((totalTTC - paid) * 100) / 100,
+          credited: Math.round(credited * 100) / 100,
+          balance: Math.round((totalTTC - paid - credited) * 100) / 100,
           status: invoice.status,
           overdueDays,
           attachmentCount: invoice.attachments.length,
@@ -78,6 +81,7 @@ class FinanceController {
       include: {
         client: { select: { id: true, name: true } },
         payments: { select: { amount: true } },
+        creditNotes: { select: { amountTTC: true } },
         dunnings: { orderBy: { level: 'desc' }, take: 1 },
       },
     });
@@ -99,7 +103,9 @@ class FinanceController {
     }> = [];
 
     for (const invoice of invoices) {
-      const totalTTC = Number(invoice.totalTTC);
+      const credited = invoice.creditNotes.reduce((s, c) => s + Number(c.amountTTC), 0);
+      // Facturé net des avoirs : un avoir n'est ni un encaissement ni une créance.
+      const totalTTC = Number(invoice.totalTTC) - credited;
       const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0);
       invoiced += totalTTC;
       collected += paid;

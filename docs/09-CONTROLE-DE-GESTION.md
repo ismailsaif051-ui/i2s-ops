@@ -96,7 +96,7 @@ Ces jours sont **potentiellement refacturables** au client si le contrat le pré
 
 ```
 CAContractuel  = Affair.contractAmountHT + Σ avenants
-CAFacturé      = Σ Invoice.totalHT   (statut ≠ Annulée) − Σ CreditNote.amount
+CAFacturé      = Σ Invoice.totalHT   (statut ≠ Annulée) − Σ CreditNote.amount (avoirs HT)
 CAEncaissé     = Σ Payment.amount
 CAÀFacturer    = Σ AttachmentSheet.totalHT (statut Validé, non facturé)
 Reste à facturer = CAContractuel − CAFacturé − CAÀFacturer
@@ -116,16 +116,29 @@ CoûtTotal     = CoûtRH + CoûtFrais + CoûtVéhicules + CoûtSousTraitance + A
 
 Le coût véhicule est réparti : les frais directs (carburant, péage) sont imputés à l'affaire par la note de frais ; les coûts de structure (LLD, assurance, entretien) sont répartis au prorata des jours d'utilisation sur l'affaire.
 
-Implémenté : `loyer mensuel ÷ 22 × jours OUVRÉS de chaque mission avec véhicule` (calendrier de la société, à défaut du lundi au vendredi ; missions annulées ou reportées exclues). Le même calcul sert à la fiche affaire et à la liste de rentabilité — elles affichaient auparavant deux marges différentes, la liste ignorant le véhicule.
+Implémenté : `loyer mensuel ÷ 22 × jours OUVRÉS` (calendrier de la société, à défaut du lundi au vendredi). Réel : missions terminées, et jours déjà écoulés d'une mission en cours. Engagé : jours à venir.
+
+**Un seul calcul des coûts** (`apps/api/src/costs/affair-costs.service.ts`) sert à la fiche affaire, à la liste des affaires, à la page Rentabilité et au contrôle de gestion. Jusqu'en octobre 2026, chacun avait le sien : la liste des affaires ne comptait que la main-d'œuvre, la page Rentabilité oubliait le véhicule, le contrôle de gestion comptait les week-ends.
+
+| | Réel | Engagé (reste à dépenser) |
+|---|---|---|
+| Main-d'œuvre | journées pointées, coût figé du jour | jours ouvrés à venir des missions planifiées, au coût journalier du jour ; d'une mission en cours, seulement à partir d'aujourd'hui (les jours passés sont déjà pointés) |
+| Frais | lignes de notes de frais acceptées | — |
+| Véhicules | missions terminées + jours écoulés des missions en cours | jours ouvrés à venir |
+| Sous-traitance, autres | coûts saisis sur l'affaire, facture fournisseur reçue | coûts saisis, commande passée |
+
+Sous-traitance et autres coûts se saisissent sur la fiche affaire (droit « contrôle de gestion » en création), avec fournisseur et référence ; « Facture reçue » les fait passer d'engagé à réel. Chaque saisie, modification ou suppression est journalisée.
 
 ### 3.3 Résultat
 
 ```
 MargeBrute       = CAFacturé − CoûtTotal
-TauxMarge (%)    = MargeBrute / CAFacturé × 100
+TauxMarge (%)    = MargeBrute / CAFacturé × 100        (« non calculable » si CAFacturé = 0)
 
-MargeProjetée    = CAContractuel − CoûtTotalProjeté
-TauxMargeProjeté = MargeProjetée / CAContractuel × 100
+CAÀTerminaison   = max(montant du marché, CAFacturé + attachements validés non facturés)
+CoûtÀTerminaison = CoûtRéel + CoûtEngagé
+MargeÀTerminaison = CAÀTerminaison − CoûtÀTerminaison
+TauxMargeÀTerminaison = MargeÀTerminaison / CAÀTerminaison × 100
 
 ÉcartMarge (pts) = TauxMargeRéel − TauxMargeBudgété
 ```
@@ -175,6 +188,15 @@ TauxRecouvrement (%) = CAEncaissé / CAFacturé × 100
 Balance âgée : 0–30 · 31–60 · 61–90 · > 90 jours.
 
 Une facture devient « échue » le lendemain de son échéance s'il reste un solde. Le statut est posé par l'API au démarrage puis toutes les heures (`OverdueService`) ; un acompte sur une facture échue la laisse échue. Le Dashboard, lui, ne lit pas ce statut : il calcule à partir des dates et du reste dû, et reste donc juste entre deux passages.
+
+**Avoirs.** Une facture émise ne se modifie jamais : on la corrige par un avoir (fiche facture › « Émettre un avoir », droit d'émission des factures), numéroté `AV-AA-NNNN`, au taux de TVA de la facture, motif obligatoire. Le dernier avoir qui solde le hors-taxes reprend exactement le TTC restant, au centime. Partout :
+
+```
+Reste dû  = TTC − règlements − avoirs TTC
+CAFacturé = HT − avoirs HT          (Dashboard : l'avoir se retire au mois de son émission)
+```
+
+Un avoir ne peut dépasser ni le hors-taxes restant ni ce que le client doit encore : au-delà, il faudrait rembourser un trop-perçu, ce que l'application ne gère pas encore. Un avoir qui solde la facture la passe à « Réglée ».
 
 ---
 
