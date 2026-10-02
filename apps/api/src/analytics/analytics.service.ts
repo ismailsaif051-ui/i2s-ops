@@ -2,10 +2,13 @@ import { Injectable } from '@nestjs/common';
 import {
   breakdown,
   idleCost as idleCostOf,
+  isOverdue,
   netProductivity,
   nonBillableSiteCost,
   onTimeRate,
+  openBalance,
   profitability,
+  vehicleShare,
   CATEGORY_LABELS,
   type CategoryCounts,
   type TimesheetCategory,
@@ -332,7 +335,7 @@ export class AnalyticsService {
     });
     if (!affair) return null;
 
-    const [labour, expenses, invoices, pendingAttachments, missionDays] = await Promise.all([
+    const [labour, expenses, invoices, pendingAttachments, vehicleCosts] = await Promise.all([
       this.prisma.timesheetDay.aggregate({
         where: { affairId },
         _sum: { dailyCostSnapshot: true, share: true },
@@ -349,14 +352,7 @@ export class AnalyticsService {
         where: { affairId, status: { in: ['VALIDATED', 'BILLABLE'] } },
         _sum: { totalHT: true },
       }),
-      this.prisma.mission.findMany({
-        where: { affairId, vehicleId: { not: null } },
-        select: {
-          plannedStartDate: true,
-          plannedEndDate: true,
-          vehicle: { select: { monthlyFee: true } },
-        },
-      }),
+      this.vehicleCostByAffair([affairId]),
     ]);
 
     const invoiced = invoices.reduce((s, i) => s + Number(i.totalHT), 0);
@@ -364,15 +360,6 @@ export class AnalyticsService {
       (s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0),
       0,
     );
-
-    // Quote-part véhicule : forfait mensuel réparti au prorata des jours d'usage.
-    const vehicleCost = missionDays.reduce((sum, m) => {
-      const fee = Number(m.vehicle?.monthlyFee ?? 0);
-      if (!fee || !m.plannedStartDate || !m.plannedEndDate) return sum;
-      const days =
-        Math.round((m.plannedEndDate.getTime() - m.plannedStartDate.getTime()) / 86_400_000) + 1;
-      return sum + (fee / 22) * days;
-    }, 0);
 
     const result = profitability(
       {
@@ -384,7 +371,7 @@ export class AnalyticsService {
       {
         labour: Number(labour._sum.dailyCostSnapshot ?? 0),
         expenses: Number(expenses._sum.amount ?? 0),
-        vehicles: Math.round(vehicleCost * 100) / 100,
+        vehicles: vehicleCosts.get(affairId) ?? 0,
         // Pas encore de source de données : affiché à zéro plutôt qu'estimé.
         subcontracting: 0,
         other: 0,
@@ -417,6 +404,67 @@ export class AnalyticsService {
   }
 
   /**
+   * Quote-part véhicule de chaque affaire — un seul calcul pour la fiche et
+   * pour la liste de rentabilité.
+   *
+   * Loyer mensuel ÷ 22 × jours OUVRÉS de chaque mission avec véhicule. Les
+   * jours ouvrés viennent du calendrier de la société (jours fériés
+   * marocains) ; une date absente du calendrier compte du lundi au vendredi.
+   * Une mission annulée ou reportée n'a pas utilisé le véhicule.
+   */
+  private async vehicleCostByAffair(affairIds: string[]): Promise<Map<string, number>> {
+    const costs = new Map<string, number>();
+    if (affairIds.length === 0) return costs;
+
+    const missions = await this.prisma.mission.findMany({
+      where: {
+        affairId: { in: affairIds },
+        vehicleId: { not: null },
+        status: { notIn: ['CANCELLED', 'POSTPONED'] },
+        plannedStartDate: { not: null },
+        plannedEndDate: { not: null },
+      },
+      select: {
+        affairId: true,
+        plannedStartDate: true,
+        plannedEndDate: true,
+        affair: { select: { companyId: true } },
+        vehicle: { select: { monthlyFee: true } },
+      },
+    });
+    const withFee = missions.filter((m) => Number(m.vehicle?.monthlyFee ?? 0) > 0);
+    if (withFee.length === 0) return costs;
+
+    const from = new Date(Math.min(...withFee.map((m) => m.plannedStartDate!.getTime())));
+    const to = new Date(Math.max(...withFee.map((m) => m.plannedEndDate!.getTime())));
+    const calendar = await this.prisma.workCalendarDay.findMany({
+      where: {
+        companyId: { in: [...new Set(withFee.map((m) => m.affair.companyId))] },
+        date: { gte: from, lte: to },
+      },
+      select: { companyId: true, date: true, isWorkingDay: true },
+    });
+    const known = new Map(calendar.map((c) => [`${c.companyId}|${isoDay(c.date)}`, c.isWorkingDay]));
+
+    for (const mission of withFee) {
+      let workingDays = 0;
+      for (
+        let day = mission.plannedStartDate!.getTime();
+        day <= mission.plannedEndDate!.getTime();
+        day += 86_400_000
+      ) {
+        const date = new Date(day);
+        const listed = known.get(`${mission.affair.companyId}|${isoDay(date)}`);
+        const weekday = date.getUTCDay();
+        if (listed ?? (weekday >= 1 && weekday <= 5)) workingDays += 1;
+      }
+      const share = vehicleShare(Number(mission.vehicle!.monthlyFee), workingDays);
+      costs.set(mission.affairId, Math.round(((costs.get(mission.affairId) ?? 0) + share) * 100) / 100);
+    }
+    return costs;
+  }
+
+  /**
    * Rentabilité de toutes les affaires du périmètre, en quatre requêtes
    * agrégées plutôt qu'une par affaire.
    */
@@ -442,7 +490,7 @@ export class AnalyticsService {
     const ids = affairs.map((a) => a.id);
     if (ids.length === 0) return { items: [], totals: null };
 
-    const [labour, expenses, invoices, pending] = await Promise.all([
+    const [labour, expenses, invoices, pending, vehicleCosts] = await Promise.all([
       this.prisma.timesheetDay.groupBy({
         by: ['affairId'],
         where: { affairId: { in: ids } },
@@ -462,6 +510,9 @@ export class AnalyticsService {
         where: { affairId: { in: ids }, status: { in: ['VALIDATED', 'BILLABLE'] } },
         _sum: { totalHT: true },
       }),
+      // Le même calcul que la fiche affaire : sans lui, la liste affichait une
+      // marge plus haute que la fiche pour toute affaire avec véhicule.
+      this.vehicleCostByAffair(ids),
     ]);
 
     const labourBy = new Map(
@@ -496,7 +547,7 @@ export class AnalyticsService {
         {
           labour: labourInfo.cost,
           expenses: expenseBy.get(affair.id) ?? 0,
-          vehicles: 0,
+          vehicles: vehicleCosts.get(affair.id) ?? 0,
           subcontracting: 0,
           other: 0,
         },
@@ -587,11 +638,17 @@ export class AnalyticsService {
       this.prisma.expenseReport.count({
         where: { status: { in: ['SUBMITTED', 'CONFIRMED_N1', 'CHECKED_HR_CG', 'ACCOUNTED'] } },
       }),
+      // Échues d'après l'échéance et le reste dû, pas d'après le statut :
+      // aucun traitement ne pose « OVERDUE », la tuile restait à zéro dès
+      // qu'on sortait des données de démonstration.
       invoiceWhere
-        ? this.prisma.invoice.aggregate({
-            where: { status: 'OVERDUE', ...invoiceWhere },
-            _count: true,
-            _sum: { totalTTC: true },
+        ? this.prisma.invoice.findMany({
+            where: {
+              status: { in: ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
+              dueDate: { lt: new Date() },
+              ...invoiceWhere,
+            },
+            select: { dueDate: true, totalTTC: true, payments: { select: { amount: true } } },
           })
         : Promise.resolve(null),
       this.prisma.certification.count({
@@ -602,6 +659,20 @@ export class AnalyticsService {
         where: { status: { notIn: ['CLOSED', 'REJECTED'] } },
       }),
     ]);
+
+    const today = new Date();
+    const overdue = overdueInvoices
+      ? overdueInvoices
+          .map((i) => ({
+            dueDate: i.dueDate,
+            balance: openBalance(
+              Number(i.totalTTC),
+              i.payments.reduce((s, p) => s + Number(p.amount), 0),
+            ),
+          }))
+          .filter((i) => isOverdue(i.dueDate, i.balance, today))
+          .map((i) => i.balance)
+      : null;
 
     const yearStart = new Date(Date.UTC(to.getUTCFullYear(), 0, 1));
     const invoices = invoiceWhere
@@ -653,10 +724,9 @@ export class AnalyticsService {
       idleCost: unassigned ? Math.round(Number(unassigned._sum.dailyCostSnapshot ?? 0)) : null,
       pendingReports,
       pendingExpenses,
-      overdueInvoices: overdueInvoices ? overdueInvoices._count : null,
-      overdueAmount: overdueInvoices
-        ? Math.round(Number(overdueInvoices._sum.totalTTC ?? 0))
-        : null,
+      overdueInvoices: overdue ? overdue.length : null,
+      // Le reste dû, pas le TTC : un acompte reçu ne doit plus figurer en retard.
+      overdueAmount: overdue ? Math.round(overdue.reduce((s, b) => s + b, 0)) : null,
       expiringCertifications: expiringCerts,
       expiredDevices,
       openNonConformities,
@@ -816,4 +886,8 @@ function resolvePeriod(period: PeriodInput): { from: Date; to: Date; label: stri
 
 function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 86_400_000);
+}
+
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }

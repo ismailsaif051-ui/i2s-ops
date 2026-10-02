@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { isOverdue } from '@i2s/calc';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NumberingService } from '../numbering/numbering.service';
@@ -655,9 +656,15 @@ export class BillingService {
         },
       });
 
+      // Un acompte sur une facture déjà échue ne la remet pas « dans les
+      // temps » : il reste un solde, toujours en retard.
+      const status =
+        outcome.status === 'PARTIALLY_PAID' && isOverdue(invoice.dueDate, outcome.remaining, new Date())
+          ? 'OVERDUE'
+          : outcome.status;
       await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: outcome.status },
+        data: { status },
       });
 
       return created;

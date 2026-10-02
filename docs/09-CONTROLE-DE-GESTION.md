@@ -116,6 +116,8 @@ CoûtTotal     = CoûtRH + CoûtFrais + CoûtVéhicules + CoûtSousTraitance + A
 
 Le coût véhicule est réparti : les frais directs (carburant, péage) sont imputés à l'affaire par la note de frais ; les coûts de structure (LLD, assurance, entretien) sont répartis au prorata des jours d'utilisation sur l'affaire.
 
+Implémenté : `loyer mensuel ÷ 22 × jours OUVRÉS de chaque mission avec véhicule` (calendrier de la société, à défaut du lundi au vendredi ; missions annulées ou reportées exclues). Le même calcul sert à la fiche affaire et à la liste de rentabilité — elles affichaient auparavant deux marges différentes, la liste ignorant le véhicule.
+
 ### 3.3 Résultat
 
 ```
@@ -165,12 +167,14 @@ L'« engagé » comprend les missions planifiées non encore réalisées, valori
 ## 4. Trésorerie
 
 ```
-Échu           = Σ Invoice.totalTTC (dueDate < aujourd'hui, non soldées)
+Échu           = Σ reste dû (TTC − règlements) des factures émises dont l'échéance est passée
 DSO (jours)    = (Créances clients / CA TTC de la période) × nb jours de la période
 TauxRecouvrement (%) = CAEncaissé / CAFacturé × 100
 ```
 
 Balance âgée : 0–30 · 31–60 · 61–90 · > 90 jours.
+
+Une facture devient « échue » le lendemain de son échéance s'il reste un solde. Le statut est posé par l'API au démarrage puis toutes les heures (`OverdueService`) ; un acompte sur une facture échue la laisse échue. Le Dashboard, lui, ne lit pas ce statut : il calcule à partir des dates et du reste dû, et reste donc juste entre deux passages.
 
 ---
 

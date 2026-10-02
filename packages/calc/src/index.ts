@@ -173,6 +173,39 @@ export function profitability(
   };
 }
 
+/** Jours ouvrés retenus par mois pour répartir le loyer d'un véhicule. */
+export const VEHICLE_WORKING_DAYS_PER_MONTH = 22;
+
+/**
+ * Quote-part du loyer d'un véhicule imputée à une mission : loyer mensuel
+ * réparti sur les jours ouvrés du mois, multiplié par les jours OUVRÉS de la
+ * mission. Compter les jours de calendrier ferait payer les week-ends à
+ * l'affaire — un tiers de trop sur une mission d'une semaine à l'autre.
+ */
+export function vehicleShare(monthlyFee: number, missionWorkingDays: number): number {
+  if (monthlyFee <= 0 || missionWorkingDays <= 0) return 0;
+  return round2((monthlyFee / VEHICLE_WORKING_DAYS_PER_MONTH) * missionWorkingDays);
+}
+
+/** Reste dû sur une facture ; zéro en dessous d'un centime (arrondis de TVA). */
+export function openBalance(totalTTC: number, paid: number): number {
+  const balance = round2(totalTTC - paid);
+  return balance > 0.01 ? balance : 0;
+}
+
+/**
+ * Une facture est échue quand son échéance est passée et qu'il reste quelque
+ * chose à payer. Calculé à partir des dates, jamais d'un statut posé à la
+ * main : un statut que personne ne met à jour laisserait les créances échues
+ * à zéro. Le jour de l'échéance, la facture n'est pas encore en retard.
+ */
+export function isOverdue(dueDate: Date, balance: number, today: Date): boolean {
+  if (balance <= 0) return false;
+  const due = Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate());
+  const now = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return due < now;
+}
+
 /** Marge brute par vacation, formule directe du cahier des charges. */
 export function vacationMargin(
   billedRate: number,

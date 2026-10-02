@@ -2,7 +2,9 @@ import { Body, Controller, Get, Module, Param, Post, Query, Req } from '@nestjs/
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { z } from 'zod';
+import { isOverdue } from '@i2s/calc';
 import { BILLING_UNIT_LABELS, BillingService, type BillingUnit } from './billing.service';
+import { OverdueService } from './overdue.service';
 import { AffairsModule } from '../affairs/affairs.module';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -155,7 +157,9 @@ class InvoicesController {
       paid: Math.round(paid * 100) / 100,
       remaining: Math.round((total - paid) * 100) / 100,
       /** En retard : échue et pas soldée. */
-      overdue: invoice.status !== 'PAID' && invoice.dueDate < new Date(),
+      overdue:
+        !['DRAFT', 'CANCELLED', 'PAID'].includes(invoice.status) &&
+        isOverdue(invoice.dueDate, total - paid > 0.01 ? total - paid : 0, new Date()),
       notes: invoice.notes,
       client: invoice.client,
       affair: invoice.affair,
@@ -219,7 +223,7 @@ class InvoicesController {
 @Module({
   imports: [AffairsModule],
   controllers: [AttachmentsController, InvoicesController],
-  providers: [BillingService],
+  providers: [BillingService, OverdueService],
   exports: [BillingService],
 })
 export class BillingModule {}
