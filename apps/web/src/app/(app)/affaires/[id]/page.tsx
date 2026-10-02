@@ -4,11 +4,8 @@ import type { Metadata } from 'next';
 import type { ReportStatus } from '@i2s/contracts';
 import { can } from '@i2s/contracts';
 import { ApiError, api, requireSession } from '@/lib/api';
-import {
-  AffairPurchaseOrderForm,
-  BILLING_UNIT_OPTIONS,
-  type BillingUnitValue,
-} from '@/components/affair-po-form';
+import { AffairPurchaseOrderForm } from '@/components/affair-po-form';
+import { BILLING_UNIT_OPTIONS, type BillingUnitValue } from '@/lib/billing-units';
 import {
   AFFAIR_COMMERCIAL_LABELS,
   AFFAIR_WORKS_LABELS,

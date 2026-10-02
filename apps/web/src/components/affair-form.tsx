@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BILLING_UNIT_OPTIONS } from '@/components/affair-po-form';
+import { BILLING_UNIT_OPTIONS } from '@/lib/billing-units';
 import { Button, Card, Field, Input, StatusBadge } from '@/components/ui';
 
 interface Option {
