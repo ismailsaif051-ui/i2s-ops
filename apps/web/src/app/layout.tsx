@@ -22,11 +22,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Polices de la charte : Poppins pour les titres, Barlow pour les textes.
-            IBM Plex Mono uniquement pour les identifiants métier. */}
+        {/* Polices de la charte : Poppins pour les titres, Barlow pour les
+            textes, les chiffres et les références. */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap"
         />
       </head>
       <body>{children}</body>

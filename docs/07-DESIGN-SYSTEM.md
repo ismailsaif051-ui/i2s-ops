@@ -61,13 +61,15 @@ règle, un bouton se lirait comme une alerte.
 | Titres | **Poppins** | Titres de page, titres de carte, valeurs des indicateurs |
 | Textes | **Barlow** | Corps, tableaux, libellés, formulaires |
 | Substitut bureautique | Arial | Quand les polices ne sont pas installées |
-| Identifiants métier | IBM Plex Mono | `26/0142`, `OM-26-0311` — chiffres à chasse fixe |
+| Chiffres et identifiants | **Barlow**, chiffres tabulaires | Montants, jours, `26/0142`, `OM-26-0311` |
 
 **Proscrites par la charte** : Calibri, Aptos, Times New Roman.
 
-La chasse fixe est un ajout applicatif, limité aux identifiants et aux montants en
-colonne : Poppins et Barlow n’alignent pas les chiffres verticalement, ce qui rend une
-colonne de montants difficile à parcourir. Partout ailleurs, la charte s’applique.
+Aucune police à chasse fixe (choix I2S, octobre 2026 — IBM Plex Mono a été retirée).
+Les montants en colonne restent alignés grâce aux chiffres tabulaires de Barlow
+(`font-variant-numeric: tabular-nums`, classes `.ref` et `.tnum`) : avec ce réglage,
+chaque chiffre occupe la même largeur — vérifié, « 1111111111 » et « 8888888888 »
+mesurent exactement 79,05 px à 15 px.
 
 Échelle : `12 · 13 · 14 · 15 · 16 · 18 · 24 · 30 · 32 px`. Corps 15 px, tableaux 14,5 px,
 indicateurs 32 px. Interlignage 1,6 pour le texte, 1,45 pour les tableaux.
