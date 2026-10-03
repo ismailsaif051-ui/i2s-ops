@@ -120,6 +120,10 @@
      mode sombre où les aplats s'éclaircissent. */
   --on-fill: #ffffff;
   --rail-hover: #e7e9e4;
+  /* Page de connexion : panneau sauge tramé de points, texte anthracite. */
+  --panel-sage: #eef3ef;
+  --panel-dot: rgb(66 107 83 / 0.14);
+  --panel-text: #202b25;
 
   --font-title: 'Archivo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
   --font-body: 'Archivo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
@@ -178,6 +182,9 @@
     --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.35), 0 12px 28px rgb(0 0 0 / 0.45);
     --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.5);
     --on-fill: #151716;
+  --panel-sage: #18201b;
+  --panel-dot: rgb(127 179 147 / 0.12);
+  --panel-text: #e8ebe8;
   }
 }
 
@@ -224,6 +231,9 @@
   --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.35), 0 12px 28px rgb(0 0 0 / 0.45);
   --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.5);
   --on-fill: #151716;
+  --panel-sage: #18201b;
+  --panel-dot: rgb(127 179 147 / 0.12);
+  --panel-text: #e8ebe8;
 }
 
 @theme inline {
@@ -263,6 +273,8 @@
   --color-rail-active: var(--rail-active-bg);
   --color-rail-hover: var(--rail-hover);
   --color-on-fill: var(--on-fill);
+  --color-panel-sage: var(--panel-sage);
+  --color-panel-text: var(--panel-text);
 
   /* Rayons et ombres ne sont PAS remappés ici : `--shadow-card: var(--shadow-card)`
      serait une auto-référence circulaire, et Tailwind rejetterait tout le bloc

@@ -27,6 +27,7 @@ import {
   IconSun,
 } from '@/components/icons';
 import { useTheme, type ThemeChoice } from '@/components/theme';
+import { GlobalSearch, type SearchPage } from '@/components/global-search';
 
 /**
  * Rubriques dépliées, par utilisateur et par navigateur — une préférence
@@ -145,6 +146,15 @@ export function AppShell({
     return group ? [{ ...group, icon }] : [];
   });
   const admin = byKey.get('admin');
+
+  // Pages proposées par la recherche : seulement celles du menu de l'utilisateur.
+  const searchPages: SearchPage[] = allowed.flatMap((group) =>
+    group.items.map((item) => ({
+      href: item.href,
+      label: PILOTAGE[item.href]?.label ?? item.label,
+      group: group.key === 'admin' ? 'Paramètres' : group.label,
+    })),
+  );
 
   // Fil d'Ariane : rubrique / page, déduits de la navigation.
   const crumb = (() => {
@@ -468,6 +478,7 @@ export function AppShell({
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            <GlobalSearch pages={searchPages} />
             <button
               type="button"
               onClick={theme.toggle}

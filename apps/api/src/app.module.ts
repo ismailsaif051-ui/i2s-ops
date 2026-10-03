@@ -15,6 +15,7 @@ import { CompaniesModule } from './companies/companies.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ControllingModule } from './controlling/controlling.module';
 import { CostsModule } from './costs/costs.module';
+import { SearchModule } from './search/search.module';
 import { OperationsModule } from './operations/operations.module';
 import { PlanningModule } from './planning/planning.module';
 import { FinanceModule } from './finance/finance.module';
@@ -63,6 +64,7 @@ import { envSchema } from './config/env';
     AnalyticsModule,
     ControllingModule,
     CostsModule,
+    SearchModule,
     OperationsModule,
     PlanningModule,
     FinanceModule,
