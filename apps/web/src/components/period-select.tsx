@@ -27,7 +27,16 @@ function DownloadIcon() {
  * se recharge telle quelle. Seuls les mois écoulés sont proposés — un mois à
  * venir n'a pas encore de chiffres.
  */
-export function PeriodControls({ current, months }: { current: string; months: Array<{ value: string; label: string }> }) {
+export function PeriodControls({
+  current,
+  months,
+  tab = 'synthese',
+}: {
+  current: string;
+  months: Array<{ value: string; label: string }>;
+  /** Onglet ouvert, conservé quand on change de mois. */
+  tab?: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -40,7 +49,11 @@ export function PeriodControls({ current, months }: { current: string; months: A
           id="periode"
           value={current}
           disabled={pending}
-          onChange={(e) => startTransition(() => router.push(`/cockpit?month=${e.target.value}`))}
+          onChange={(e) =>
+            startTransition(() =>
+              router.push(`/cockpit?month=${e.target.value}${tab === 'synthese' ? '' : `&tab=${tab}`}`),
+            )
+          }
           className="h-full cursor-pointer appearance-none bg-transparent pr-9 font-medium capitalize outline-none disabled:cursor-wait"
           aria-describedby="periode-aide"
         >

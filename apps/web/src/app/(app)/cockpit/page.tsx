@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { compactDh, money, percent } from '@/lib/format';
 import { Card, KpiCard, KpiRow, NextActionBanner, PageHeader } from '@/components/ui';
 import { PeriodControls } from '@/components/period-select';
+import { ActivityTab, FinanceTab, QualityTab, TABS, TabNav, type TabKey } from './tabs';
 
 export const metadata: Metadata = { title: 'Vue d’ensemble' };
 
@@ -77,9 +78,11 @@ function monthOptions(now: Date) {
   return options;
 }
 
-export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ month?: string; tab?: string }> }) {
   const months = monthOptions(new Date());
-  const asked = (await searchParams).month;
+  const params = await searchParams;
+  const asked = params.month;
+  const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : 'synthese';
   // Seul un mois proposé est accepté : une adresse bricolée revient au mois en cours.
   const month = months.some((m) => m.value === asked) ? asked! : months[0]!.value;
   const data = await api<Dashboard>(`/analytics/dashboard?month=${month}`).catch(() => null);
@@ -90,7 +93,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         <PageHeader
           title="Vue d’ensemble"
           description="Les indicateurs essentiels pour décider et agir."
-          action={<PeriodControls current={month} months={months} />}
+          action={<PeriodControls current={month} months={months} tab={tab} />}
         />
         <NextActionBanner
           tone="info"
@@ -147,7 +150,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Vue d’ensemble"
         description="Les indicateurs essentiels pour décider et agir."
-        action={<PeriodControls current={month} months={months} />}
+        action={<PeriodControls current={month} months={months} tab={tab} />}
       />
 
       {/* Périmètre explicite : ce qui suit le mois choisi, et ce qui reste un état du jour. */}
@@ -156,171 +159,180 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         et « À traiter » : état à ce jour{isCurrentMonth ? '' : ', quel que soit le mois choisi'}.
       </p>
 
-      <KpiRow>
-        <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
-        <KpiCard label="Missions en cours" value={data.missionsInProgress} href="/operations/missions" />
-        {data.invoicedYtd !== null && (
-          <KpiCard label="Facturé · année" value={compactDh(data.invoicedYtd)} href="/finance/factures" />
-        )}
-        {data.collectedYtd !== null && (
-          <KpiCard label="Encaissé · année" value={compactDh(data.collectedYtd)} href="/finance/encaissements" />
-        )}
-      </KpiRow>
+      <TabNav current={tab} month={month} />
 
-      <div className={`mb-5 grid gap-5 ${canSeeBilling ? 'xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : ''}`}>
-        <Card>
-          <div className="px-6 pb-2 pt-5">
-            <h2 className="text-[20px] font-semibold leading-tight">À traiter</h2>
-            <p className="mt-1 text-[14px] text-muted">Les actions qui demandent votre attention.</p>
-          </div>
-          {todos.length === 0 ? (
-            <p className="px-6 pb-6 pt-3 text-[14.5px] text-muted">Rien à traiter pour le moment.</p>
-          ) : (
-            <>
-              {/* Tableau sur écran large… */}
-              <table className="hidden w-full text-[14.5px] md:table">
-                <thead>
-                  <tr className="text-left text-[13.5px] text-muted">
-                    <th className="px-6 pb-2.5 pt-2 font-normal">Priorité</th>
-                    <th className="px-3 pb-2.5 pt-2 font-normal">Sujet</th>
-                    <th className="px-3 pb-2.5 pt-2 font-normal">Volume</th>
-                    <th className="px-6 pb-2.5 pt-2 font-normal">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {todos.map((todo) => (
-                    <tr key={todo.subject} className="h-[52px] border-t border-border">
-                      <td className="px-6">
-                        <span className={`inline-flex items-center gap-2.5 ${PRIORITY[todo.priority].text}`}>
-                          <span className={`h-2 w-2 rounded-full ${PRIORITY[todo.priority].dot}`} aria-hidden="true" />
-                          {PRIORITY[todo.priority].label}
-                        </span>
-                      </td>
-                      <td className="px-3">{todo.subject}</td>
-                      <td className="tnum px-3">{todo.volume}</td>
-                      <td className="px-6">
-                        <Link href={todo.href} className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline">
-                          {todo.action}
-                          <span className="sr-only"> — {todo.subject}</span>
-                          <ArrowRight />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {/* …blocs compacts sur mobile. */}
-              <ul className="divide-y divide-border border-t border-border md:hidden">
-                {todos.map((todo) => (
-                  <li key={todo.subject} className="flex items-center justify-between gap-3 px-5 py-3.5">
-                    <div className="min-w-0">
-                      <p className="font-medium">{todo.subject}</p>
-                      <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">
-                        <span className={`h-2 w-2 rounded-full ${PRIORITY[todo.priority].dot}`} aria-hidden="true" />
-                        {PRIORITY[todo.priority].label} · <span className="tnum">{todo.volume}</span>
-                      </p>
-                    </div>
-                    <Link href={todo.href} className="inline-flex shrink-0 items-center gap-1.5 text-[14px] font-medium text-accent">
-                      {todo.action}
-                      <span className="sr-only"> — {todo.subject}</span>
-                      <ArrowRight />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </>
+      {tab === 'activite' && <ActivityTab month={month} />}
+      {tab === 'finance' && <FinanceTab month={month} />}
+      {tab === 'qualite' && <QualityTab month={month} />}
+      {tab === 'synthese' && (
+        <>
+        <KpiRow>
+          <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
+          <KpiCard label="Missions en cours" value={data.missionsInProgress} href="/operations/missions" />
+          {data.invoicedYtd !== null && (
+            <KpiCard label="Facturé · année" value={compactDh(data.invoicedYtd)} href="/finance/factures" />
           )}
-        </Card>
+          {data.collectedYtd !== null && (
+            <KpiCard label="Encaissé · année" value={compactDh(data.collectedYtd)} href="/finance/encaissements" />
+          )}
+        </KpiRow>
 
-        {canSeeBilling && (
+        <div className={`mb-5 grid gap-5 ${canSeeBilling ? 'xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : ''}`}>
           <Card>
-            <div className="px-6 pb-6 pt-5">
-              <h2 className="text-[20px] font-semibold leading-tight">Encaissements annuels</h2>
-              <p className="mt-1 text-[14px] text-muted">Du 1<sup>er</sup> janvier au {endOfPeriod} : facturé hors taxes (avoirs déduits) et règlements reçus.</p>
-
-              <div className="mt-6 grid gap-5">
-                {[
-                  { label: 'Facturé', value: data.invoicedYtd!, color: 'bg-brand' },
-                  { label: 'Encaissé', value: data.collectedYtd!, color: 'bg-secondary' },
-                ].map((row) => (
-                  <div key={row.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-6 gap-y-2">
-                    <p className="text-[15px] font-medium">{row.label}</p>
-                    <p className="tnum row-span-2 self-center text-[17px] font-semibold">{compactDh(row.value)}</p>
-                    <Bar value={row.value} max={scale} color={row.color} label={`${row.label} : ${money(row.value)} DH`} />
-                  </div>
-                ))}
-              </div>
-
-              <p className="mt-6 border-t border-border pt-4 text-[13.5px] text-muted">
-                Encaissé ={' '}
-                <span className="tnum font-medium text-text">
-                  {data.invoicedYtd! > 0 ? percent((data.collectedYtd! / data.invoicedYtd!) * 100, 0) : '—'}
-                </span>{' '}
-                du facturé. Les factures échues sont suivies à part, dans « À traiter ».
-              </p>
+            <div className="px-6 pb-2 pt-5">
+              <h2 className="text-[20px] font-semibold leading-tight">À traiter</h2>
+              <p className="mt-1 text-[14px] text-muted">Les actions qui demandent votre attention.</p>
             </div>
-          </Card>
-        )}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <Link href="/pilotage/qualite" className="block px-6 pb-6 pt-5 transition-colors hover:bg-surface-2/50">
-            <h2 className="text-[20px] font-semibold leading-tight">Qualité de service</h2>
-            <p className="mt-1 text-[14px] text-muted">Rapports remis dans le délai, du 1<sup>er</sup> janvier au {endOfPeriod}.</p>
-            {data.reportsIssued > 0 ? (
-              <>
-                <p className="tnum mt-4 text-[36px] font-semibold leading-none text-secondary">
-                  {percent(data.reportOnTimeRate, 0)}
-                </p>
-                <div className="mt-4">
-                  <Bar
-                    value={data.reportOnTimeRate}
-                    max={100}
-                    color="bg-secondary"
-                    label={`${percent(data.reportOnTimeRate, 0)} des rapports remis dans le délai`}
-                  />
-                </div>
-                <p className="mt-3 text-[13.5px] text-muted">
-                  <span className="tnum">{data.reportsIssued}</span> rapports émis
-                </p>
-              </>
+            {todos.length === 0 ? (
+              <p className="px-6 pb-6 pt-3 text-[14.5px] text-muted">Rien à traiter pour le moment.</p>
             ) : (
-              <p className="mt-4 text-[14.5px] text-muted">— Aucun rapport remis sur cette période : le taux n’est pas calculable.</p>
+              <>
+                {/* Tableau sur écran large… */}
+                <table className="hidden w-full text-[14.5px] md:table">
+                  <thead>
+                    <tr className="text-left text-[13.5px] text-muted">
+                      <th className="px-6 pb-2.5 pt-2 font-normal">Priorité</th>
+                      <th className="px-3 pb-2.5 pt-2 font-normal">Sujet</th>
+                      <th className="px-3 pb-2.5 pt-2 font-normal">Volume</th>
+                      <th className="px-6 pb-2.5 pt-2 font-normal">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todos.map((todo) => (
+                      <tr key={todo.subject} className="h-[52px] border-t border-border">
+                        <td className="px-6">
+                          <span className={`inline-flex items-center gap-2.5 ${PRIORITY[todo.priority].text}`}>
+                            <span className={`h-2 w-2 rounded-full ${PRIORITY[todo.priority].dot}`} aria-hidden="true" />
+                            {PRIORITY[todo.priority].label}
+                          </span>
+                        </td>
+                        <td className="px-3">{todo.subject}</td>
+                        <td className="tnum px-3">{todo.volume}</td>
+                        <td className="px-6">
+                          <Link href={todo.href} className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline">
+                            {todo.action}
+                            <span className="sr-only"> — {todo.subject}</span>
+                            <ArrowRight />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {/* …blocs compacts sur mobile. */}
+                <ul className="divide-y divide-border border-t border-border md:hidden">
+                  {todos.map((todo) => (
+                    <li key={todo.subject} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                      <div className="min-w-0">
+                        <p className="font-medium">{todo.subject}</p>
+                        <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">
+                          <span className={`h-2 w-2 rounded-full ${PRIORITY[todo.priority].dot}`} aria-hidden="true" />
+                          {PRIORITY[todo.priority].label} · <span className="tnum">{todo.volume}</span>
+                        </p>
+                      </div>
+                      <Link href={todo.href} className="inline-flex shrink-0 items-center gap-1.5 text-[14px] font-medium text-accent">
+                        {todo.action}
+                        <span className="sr-only"> — {todo.subject}</span>
+                        <ArrowRight />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
-          </Link>
-        </Card>
-
-        {data.unassignedDays !== null && data.idleCost !== null && (
-          <Card>
-            <div className="px-6 pb-6 pt-5">
-              <h2 className="text-[20px] font-semibold leading-tight">Disponibilité des équipes</h2>
-              <p className="mt-1 text-[14px] text-muted">Mois de {data.period.label}.</p>
-              <div className="mt-4 grid grid-cols-2">
-                <Link href="/pilotage/jours-non-affectes" className="pr-5 hover:opacity-80">
-                  <p className="text-[14px] text-muted">Jours non affectés</p>
-                  <p className={`tnum mt-2 text-[36px] font-semibold leading-none ${data.unassignedDays > 0 ? 'text-danger' : ''}`}>
-                    {data.unassignedDays}
-                  </p>
-                  <p className="mt-3 text-[13.5px] text-muted">
-                    {data.unassignedDays === 0 ? 'Aucun jour non affecté.' : 'Capacité payée mais non employée.'}
-                  </p>
-                </Link>
-                <Link href="/pilotage/jours-non-affectes" className="border-l border-border pl-5 hover:opacity-80">
-                  <p className="text-[14px] text-muted">Coût d’inactivité</p>
-                  <p className={`tnum mt-2 text-[36px] font-semibold leading-none ${data.idleCost > 0 ? 'text-danger' : ''}`}>
-                    {money(data.idleCost)}
-                    <span className="ml-1.5 text-[18px] font-medium">DH</span>
-                  </p>
-                  <p className="mt-3 text-[13.5px] text-muted">
-                    {data.idleCost === 0 ? 'Aucun coût d’inactivité.' : 'Coût journalier des jours non affectés.'}
-                  </p>
-                </Link>
-              </div>
-            </div>
           </Card>
-        )}
-      </div>
+
+          {canSeeBilling && (
+            <Card>
+              <div className="px-6 pb-6 pt-5">
+                <h2 className="text-[20px] font-semibold leading-tight">Encaissements annuels</h2>
+                <p className="mt-1 text-[14px] text-muted">Du 1<sup>er</sup> janvier au {endOfPeriod} : facturé hors taxes (avoirs déduits) et règlements reçus.</p>
+
+                <div className="mt-6 grid gap-5">
+                  {[
+                    { label: 'Facturé', value: data.invoicedYtd!, color: 'bg-brand' },
+                    { label: 'Encaissé', value: data.collectedYtd!, color: 'bg-secondary' },
+                  ].map((row) => (
+                    <div key={row.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-6 gap-y-2">
+                      <p className="text-[15px] font-medium">{row.label}</p>
+                      <p className="tnum row-span-2 self-center text-[17px] font-semibold">{compactDh(row.value)}</p>
+                      <Bar value={row.value} max={scale} color={row.color} label={`${row.label} : ${money(row.value)} DH`} />
+                    </div>
+                  ))}
+                </div>
+
+                <p className="mt-6 border-t border-border pt-4 text-[13.5px] text-muted">
+                  Encaissé ={' '}
+                  <span className="tnum font-medium text-text">
+                    {data.invoicedYtd! > 0 ? percent((data.collectedYtd! / data.invoicedYtd!) * 100, 0) : '—'}
+                  </span>{' '}
+                  du facturé. Les factures échues sont suivies à part, dans « À traiter ».
+                </p>
+              </div>
+            </Card>
+          )}
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Card>
+            <Link href="/pilotage/qualite" className="block px-6 pb-6 pt-5 transition-colors hover:bg-surface-2/50">
+              <h2 className="text-[20px] font-semibold leading-tight">Qualité de service</h2>
+              <p className="mt-1 text-[14px] text-muted">Rapports remis dans le délai, du 1<sup>er</sup> janvier au {endOfPeriod}.</p>
+              {data.reportsIssued > 0 ? (
+                <>
+                  <p className="tnum mt-4 text-[36px] font-semibold leading-none text-secondary">
+                    {percent(data.reportOnTimeRate, 0)}
+                  </p>
+                  <div className="mt-4">
+                    <Bar
+                      value={data.reportOnTimeRate}
+                      max={100}
+                      color="bg-secondary"
+                      label={`${percent(data.reportOnTimeRate, 0)} des rapports remis dans le délai`}
+                    />
+                  </div>
+                  <p className="mt-3 text-[13.5px] text-muted">
+                    <span className="tnum">{data.reportsIssued}</span> rapports émis
+                  </p>
+                </>
+              ) : (
+                <p className="mt-4 text-[14.5px] text-muted">— Aucun rapport remis sur cette période : le taux n’est pas calculable.</p>
+              )}
+            </Link>
+          </Card>
+
+          {data.unassignedDays !== null && data.idleCost !== null && (
+            <Card>
+              <div className="px-6 pb-6 pt-5">
+                <h2 className="text-[20px] font-semibold leading-tight">Disponibilité des équipes</h2>
+                <p className="mt-1 text-[14px] text-muted">Mois de {data.period.label}.</p>
+                <div className="mt-4 grid grid-cols-2">
+                  <Link href="/pilotage/jours-non-affectes" className="pr-5 hover:opacity-80">
+                    <p className="text-[14px] text-muted">Jours non affectés</p>
+                    <p className={`tnum mt-2 text-[36px] font-semibold leading-none ${data.unassignedDays > 0 ? 'text-danger' : ''}`}>
+                      {data.unassignedDays}
+                    </p>
+                    <p className="mt-3 text-[13.5px] text-muted">
+                      {data.unassignedDays === 0 ? 'Aucun jour non affecté.' : 'Capacité payée mais non employée.'}
+                    </p>
+                  </Link>
+                  <Link href="/pilotage/jours-non-affectes" className="border-l border-border pl-5 hover:opacity-80">
+                    <p className="text-[14px] text-muted">Coût d’inactivité</p>
+                    <p className={`tnum mt-2 text-[36px] font-semibold leading-none ${data.idleCost > 0 ? 'text-danger' : ''}`}>
+                      {money(data.idleCost)}
+                      <span className="ml-1.5 text-[18px] font-medium">DH</span>
+                    </p>
+                    <p className="mt-3 text-[13.5px] text-muted">
+                      {data.idleCost === 0 ? 'Aucun coût d’inactivité.' : 'Coût journalier des jours non affectés.'}
+                    </p>
+                  </Link>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+        </>
+      )}
     </>
   );
 }
