@@ -3,11 +3,12 @@ import type { Metadata } from 'next';
 import { api } from '@/lib/api';
 import { compactDh, money, percent } from '@/lib/format';
 import { Card, KpiCard, KpiRow, NextActionBanner, PageHeader } from '@/components/ui';
+import { PeriodControls } from '@/components/period-select';
 
 export const metadata: Metadata = { title: 'Vue d’ensemble' };
 
 interface Dashboard {
-  period: { label: string };
+  period: { label: string; from: string; to: string };
   affairsInProgress: number;
   missionsInProgress: number;
   missionsUpcoming: number;
@@ -64,13 +65,33 @@ function Bar({ value, max, color, label }: { value: number; max: number; color: 
   );
 }
 
-export default async function OverviewPage() {
-  const data = await api<Dashboard>('/analytics/dashboard').catch(() => null);
+/** Mois proposés : de janvier de l'an dernier au mois en cours, le plus récent en tête. */
+function monthOptions(now: Date) {
+  const options: Array<{ value: string; label: string }> = [];
+  for (let d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)); d.getUTCFullYear() >= now.getUTCFullYear() - 1; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1))) {
+    options.push({
+      value: d.toISOString().slice(0, 7),
+      label: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    });
+  }
+  return options;
+}
+
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  const months = monthOptions(new Date());
+  const asked = (await searchParams).month;
+  // Seul un mois proposé est accepté : une adresse bricolée revient au mois en cours.
+  const month = months.some((m) => m.value === asked) ? asked! : months[0]!.value;
+  const data = await api<Dashboard>(`/analytics/dashboard?month=${month}`).catch(() => null);
 
   if (!data) {
     return (
       <>
-        <PageHeader title="Vue d’ensemble" description="Les indicateurs essentiels pour décider et agir." />
+        <PageHeader
+          title="Vue d’ensemble"
+          description="Les indicateurs essentiels pour décider et agir."
+          action={<PeriodControls current={month} months={months} />}
+        />
         <NextActionBanner
           tone="info"
           title="Indicateurs indisponibles"
@@ -118,20 +139,22 @@ export default async function OverviewPage() {
   }
 
   const scale = canSeeBilling ? Math.max(data.invoicedYtd!, data.collectedYtd!) : 0;
-  const year = data.period.label.split(' ').pop();
+  const endOfPeriod = new Date(data.period.to).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const isCurrentMonth = month === months[0]!.value;
 
   return (
     <>
       <PageHeader
         title="Vue d’ensemble"
         description="Les indicateurs essentiels pour décider et agir."
-        action={
-          <p className="rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13.5px] text-muted">
-            Période : <span className="font-medium capitalize text-text">{data.period.label}</span>
-            <span className="text-subtle"> · cumuls depuis janvier {year}</span>
-          </p>
-        }
+        action={<PeriodControls current={month} months={months} />}
       />
+
+      {/* Périmètre explicite : ce qui suit le mois choisi, et ce qui reste un état du jour. */}
+      <p className="-mt-4 mb-5 text-[13.5px] text-muted">
+        Cumuls « année » du 1<sup>er</sup> janvier au {endOfPeriod}. Affaires et missions en cours,
+        et « À traiter » : état à ce jour{isCurrentMonth ? '' : ', quel que soit le mois choisi'}.
+      </p>
 
       <KpiRow>
         <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
@@ -213,7 +236,7 @@ export default async function OverviewPage() {
           <Card>
             <div className="px-6 pb-6 pt-5">
               <h2 className="text-[20px] font-semibold leading-tight">Encaissements annuels</h2>
-              <p className="mt-1 text-[14px] text-muted">Montants cumulés depuis janvier, hors taxes facturés et règlements reçus.</p>
+              <p className="mt-1 text-[14px] text-muted">Du 1<sup>er</sup> janvier au {endOfPeriod} : facturé hors taxes (avoirs déduits) et règlements reçus.</p>
 
               <div className="mt-6 grid gap-5">
                 {[
@@ -244,7 +267,7 @@ export default async function OverviewPage() {
         <Card>
           <Link href="/pilotage/qualite" className="block px-6 pb-6 pt-5 transition-colors hover:bg-surface-2/50">
             <h2 className="text-[20px] font-semibold leading-tight">Qualité de service</h2>
-            <p className="mt-1 text-[14px] text-muted">Rapports remis dans le délai, depuis janvier.</p>
+            <p className="mt-1 text-[14px] text-muted">Rapports remis dans le délai, du 1<sup>er</sup> janvier au {endOfPeriod}.</p>
             {data.reportsIssued > 0 ? (
               <>
                 <p className="tnum mt-4 text-[36px] font-semibold leading-none text-secondary">
@@ -263,7 +286,7 @@ export default async function OverviewPage() {
                 </p>
               </>
             ) : (
-              <p className="mt-4 text-[14.5px] text-muted">— Aucun rapport remis cette année : le taux n’est pas encore calculable.</p>
+              <p className="mt-4 text-[14.5px] text-muted">— Aucun rapport remis sur cette période : le taux n’est pas calculable.</p>
             )}
           </Link>
         </Card>
@@ -272,7 +295,7 @@ export default async function OverviewPage() {
           <Card>
             <div className="px-6 pb-6 pt-5">
               <h2 className="text-[20px] font-semibold leading-tight">Disponibilité des équipes</h2>
-              <p className="mt-1 text-[14px] text-muted">Période : {data.period.label}.</p>
+              <p className="mt-1 text-[14px] text-muted">Mois de {data.period.label}.</p>
               <div className="mt-4 grid grid-cols-2">
                 <Link href="/pilotage/jours-non-affectes" className="pr-5 hover:opacity-80">
                   <p className="text-[14px] text-muted">Jours non affectés</p>

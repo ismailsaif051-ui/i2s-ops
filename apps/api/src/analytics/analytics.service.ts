@@ -619,50 +619,46 @@ export class AnalyticsService {
           .map((i) => i.balance)
       : null;
 
+    // Cumuls « année » : du 1er janvier à la FIN DE LA PÉRIODE choisie — pour
+    // mars, rien de ce qui a été facturé ou encaissé après le 31 mars.
     const yearStart = new Date(Date.UTC(to.getUTCFullYear(), 0, 1));
-    const invoices = invoiceWhere
-      ? await this.prisma.invoice.findMany({
-          where: { issueDate: { gte: yearStart }, status: { not: 'CANCELLED' }, ...invoiceWhere },
-          select: {
-            totalHT: true,
-            issueDate: true,
-            payments: { select: { amount: true, date: true } },
-            creditNotes: { select: { amount: true, issueDate: true } },
-          },
-        })
-      : [];
-    const invoiced = invoices.reduce(
-      (s, i) => s + Number(i.totalHT) - i.creditNotes.reduce((c, n) => c + Number(n.amount), 0),
-      0,
-    );
-    const collected = invoices.reduce(
-      (s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0),
-      0,
-    );
+    const cumul = { gte: yearStart, lte: to };
+    const [invoices, creditNotes, payments] = invoiceWhere
+      ? await Promise.all([
+          this.prisma.invoice.findMany({
+            where: { issueDate: cumul, status: { not: 'CANCELLED' }, ...invoiceWhere },
+            select: { totalHT: true, issueDate: true },
+          }),
+          // L'avoir se retire à sa date d'émission, quelle que soit celle de la facture.
+          this.prisma.creditNote.findMany({
+            where: { issueDate: cumul, invoice: { status: { not: 'CANCELLED' }, ...invoiceWhere } },
+            select: { amount: true, issueDate: true },
+          }),
+          // Encaissé = argent reçu sur la période, y compris pour une facture de
+          // l'année précédente.
+          this.prisma.payment.findMany({
+            where: { date: cumul, invoice: invoiceWhere },
+            select: { amount: true, date: true },
+          }),
+        ])
+      : [[], [], []];
+    const invoiced =
+      invoices.reduce((s, i) => s + Number(i.totalHT), 0) -
+      creditNotes.reduce((s, c) => s + Number(c.amount), 0);
+    const collected = payments.reduce((s, p) => s + Number(p.amount), 0);
 
-    // Historique mensuel (janvier → mois courant) pour les mini-graphiques du
-    // cockpit — cumul réel à partir des mêmes factures/encaissements, jamais
-    // une valeur inventée.
+    // Historique mensuel (janvier → fin de période), à partir des mêmes pièces.
     const monthCount = to.getUTCMonth() + 1;
     const invoicedTrend = new Array(monthCount).fill(0) as number[];
     const collectedTrend = new Array(monthCount).fill(0) as number[];
-    for (const inv of invoices) {
-      const m = inv.issueDate.getUTCMonth();
-      if (m < monthCount) invoicedTrend[m] += Number(inv.totalHT);
-      // L'avoir se retire au mois où il est émis.
-      for (const note of inv.creditNotes) {
-        const cm = note.issueDate.getUTCMonth();
-        if (cm < monthCount) invoicedTrend[cm] -= Number(note.amount);
-      }
-      for (const pay of inv.payments) {
-        const pm = pay.date.getUTCMonth();
-        if (pm < monthCount) collectedTrend[pm] += Number(pay.amount);
-      }
-    }
+    for (const inv of invoices) invoicedTrend[inv.issueDate.getUTCMonth()] += Number(inv.totalHT);
+    for (const note of creditNotes) invoicedTrend[note.issueDate.getUTCMonth()] -= Number(note.amount);
+    for (const pay of payments) collectedTrend[pay.date.getUTCMonth()] += Number(pay.amount);
 
-    // Taux de respect du délai de remise de rapport (objectif QMS < 21 j ouvrés).
+    // Taux de respect du délai de remise de rapport (objectif QMS < 21 j ouvrés),
+    // sur les rapports émis de janvier à la fin de la période.
     const issuedReports = await this.prisma.report.findMany({
-      where: { deliveredAt: { not: null }, issuedAt: { gte: new Date(Date.UTC(to.getUTCFullYear(), 0, 1)) } },
+      where: { deliveredAt: { not: null }, issuedAt: cumul },
       select: { deliveredAt: true, mission: { select: { reportDueDate: true } } },
     });
     const onTime = issuedReports.filter(
