@@ -26,6 +26,7 @@ interface Actions {
   assign: boolean;
   issueOrder: boolean;
   signOrder: boolean;
+  cancel: boolean;
 }
 
 const ROLES = [
@@ -497,6 +498,112 @@ export function MissionOrderPanel({
         {message && (
           <p role="alert" className="rounded-[10px] bg-danger-soft px-4 py-3 text-[14px] text-danger">
             {message}
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Annulation — motif obligatoire, irréversible depuis l'écran. */
+export function MissionCancelPanel({
+  missionId,
+  canCancel,
+  cancelReason,
+}: {
+  missionId: string;
+  canCancel: boolean;
+  cancelReason: string | null;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (cancelReason) {
+    return (
+      <Card title="Mission annulée">
+        <p className="px-5 py-5 text-[14.5px] text-muted">
+          <span className="font-medium text-text">Motif :</span> {cancelReason}
+        </p>
+      </Card>
+    );
+  }
+
+  if (!canCancel) return null;
+
+  async function submit() {
+    if (reason.trim().length < 5) {
+      setError('Le motif doit compter au moins 5 caractères.');
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    const response = await fetch(`/api/missions/${missionId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    setBusy(false);
+
+    if (!response.ok) {
+      setError(payload.message ?? 'Annulation refusée.');
+      return;
+    }
+    router.refresh();
+  }
+
+  return (
+    <Card title="Annuler la mission">
+      <div className="flex flex-col gap-3 px-5 py-5">
+        {!open ? (
+          <div>
+            <Button variant="danger" onClick={() => setOpen(true)}>
+              Annuler la mission
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Field label="Motif de l’annulation">
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                maxLength={500}
+                className="w-full rounded-[10px] border border-border-strong bg-surface px-3.5 py-2.5 text-[15px] outline-none focus:border-accent"
+                placeholder="Ex. : client a annulé l'intervention, aléa chantier…"
+              />
+            </Field>
+            <p className="text-[13.5px] text-subtle">
+              Irréversible : l’équipe affectée en sera notifiée.
+            </p>
+            <div className="flex items-center gap-3">
+              <Button variant="danger" onClick={submit} disabled={busy}>
+                {busy ? 'Annulation…' : 'Confirmer l’annulation'}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setReason('');
+                  setError(null);
+                }}
+                className="text-[13.5px] text-subtle hover:underline"
+              >
+                Renoncer
+              </button>
+            </div>
+          </>
+        )}
+
+        {error && (
+          <p role="alert" className="rounded-[10px] bg-danger-soft px-4 py-3 text-[14px] text-danger">
+            {error}
           </p>
         )}
       </div>

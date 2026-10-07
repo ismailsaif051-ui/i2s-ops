@@ -41,6 +41,10 @@ const assignSchema = z.object({
     .min(1, 'Une mission a besoin d’au moins un intervenant.'),
 });
 
+const cancelSchema = z.object({
+  reason: z.string().trim().min(5, 'Précisez le motif de l’annulation.').max(500),
+});
+
 const orderSchema = z.object({
   object: z.string().trim().min(3, 'L’objet de la mission est obligatoire.').max(300),
   instructions: z.string().trim().max(4000).optional().or(z.literal('')),
@@ -244,8 +248,10 @@ class MissionsController {
     // Un geste n'est ouvert que si l'utilisateur en a le droit ET si l'état de
     // la mission le permet. Les deux conditions, pas une seule : sinon l'écran
     // propose un bouton que l'API refusera.
-    const allowed = (resource: 'mission' | 'mission_order', action: 'CREATE' | 'UPDATE' | 'APPROVE') =>
-      user.permissions.some((perm) => perm.resource === resource && perm.action === action);
+    const allowed = (
+      resource: 'mission' | 'mission_order',
+      action: 'CREATE' | 'UPDATE' | 'APPROVE' | 'DELETE',
+    ) => user.permissions.some((perm) => perm.resource === resource && perm.action === action);
 
     return {
       id: mission.id,
@@ -260,6 +266,7 @@ class MissionsController {
       actualStartDate: mission.actualStartDate,
       actualEndDate: mission.actualEndDate,
       reportDueDate: mission.reportDueDate,
+      cancelReason: mission.cancelReason,
       affair: {
         id: mission.affair.id,
         number: mission.affair.number,
@@ -313,6 +320,9 @@ class MissionsController {
           (!mission.missionOrder || mission.missionOrder.status === 'DRAFT'),
         signOrder:
           allowed('mission_order', 'APPROVE') && mission.missionOrder?.status === 'APPROVED',
+        cancel:
+          allowed('mission', 'DELETE') &&
+          !['COMPLETED', 'REPORTED', 'CLOSED', 'CANCELLED'].includes(mission.status),
       },
     };
   }
@@ -353,6 +363,17 @@ class MissionsController {
   @RequirePermission('mission_order', 'APPROVE')
   signOrder(@CurrentUser() user: RequestUser, @Param('id') id: string, @Req() req: Request) {
     return this.missions.signOrder(user, id, ctx(req));
+  }
+
+  @Post(':id/cancel')
+  @RequirePermission('mission', 'DELETE')
+  cancel(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(cancelSchema)) body: z.infer<typeof cancelSchema>,
+    @Req() req: Request,
+  ) {
+    return this.missions.cancel(user, id, body.reason, ctx(req));
   }
 
   /** Pièce imprimable de l'ordre signé — voir MissionsService.orderPdf. */

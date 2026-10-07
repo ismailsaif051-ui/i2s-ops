@@ -87,6 +87,34 @@ npm run dev
 
 ---
 
+## Comptes et mots de passe
+
+Les mots de passe sont stockés hachés (Argon2id) : aucun ne peut être relu. Un mot de passe oublié
+se redéfinit, il ne se retrouve pas. Ne les échangez ni par message ni dans un document partagé.
+
+| Compte | Login | Mot de passe |
+|---|---|---|
+| Administrateur | `SEED_ADMIN_EMAIL` (défaut `admin@i2s-testing.ma`) | Généré par `npm run db:seed` et affiché **une seule fois** ; à changer à la première connexion. Fixable avec `SEED_ADMIN_PASSWORD` avant le seed. |
+| Démonstration | `rôle.matricule@demo.i2s-testing.ma` (ex. `dg.a0001@…`, `controller.a0003@…`) | Commun, affiché une seule fois par `npm run db:demo`. Fixable avec `DEMO_PASSWORD` dans `.env`. |
+
+**Fixer un mot de passe permanent pour l'administrateur ou récupérer l'accès :**
+
+```bash
+npm run db:reset-admin                      # admin@i2s-testing.ma
+npm run db:reset-admin -- autre@i2s-testing.ma
+```
+
+Le mot de passe est saisi de façon masquée (12 caractères minimum), jamais passé en argument. Le compte
+n'a plus de changement forcé ensuite. En production, lancez la commande avec le `DATABASE_URL` de la base
+de production.
+
+**Comptes des vrais utilisateurs :** les créer depuis l'écran d'administration. Chaque compte reçoit un
+mot de passe provisoire, à changer à la première connexion, et l'audit identifie qui a fait quoi.
+Pas de mot de passe commun permanent en production : ne chargez pas le jeu de simulation sur la base
+réelle.
+
+---
+
 ## Structure
 
 ```

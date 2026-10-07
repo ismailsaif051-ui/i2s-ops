@@ -301,6 +301,68 @@ export class MissionsService {
     return { conflicts };
   }
 
+  /* ── Annulation ───────────────────────────────────────────────── */
+
+  /**
+   * Une mission qui n'a encore rien produit peut être annulée. Au-delà — un
+   * rapport existe, ou la mission est déjà close — l'annulation reviendrait à
+   * effacer un travail livré ; c'est une non-conformité à tracer, pas un
+   * retour en arrière.
+   */
+  async cancel(
+    user: RequestUser,
+    id: string,
+    reason: string,
+    ctx: { ip?: string | null; userAgent?: string | null },
+  ) {
+    const mission = await this.get(user, id);
+
+    if (['COMPLETED', 'REPORTED', 'CLOSED', 'CANCELLED'].includes(mission.status)) {
+      throw new BadRequestException(
+        `Une mission « ${mission.status} » ne s’annule plus.`,
+      );
+    }
+
+    await this.prisma.mission.update({
+      where: { id },
+      data: { status: 'CANCELLED', cancelReason: reason, updatedById: user.employeeId },
+    });
+
+    await this.audit.record(
+      {
+        entity: 'mission',
+        entityId: id,
+        action: 'CANCEL',
+        before: { status: mission.status },
+        after: { status: 'CANCELLED', reason },
+        reason,
+        companyId: mission.affair.companyId,
+      },
+      { user, ...ctx },
+    );
+
+    const employeeIds = mission.assignments.map((a) => a.employeeId);
+    if (employeeIds.length > 0) {
+      const recipients = await this.prisma.user.findMany({
+        where: { employeeId: { in: employeeIds } },
+        select: { id: true },
+      });
+      const userIds = recipients.map((r) => r.id).filter((uid) => uid !== user.id);
+      if (userIds.length > 0) {
+        await this.notifications.notifyMany(userIds, {
+          type: 'MISSION_CANCELLED',
+          level: 'warning',
+          title: `Mission annulée — ${mission.number}`,
+          body: `La mission ${mission.number} (${mission.affair.number}) a été annulée. Motif : ${reason}`,
+          link: `/operations/missions/${mission.id}`,
+          payload: { missionId: mission.id, reason },
+        });
+      }
+    }
+
+    return { status: 'CANCELLED' as const };
+  }
+
   /**
    * Prévient les chefs de service d'une deuxième intervention le même jour.
    *

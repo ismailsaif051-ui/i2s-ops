@@ -6,6 +6,7 @@ const ROUTES: Record<string, string> = {
   assignments: 'assignments',
   order: 'order',
   'order-sign': 'order/sign',
+  cancel: 'cancel',
 };
 
 export async function POST(

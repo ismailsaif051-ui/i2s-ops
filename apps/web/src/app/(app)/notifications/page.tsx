@@ -26,6 +26,7 @@ const TONE: Record<string, 'info' | 'warning' | 'danger' | 'success'> = {
 /** Libellé de chaque type d'alerte — jamais le code technique à l'écran. */
 const TYPE_LABELS: Record<string, string> = {
   MISSION_SHARED_DAY: 'Journée partagée',
+  MISSION_CANCELLED: 'Mission annulée',
   CERTIFICATION: 'Certification',
   ETALONNAGE: 'Étalonnage',
   FRAIS: 'Frais',

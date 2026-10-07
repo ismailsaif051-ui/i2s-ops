@@ -5,6 +5,7 @@ import { ApiError, api } from '@/lib/api';
 import { MISSION_STATUS_LABELS, date, moneyDh } from '@/lib/format';
 import { Card, EmptyState, PageHeader, StatusBadge, type Tone } from '@/components/ui';
 import {
+  MissionCancelPanel,
   MissionOrderPanel,
   MissionTeam,
   type EmployeeOption,
@@ -40,6 +41,7 @@ interface MissionDetail {
   actualStartDate: string | null;
   actualEndDate: string | null;
   reportDueDate: string | null;
+  cancelReason: string | null;
   affair: { id: string; number: string; title: string; client: string };
   department: { id: string; code: string; name: string } | null;
   site: { id: string; name: string; city: string | null } | null;
@@ -65,7 +67,7 @@ interface MissionDetail {
     category: string;
     expenseReport: { id: string; number: string; status: string };
   }>;
-  actions: { assign: boolean; issueOrder: boolean; signOrder: boolean };
+  actions: { assign: boolean; issueOrder: boolean; signOrder: boolean; cancel: boolean };
 }
 
 interface Options {
@@ -153,6 +155,12 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
           order={mission.missionOrder}
           actions={mission.actions}
           defaultObject={mission.objective ?? mission.affair.title}
+        />
+
+        <MissionCancelPanel
+          missionId={mission.id}
+          canCancel={mission.actions.cancel}
+          cancelReason={mission.cancelReason}
         />
 
         <Card
