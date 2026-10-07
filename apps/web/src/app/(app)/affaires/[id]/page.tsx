@@ -151,19 +151,22 @@ export default async function AffairPage({ params }: { params: Promise<{ id: str
 
   let detail: AffairDetail;
   let session: Awaited<ReturnType<typeof requireSession>>;
+  let analytics: Profitability | null;
+  let costLines: AffairCostList | null;
   try {
-    detail = await api<AffairDetail>(`/affairs/${id}`);
-    session = await requireSession();
+    // Les quatre appels ne dépendent que de `id` : partis ensemble, la page
+    // attend le plus lent des quatre au lieu de leur somme.
+    [detail, session, analytics, costLines] = await Promise.all([
+      api<AffairDetail>(`/affairs/${id}`),
+      requireSession(),
+      api<Profitability | null>(`/analytics/affairs/${id}/profitability`).catch(() => null),
+      api<AffairCostList>(`/affairs/${id}/costs`).catch(() => null),
+    ]);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }
-
-  const analytics = await api<Profitability | null>(`/analytics/affairs/${id}/profitability`).catch(
-    () => null,
-  );
   const p = analytics?.profitability;
-  const costLines = await api<AffairCostList>(`/affairs/${id}/costs`).catch(() => null);
 
   const budgetByCategory = new Map(
     (analytics?.budgetLines ?? []).map((b) => [b.category, b.planned]),
