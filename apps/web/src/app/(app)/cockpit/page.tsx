@@ -10,24 +10,25 @@ export const metadata: Metadata = { title: 'Vue d’ensemble' };
 
 interface Dashboard {
   period: { label: string; from: string; to: string };
-  affairsInProgress: number;
-  missionsInProgress: number;
-  missionsUpcoming: number;
+  /** Chaque compteur est absent (null) quand l'utilisateur n'a pas le droit de voir la liste correspondante. */
+  affairsInProgress: number | null;
+  missionsInProgress: number | null;
+  missionsUpcoming: number | null;
   /** Absent quand l'utilisateur n'a pas le droit timesheet:VIEW. */
   unassignedDays: number | null;
   idleCost: number | null;
-  pendingReports: number;
-  pendingExpenses: number;
+  pendingReports: number | null;
+  pendingExpenses: number | null;
   /** Absent quand l'utilisateur n'a pas le droit invoice:VIEW. */
   overdueInvoices: number | null;
   overdueAmount: number | null;
-  expiringCertifications: number;
-  expiredDevices: number;
-  openNonConformities: number;
+  expiringCertifications: number | null;
+  expiredDevices: number | null;
+  openNonConformities: number | null;
   invoicedYtd: number | null;
   collectedYtd: number | null;
-  reportOnTimeRate: number;
-  reportsIssued: number;
+  reportOnTimeRate: number | null;
+  reportsIssued: number | null;
 }
 
 type Priority = 'high' | 'check' | 'validate' | 'follow';
@@ -119,7 +120,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       href: '/finance/encaissements',
     });
   }
-  if (data.expiredDevices > 0) {
+  if ((data.expiredDevices ?? 0) > 0) {
     todos.push({
       priority: 'high',
       subject: 'Instruments hors étalonnage',
@@ -128,16 +129,16 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       href: '/operations/parc-mesure',
     });
   }
-  if (data.pendingReports > 0) {
+  if ((data.pendingReports ?? 0) > 0) {
     todos.push({ priority: 'check', subject: 'Rapports à vérifier', volume: String(data.pendingReports), action: 'Consulter', href: '/operations/rapports' });
   }
-  if (data.pendingExpenses > 0) {
+  if ((data.pendingExpenses ?? 0) > 0) {
     todos.push({ priority: 'validate', subject: 'Frais en attente', volume: String(data.pendingExpenses), action: 'Valider', href: '/finance/notes-de-frais' });
   }
-  if (data.openNonConformities > 0) {
+  if ((data.openNonConformities ?? 0) > 0) {
     todos.push({ priority: 'follow', subject: 'Non-conformités ouvertes', volume: String(data.openNonConformities), action: 'Examiner', href: '/operations/non-conformites' });
   }
-  if (data.expiringCertifications > 0) {
+  if ((data.expiringCertifications ?? 0) > 0) {
     todos.push({ priority: 'follow', subject: 'Certifications expirant sous 60 jours', volume: String(data.expiringCertifications), action: 'Planifier', href: '/ressources/habilitations' });
   }
 
@@ -167,8 +168,12 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       {tab === 'synthese' && (
         <>
         <KpiRow>
-          <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
-          <KpiCard label="Missions en cours" value={data.missionsInProgress} href="/operations/missions" />
+          {data.affairsInProgress !== null && (
+            <KpiCard label="Affaires en cours" value={data.affairsInProgress} href="/affaires" />
+          )}
+          {data.missionsInProgress !== null && (
+            <KpiCard label="Missions en cours" value={data.missionsInProgress} href="/operations/missions" />
+          )}
           {data.invoicedYtd !== null && (
             <KpiCard label="Facturé · année" value={compactDh(data.invoicedYtd)} href="/finance/factures" />
           )}
@@ -274,6 +279,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         </div>
 
         <div className="grid gap-5 lg:grid-cols-2">
+          {data.reportsIssued !== null && data.reportOnTimeRate !== null && (
           <Card>
             <Link href="/pilotage/qualite" className="block px-6 pb-6 pt-5 transition-colors hover:bg-surface-2/50">
               <h2 className="text-[20px] font-semibold leading-tight">Qualité de service</h2>
@@ -300,6 +306,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
               )}
             </Link>
           </Card>
+          )}
 
           {data.unassignedDays !== null && data.idleCost !== null && (
             <Card>

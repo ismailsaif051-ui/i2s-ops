@@ -6,6 +6,7 @@ import { AnalyticsService } from './analytics.service';
 import { CurrentUser, RequirePermission } from '../common/decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CostsModule } from '../costs/costs.module';
+import { AffairsModule } from '../affairs/affairs.module';
 import { buildXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx';
 import type { RequestUser } from '../common/types';
 
@@ -131,7 +132,7 @@ class AnalyticsController {
 }
 
 @Module({
-  imports: [CostsModule],
+  imports: [CostsModule, AffairsModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
   exports: [AnalyticsService],

@@ -348,9 +348,10 @@ interface Quality {
 }
 
 interface QualityState {
-  openNonConformities: number;
-  expiredDevices: number;
-  expiringCertifications: number;
+  /** Absents (null) sans le droit de voir la liste correspondante. */
+  openNonConformities: number | null;
+  expiredDevices: number | null;
+  expiringCertifications: number | null;
 }
 
 function RateRow({ label, rate, total }: { label: string; rate: number; total: number }) {
@@ -385,11 +386,11 @@ export async function QualityTab({ month }: { month: string }) {
           hint={quality.averageDaysVsDue !== null && quality.averageDaysVsDue <= 0 ? 'remis en avance en moyenne' : 'remis en retard en moyenne'}
           href="/pilotage/qualite"
         />
-        {state && (
-          <>
-            <KpiCard label="Non-conformités ouvertes" value={state.openNonConformities} tone={state.openNonConformities > 0 ? 'warning' : undefined} hint="état à ce jour" href="/operations/non-conformites" />
-            <KpiCard label="Instruments hors étalonnage" value={state.expiredDevices} tone={state.expiredDevices > 0 ? 'danger' : undefined} hint="état à ce jour" href="/operations/parc-mesure" />
-          </>
+        {state && state.openNonConformities !== null && (
+          <KpiCard label="Non-conformités ouvertes" value={state.openNonConformities} tone={state.openNonConformities > 0 ? 'warning' : undefined} hint="état à ce jour" href="/operations/non-conformites" />
+        )}
+        {state && state.expiredDevices !== null && (
+          <KpiCard label="Instruments hors étalonnage" value={state.expiredDevices} tone={state.expiredDevices > 0 ? 'danger' : undefined} hint="état à ce jour" href="/operations/parc-mesure" />
         )}
       </KpiRow>
 

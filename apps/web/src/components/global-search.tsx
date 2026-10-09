@@ -58,7 +58,8 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
     function onKey(event: KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      // Le remplissage automatique émet des événements sans touche : ne pas les lire à l'aveugle.
+      if ((event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'k') {
         event.preventDefault();
         setOpen(true);
       }

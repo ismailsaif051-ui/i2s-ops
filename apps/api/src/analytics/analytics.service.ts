@@ -19,6 +19,9 @@ import { can } from '@i2s/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../rbac/scope.service';
 import { REPORT_SCOPE, isOnTime } from '../reports/reports.service';
+import { AffairsService } from '../affairs/affairs.service';
+import { MISSION_SCOPE } from '../missions/missions.service';
+import { EXPENSE_SCOPE } from '../expenses/expenses.service';
 import type { RequestUser } from '../common/types';
 import { sumShares } from '../timesheets/day-split';
 import { AffairCostsService, totalCosts, zeroCosts } from '../costs/affair-costs.service';
@@ -64,7 +67,27 @@ export class AnalyticsService {
     private readonly prisma: PrismaService,
     private readonly scope: ScopeService,
     private readonly costs: AffairCostsService,
+    private readonly affairs: AffairsService,
   ) {}
+
+  /**
+   * Filtre d'un compteur du tableau de bord : le périmètre de l'utilisateur
+   * sur cette ressource, ou `null` s'il n'a pas le droit de la voir (ou si
+   * son périmètre ne peut pas être établi). Un compteur `null` n'est pas
+   * affiché — jamais un total de la société montré à qui n'en voit qu'une part.
+   */
+  private scoped(
+    user: RequestUser,
+    resource: Parameters<typeof can>[1],
+    build: () => Record<string, unknown>,
+  ): Record<string, unknown> | null {
+    if (!can(user.permissions, resource, 'VIEW')) return null;
+    try {
+      return build();
+    } catch {
+      return null;
+    }
+  }
 
   /* ── Productivité ────────────────────────────────────────────── */
 
@@ -546,6 +569,26 @@ export class AnalyticsService {
       ? this.scope.buildWhere(user, 'invoice', 'VIEW', INVOICE_SCOPE)
       : null;
 
+    // Chaque compteur porte le périmètre de la LISTE vers laquelle il mène :
+    // un inspecteur compte ses missions, pas celles de la société.
+    const affairWhere = this.scoped(user, 'affair', () => this.affairs.affairWhere(user, 'VIEW'));
+    const missionWhere = this.scoped(user, 'mission', () =>
+      this.scope.requireScope(user, 'mission', 'VIEW') === 'OWN'
+        ? { assignments: { some: { employeeId: user.employeeId ?? '' } } }
+        : this.scope.buildWhere(user, 'mission', 'VIEW', MISSION_SCOPE),
+    );
+    const reportWhere = this.scoped(user, 'report', () => this.scope.buildWhere(user, 'report', 'VIEW', REPORT_SCOPE));
+    const expenseWhere = this.scoped(user, 'expense_report', () =>
+      this.scope.buildWhere(user, 'expense_report', 'VIEW', EXPENSE_SCOPE),
+    );
+    const inCompany = { companyId: { in: user.companyIds } };
+    const certificationWhere = this.scoped(user, 'certification', () => ({ employee: { ...inCompany, deletedAt: null } }));
+    const deviceWhere = this.scoped(user, 'measuring_device', () => inCompany);
+    const nonConformityWhere = this.scoped(user, 'non_conformity', () => ({
+      OR: [{ affair: inCompany }, { affairId: null }],
+    }));
+    const none = Promise.resolve(null);
+
     const [
       affairsInProgress,
       missionsInProgress,
@@ -558,11 +601,22 @@ export class AnalyticsService {
       expiredDevices,
       openNonConformities,
     ] = await Promise.all([
-      this.prisma.affair.count({ where: { status: 'IN_PROGRESS', deletedAt: null } }),
-      this.prisma.mission.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.mission.count({
-        where: { status: { in: ['CONFIRMED', 'ORDER_ISSUED', 'PLANNED'] }, plannedStartDate: { gte: to } },
-      }),
+      affairWhere
+        ? this.prisma.affair.count({ where: { status: 'IN_PROGRESS', deletedAt: null, ...affairWhere } })
+        : none,
+      missionWhere
+        ? this.prisma.mission.count({ where: { status: 'IN_PROGRESS', deletedAt: null, ...missionWhere } })
+        : none,
+      missionWhere
+        ? this.prisma.mission.count({
+            where: {
+              status: { in: ['CONFIRMED', 'ORDER_ISSUED', 'PLANNED'] },
+              plannedStartDate: { gte: to },
+              deletedAt: null,
+              ...missionWhere,
+            },
+          })
+        : none,
       timesheetScope
         ? this.prisma.timesheetDay.aggregate({
             where: { date: { gte: from, lte: to }, category: 'UNASSIGNED', ...timesheetScope },
@@ -570,12 +624,16 @@ export class AnalyticsService {
             _sum: { dailyCostSnapshot: true },
           })
         : Promise.resolve(null),
-      this.prisma.report.count({
-        where: { status: { in: ['SUBMITTED', 'UNDER_CHECK', 'CORRECTION'] } },
-      }),
-      this.prisma.expenseReport.count({
-        where: { status: { in: ['SUBMITTED', 'CONFIRMED_N1', 'CHECKED_HR_CG', 'ACCOUNTED'] } },
-      }),
+      reportWhere
+        ? this.prisma.report.count({
+            where: { status: { in: ['SUBMITTED', 'UNDER_CHECK', 'CORRECTION'] }, ...reportWhere },
+          })
+        : none,
+      expenseWhere
+        ? this.prisma.expenseReport.count({
+            where: { status: { in: ['SUBMITTED', 'CONFIRMED_N1', 'CHECKED_HR_CG', 'ACCOUNTED'] }, ...expenseWhere },
+          })
+        : none,
       // Échues d'après l'échéance et le reste dû, pas d'après le statut :
       // aucun traitement ne pose « OVERDUE », la tuile restait à zéro dès
       // qu'on sortait des données de démonstration.
@@ -594,13 +652,19 @@ export class AnalyticsService {
             },
           })
         : Promise.resolve(null),
-      this.prisma.certification.count({
-        where: { expiresAt: { gte: new Date(), lte: addDays(new Date(), 60) } },
-      }),
-      this.prisma.measuringDevice.count({ where: { status: 'EXPIRED', deletedAt: null } }),
-      this.prisma.nonConformity.count({
-        where: { status: { notIn: ['CLOSED', 'REJECTED'] } },
-      }),
+      certificationWhere
+        ? this.prisma.certification.count({
+            where: { expiresAt: { gte: new Date(), lte: addDays(new Date(), 60) }, ...certificationWhere },
+          })
+        : none,
+      deviceWhere
+        ? this.prisma.measuringDevice.count({ where: { status: 'EXPIRED', deletedAt: null, ...deviceWhere } })
+        : none,
+      nonConformityWhere
+        ? this.prisma.nonConformity.count({
+            where: { status: { notIn: ['CLOSED', 'REJECTED'] }, ...nonConformityWhere },
+          })
+        : none,
     ]);
 
     const today = new Date();
@@ -657,11 +721,13 @@ export class AnalyticsService {
 
     // Taux de respect du délai de remise de rapport (objectif QMS < 21 j ouvrés),
     // sur les rapports émis de janvier à la fin de la période.
-    const issuedReports = await this.prisma.report.findMany({
-      where: { deliveredAt: { not: null }, issuedAt: cumul },
-      select: { deliveredAt: true, mission: { select: { reportDueDate: true } } },
-    });
-    const onTime = issuedReports.filter(
+    const issuedReports = reportWhere
+      ? await this.prisma.report.findMany({
+          where: { deliveredAt: { not: null }, issuedAt: cumul, ...reportWhere },
+          select: { deliveredAt: true, mission: { select: { reportDueDate: true } } },
+        })
+      : null;
+    const onTime = (issuedReports ?? []).filter(
       (r) => r.mission.reportDueDate && r.deliveredAt && r.deliveredAt <= r.mission.reportDueDate,
     ).length;
 
@@ -684,8 +750,8 @@ export class AnalyticsService {
       collectedYtd: invoiceWhere ? Math.round(collected) : null,
       invoicedTrend: invoiceWhere ? invoicedTrend.map((v) => Math.round(v)) : null,
       collectedTrend: invoiceWhere ? collectedTrend.map((v) => Math.round(v)) : null,
-      reportOnTimeRate: onTimeRate(onTime, issuedReports.length),
-      reportsIssued: issuedReports.length,
+      reportOnTimeRate: issuedReports ? onTimeRate(onTime, issuedReports.length) : null,
+      reportsIssued: issuedReports ? issuedReports.length : null,
     };
   }
 
