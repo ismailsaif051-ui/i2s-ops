@@ -33,3 +33,4 @@ npm-debug.log*
 
 # Brouillons de travail hors application (maquettes, scripts jetables)
 .scratch/
+.guides-tmp/
